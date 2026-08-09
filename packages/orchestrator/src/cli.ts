@@ -174,6 +174,36 @@ async function main(): Promise<void> {
     console.log(JSON.stringify(parkDraft(dir, taskId), null, 2));
     return;
   }
+  if (cmd === "goal" && (args[1] === "park" || args[1] === "unpark")) {
+    if (args[1] === "park") {
+      console.log(JSON.stringify(parkGoal(dir, arg("--reason", args) ?? "draft-idle"), null, 2));
+    } else {
+      console.log(JSON.stringify(unparkGoal(dir), null, 2));
+    }
+    return;
+  }
+  if (cmd === "memory" && args[1] === "brief") {
+    const sub = args[2];
+    if (sub === "write") {
+      const summary = arg("--summary", args);
+      if (!summary) usage();
+      const l2 = (arg("--l2", args) ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      const risks = (arg("--risk", args) ?? "").split(";").map((s) => s.trim()).filter(Boolean);
+      console.log(JSON.stringify(writeMemoryBrief(dir, { l1_summary: summary, l2_paths: l2, risks, by: arg("--by", args) ?? "docs-lead" }), null, 2));
+      return;
+    }
+    if (sub === "ack") {
+      const id = arg("--id", args);
+      if (!id) usage();
+      console.log(JSON.stringify(ackMemoryBrief(dir, id, arg("--by", args) ?? "run-lead"), null, 2));
+      return;
+    }
+    if (sub === "list") {
+      console.log(JSON.stringify(listMemoryBriefs(dir), null, 2));
+      return;
+    }
+    usage();
+  }
   if (cmd === "draft" && args[1] === "park-goal") {
     console.log(JSON.stringify(parkGoal(dir), null, 2));
     return;
