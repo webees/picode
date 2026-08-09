@@ -43,6 +43,7 @@ export class CommandPiSpawner implements PiSpawner {
     }
     const handle: PiHandle = { pid, pi_session_id: `pid-${pid}` };
     GLOBAL_HANDLES.set(pid, child);
+    child.unref(); // CLI/orchestrator must not wait on a long-lived Pi process
     child.once("exit", () => GLOBAL_HANDLES.delete(pid));
     return handle;
   }

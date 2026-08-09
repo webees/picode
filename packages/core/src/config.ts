@@ -72,6 +72,12 @@ export interface PiConfig {
   command_template: string;
 }
 
+/** Product intake (18 phase E / U7): acceptance criteria gate on active. */
+export interface ProductConfig {
+  /** goal must carry product_acceptance[] before intake → active (P01). */
+  require_acceptance_before_active: boolean;
+}
+
 export interface StaffingConfig {
   /** v1 fixed: real_recruit (17 §10 / D009). */
   mode: "real_recruit" | "template";
@@ -128,6 +134,7 @@ export interface PicodeConfig {
   bus: { adapter: "file" | "messenger" };
   i18n: { locale: string; strings?: Record<string, string> };
   pi: PiConfig;
+  product: ProductConfig;
 }
 
 const DEFAULTS: PicodeConfig = {
@@ -262,6 +269,7 @@ const DEFAULTS: PicodeConfig = {
   bus: { adapter: "file" },
   i18n: { locale: "zh-CN" },
   pi: { enabled: false, command_template: "pi --print" },
+  product: { require_acceptance_before_active: true },
 };
 
 // Note: sess_mgr / sponsor / staffing / cells.lifetime are typed per 17 §10.

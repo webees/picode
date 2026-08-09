@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { createRun, resolveRunDir, setGoalStatus } from "./run-store.js";
+import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
 import { addChunkAndTask, approveBrief, draftBrief, prepareTask } from "./task.js";
 import { SessionStore } from "./session-store.js";
 import {
@@ -32,6 +32,8 @@ function setup() {
   const repo = tmpGitRepo();
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
+  // P01: product acceptance criteria before active (18 phase E).
+  setProductAcceptance(dir, ["module-a compiles and tests pass"]);
   setGoalStatus(dir, "active");
   const { taskId } = addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
@@ -49,7 +51,6 @@ async function fullHire(repo: string, dir: string, config: ReturnType<typeof res
 
 test("T18/T24: prepare fails without staffing approval (double latch)", () => {
   const { repo, dir, config, taskId } = setup();
-  setGoalStatus(dir, "active");
   draftBrief(dir, taskId);
   approveBrief(dir, taskId, "run-lead");
   // brief approved, staffing missing → prepare must fail

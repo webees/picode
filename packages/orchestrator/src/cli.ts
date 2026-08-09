@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRun, resolveRunDir, setGoalStatus } from "./run-store.js";
+import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
 import {
   addChunkAndTask,
   approveBrief,
@@ -30,6 +30,7 @@ function usage(): never {
 
   picode init --repo <path> --goal-title <title> [--scale S|M|L]
   picode goal set-status --repo <path> --run <id> --status intake|draft|active|...
+  picode goal set-product-acceptance --repo <path> --run <id> --acceptance "a; b; c"
   picode chunk add --repo <path> --run <id> --id chunk-a --write "src/**"
   picode brief draft --repo <path> --run <id> --task <task_id>
   picode brief approve --repo <path> --run <id> --task <task_id> [--by run-lead]
@@ -79,8 +80,22 @@ async function main(): Promise<void> {
       | "completed"
       | "cancelled";
     if (!status) usage();
-    const goal = setGoalStatus(dir, status, { clearOpenQuestions: true });
+    const goal = setGoalStatus(dir, status, {
+      clearOpenQuestions: true,
+      skipProductAcceptanceCheck: !config.product.require_acceptance_before_active,
+    });
     console.log(JSON.stringify(goal, null, 2));
+    return;
+  }
+
+  if (cmd === "goal" && args[1] === "set-product-acceptance") {
+    const acceptance = (arg("--acceptance", args) ?? "")
+      .split(";")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (acceptance.length === 0) usage();
+    const goal = setProductAcceptance(dir, acceptance);
+    console.log(JSON.stringify({ goal, brief: path.join(dir, "product", "brief.md") }, null, 2));
     return;
   }
 

@@ -21,6 +21,8 @@ export interface GoalState {
   scale: "S" | "M" | "L";
   open_questions: string[];
   acceptance: Array<{ id: string; type: string; spec: string }>;
+  /** Product acceptance criteria from pm (18 phase E / P01). */
+  product_acceptance: string[];
   non_goals: string[];
   run_lead_id: string;
   user_confirmed_at: string | null;
@@ -49,6 +51,7 @@ export function createRun(
   ensureDir(path.join(dir, "docs"));
   ensureDir(path.join(dir, "gates"));
   ensureDir(path.join(dir, "approvals"));
+  ensureDir(path.join(dir, "product"));
 
   const goal: GoalState = {
     schema_version: "1",
@@ -59,6 +62,7 @@ export function createRun(
     scale: opts.scale ?? "S",
     open_questions: [],
     acceptance: [],
+    product_acceptance: [],
     non_goals: [],
     run_lead_id: "run-lead",
     user_confirmed_at: null,
@@ -80,9 +84,11 @@ export function createRun(
   writeAtomic(path.join(dir, "secret.txt"), crypto.randomBytes(32).toString("hex"));
 
   const bus = new RoomStore(dir);
+  // Stage E (18 §4): sponsor is a human channel — only `chat` posts via bus;
+  // confirmations/change orders go through CLI (goal set-status etc.).
   bus.saveMembers("leadership", [
     { id: "run-lead", access: "post" },
-    { id: "sponsor", access: "post" },
+    { id: "sponsor", access: "post", post_types_allow: ["chat"] },
     { id: "sess-mgr", access: "post" },
     { id: "tpm", access: "post" },
     { id: "proc-audit", access: "post", post_types_allow: ["drift", "alert"] },
@@ -91,7 +97,7 @@ export function createRun(
   ]);
   bus.saveMembers("product", [
     { id: "pm", access: "post" },
-    { id: "sponsor", access: "post" },
+    { id: "sponsor", access: "post", post_types_allow: ["chat"] },
     { id: "run-lead", access: "post" },
     { id: "sess-mgr", access: "read" },
   ]);
@@ -143,17 +149,35 @@ export function writeGoal(dir: string, goal: GoalState): void {
 export function setGoalStatus(
   dir: string,
   status: GoalState["status"],
-  opts?: { clearOpenQuestions?: boolean },
+  opts?: { clearOpenQuestions?: boolean; skipProductAcceptanceCheck?: boolean },
 ): GoalState {
   const goal = readGoal(dir);
   if (status === "active") {
     if (goal.open_questions.length > 0 && !opts?.clearOpenQuestions) {
       throw new Error("open_questions non-empty; cannot activate");
     }
+    if (goal.product_acceptance.length === 0 && !opts?.skipProductAcceptanceCheck) {
+      throw new Error("no product acceptance criteria; cannot activate (P01)");
+    }
     goal.user_confirmed_at = new Date().toISOString();
   }
   goal.status = status;
   writeGoal(dir, goal);
+  return goal;
+}
+
+/** Record product acceptance criteria (pm) and write product/brief.md (P01). */
+export function setProductAcceptance(dir: string, items: string[]): GoalState {
+  const goal = readGoal(dir);
+  goal.product_acceptance = items;
+  writeGoal(dir, goal);
+  ensureDir(path.join(dir, "product"));
+  const md =
+    `# Product Brief\n\n` +
+    `## Acceptance criteria\n\n` +
+    items.map((i) => `- ${i}`).join("\n") +
+    `\n`;
+  writeAtomic(path.join(dir, "product", "brief.md"), md);
   return goal;
 }
 
