@@ -17,7 +17,10 @@ export type ToolName =
   | "request_info"
   | "request_cross_room"
   | "progress_report"
-  | "state_read";
+  | "state_read"
+  | "session_wake"
+  | "session_sleep"
+  | "session_list";
 
 export interface ToolProfile {
   allow: ToolName[];
@@ -32,6 +35,9 @@ const PROFILES: Record<string, ToolProfile> = {
       "state_read",
       "progress_report",
       "request_info",
+      "session_wake",
+      "session_sleep",
+      "session_list",
     ],
   },
   "product.pm": {

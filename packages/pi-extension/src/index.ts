@@ -7,9 +7,11 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import YAML from "yaml";
 import {
   matchGlob,
   profileAllows,
+  withFileLock,
   type ToolName,
 } from "@picode/core";
 import { RoomStore, verifyToken } from "@picode/bus";
@@ -42,6 +44,46 @@ function loadSecret(runsRoot: string, runId: string): string {
   const p = path.join(runsRoot, runId, "secret.txt");
   if (!fs.existsSync(p)) return "dev-secret";
   return fs.readFileSync(p, "utf8").trim();
+}
+
+/** sess-mgr command queue: runs/<id>/session_commands.jsonl (18 phase B). */
+async function appendSessionCommand(
+  runDir: string,
+  from: string,
+  cmd: { action: "wake" | "sleep" | "terminate"; agent_id: string; reason: string; force?: boolean },
+) {
+  if (from !== "sess-mgr") {
+    throw Object.assign(new Error(`command from non-sess-mgr rejected: ${from}`), {
+      code: "COMMAND_FROM_DENIED",
+    });
+  }
+  const file = path.join(runDir, "session_commands.jsonl");
+  const full = {
+    id: `cmd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    ts: new Date().toISOString(),
+    from,
+    ...cmd,
+  };
+  await withFileLock(path.join(runDir, ".session_commands.lock"), () => {
+    fs.appendFileSync(file, JSON.stringify(full) + "\n", "utf8");
+  });
+  return full;
+}
+
+function listSessions(runDir: string): Array<Record<string, unknown>> {
+  const sessionsDir = path.join(runDir, "sessions");
+  if (!fs.existsSync(sessionsDir)) return [];
+  return fs
+    .readdirSync(sessionsDir)
+    .filter((f) => f.endsWith(".yaml"))
+    .map((f) => {
+      const raw = fs.readFileSync(path.join(sessionsDir, f), "utf8");
+      try {
+        return YAML.parse(raw) as Record<string, unknown>;
+      } catch {
+        return { agent_id: f.replace(/\.yaml$/, ""), parse_error: true };
+      }
+    });
 }
 
 export default function picodeExtension(pi: PiApi): void {
@@ -254,6 +296,93 @@ export default function picodeExtension(pi: PiApi): void {
       };
       fs.writeFileSync(path.join(reqDir, `${id}.json`), JSON.stringify(body, null, 2));
       return jsonResult({ ok: true, request: body });
+    },
+  });
+
+  const sessionTargets = (params: Record<string, unknown>) => ({
+    action: params.action as "wake" | "sleep" | "terminate",
+    agent_id: String(params.agent_id),
+    reason: String(params.reason ?? "sess-mgr"),
+    force: !!params.force,
+  });
+
+  pi.registerTool({
+    name: "session_wake",
+    label: "Picode Session Wake",
+    description:
+      "Enqueue a wake command for an agent (sess-mgr only). Orchestrator drains the queue.",
+    parameters: {
+      type: "object",
+      properties: {
+        agent_id: { type: "string" },
+        reason: { type: "string" },
+        force: { type: "boolean", description: "bypass max_awake" },
+      },
+      required: ["agent_id"],
+    },
+    async execute(_id, params) {
+      if (!allow("session_wake")) return err("TOOL_DENIED", "session_wake not in profile");
+      const a = auth();
+      if (a) return err("TOKEN_INVALID", a);
+      if (!runDir) return err("NO_RUN", "no run");
+      try {
+        const cmd = await appendSessionCommand(runDir, agentId, {
+          ...sessionTargets(params),
+          action: "wake",
+        });
+        return jsonResult({ ok: true, queued: cmd });
+      } catch (e) {
+        return err("COMMAND_FROM_DENIED", e instanceof Error ? e.message : String(e));
+      }
+    },
+  });
+
+  pi.registerTool({
+    name: "session_sleep",
+    label: "Picode Session Sleep",
+    description:
+      "Enqueue a sleep command for an agent (sess-mgr only). Orchestrator drains the queue.",
+    parameters: {
+      type: "object",
+      properties: {
+        agent_id: { type: "string" },
+        reason: { type: "string" },
+      },
+      required: ["agent_id"],
+    },
+    async execute(_id, params) {
+      if (!allow("session_sleep")) return err("TOOL_DENIED", "session_sleep not in profile");
+      const a = auth();
+      if (a) return err("TOKEN_INVALID", a);
+      if (!runDir) return err("NO_RUN", "no run");
+      try {
+        const cmd = await appendSessionCommand(runDir, agentId, {
+          ...sessionTargets(params),
+          action: "sleep",
+        });
+        return jsonResult({ ok: true, queued: cmd });
+      } catch (e) {
+        return err("COMMAND_FROM_DENIED", e instanceof Error ? e.message : String(e));
+      }
+    },
+  });
+
+  pi.registerTool({
+    name: "session_list",
+    label: "Picode Session List",
+    description: "List the run's session roster (awake count, states).",
+    parameters: {
+      type: "object",
+      properties: {},
+    },
+    async execute() {
+      if (!allow("session_list")) return err("TOOL_DENIED", "session_list not in profile");
+      const a = auth();
+      if (a) return err("TOKEN_INVALID", a);
+      if (!runDir) return err("NO_RUN", "no run");
+      const sessions = listSessions(runDir);
+      const awake = sessions.filter((s) => s.state === "awake").length;
+      return jsonResult({ ok: true, awake_count: awake, sessions });
     },
   });
 }

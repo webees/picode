@@ -10,6 +10,7 @@ import {
   printSpawnEnv,
 } from "./task.js";
 import { SessionStore } from "./session-store.js";
+import { applyEvent, drainSessionCommands, rosterSnapshot } from "./rules-engine.js";
 
 function arg(name: string, args: string[]): string | undefined {
   const i = args.indexOf(name);
@@ -32,6 +33,8 @@ function usage(): never {
   picode session sleep --repo <path> --run <id> --agent <agent_id> [--reason <r>]
   picode session terminate --repo <path> --run <id> --agent <agent_id> [--reason <r>]
   picode session list --repo <path> --run <id> [--state registered|sleeping|awake|terminated]
+  picode session event --repo <path> --run <id> --event <name> [--task <task_id>]
+  picode session drain --repo <path> --run <id>
 `);
   process.exit(1);
 }
@@ -154,6 +157,24 @@ async function main(): Promise<void> {
       let rows = sessions.list();
       if (state) rows = rows.filter((s) => s.state === state);
       console.log(JSON.stringify({ count: rows.length, sessions: rows }, null, 2));
+      return;
+    }
+    if (sub === "event") {
+      const event = arg("--event", args);
+      if (!event) usage();
+      const res = await applyEvent(dir, config, event, {
+        taskId: arg("--task", args),
+      });
+      console.log(JSON.stringify(res, null, 2));
+      return;
+    }
+    if (sub === "drain") {
+      const res = await drainSessionCommands(dir, config);
+      console.log(JSON.stringify(res, null, 2));
+      return;
+    }
+    if (sub === "roster") {
+      console.log(JSON.stringify(rosterSnapshot(dir), null, 2));
       return;
     }
     usage();

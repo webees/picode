@@ -32,12 +32,31 @@ export interface CellTemplate {
   room_kind?: string;
 }
 
+export interface SessMgrRule {
+  /** Event id from 17 §5.3 (run_created, intake_start, sponsor_message, …). */
+  event: string;
+  /** Roles to wake unconditionally. */
+  wake?: string[];
+  /** Roles to wake only when a config flag is on (e.g. research.parallel_on_intake). */
+  wake_if?: string[];
+  /** Gate events that wake gates by scale (merge_ready → code-review/sec-eng). */
+  wake_gates?: boolean;
+  /** Wake the whole squad of a task (task_ready: double latch). */
+  wake_squad?: boolean;
+  /** Wake the squad-lead of a task (progress_due). */
+  wake_squad_lead?: boolean;
+  /** Terminate the squad of a task (task_dissolved). */
+  terminate_squad?: boolean;
+}
+
 export interface SessMgrConfig {
   enabled: boolean;
   idle_sleep_sec: number;
   allow_orch_force_wake: boolean;
   max_awake: number;
   always_register: boolean;
+  /** Deterministic event→action table (17 §5.3); LLM arbitration only beyond it. */
+  rules: SessMgrRule[];
 }
 
 export interface SponsorConfig {
@@ -110,6 +129,22 @@ const DEFAULTS: PicodeConfig = {
     allow_orch_force_wake: true,
     max_awake: 8,
     always_register: true,
+    rules: [
+      { event: "run_created", wake: ["sess-mgr", "run-lead", "pm"] },
+      {
+        event: "intake_start",
+        wake: ["run-lead", "pm"],
+        wake_if: ["ind-res"],
+      },
+      { event: "sponsor_message", wake: ["run-lead"] },
+      { event: "goal_active", wake: ["scout", "sys-arch"] },
+      { event: "staffing_request", wake: ["people-lead", "recruiter", "people-qa"] },
+      { event: "brief_assemble", wake: ["docs-lead", "tech-writer", "docs-qa"] },
+      { event: "task_ready", wake_squad: true },
+      { event: "progress_due", wake_squad_lead: true },
+      { event: "merge_ready", wake: ["release-eng"], wake_gates: true },
+      { event: "task_dissolved", terminate_squad: true },
+    ],
   },
   sponsor: { human_only: true },
   staffing: { mode: "real_recruit", persona_dimensions: "full" },
