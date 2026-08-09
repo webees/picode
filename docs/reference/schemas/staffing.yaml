@@ -1,0 +1,23 @@
+schema_version: "1"
+task_id: task-chunk-a
+request_id: staff-req-001
+status: approved   # submitted | in_hr | run_lead_review | approved | rejected
+approved_by: run-lead
+approved_at: "2026-01-01T00:00:00Z"
+triad:
+  squad-lead:
+    role_template: squad-lead
+    agent_id: squad-lead@task-chunk-a
+    tool_profile: implement.squad-lead
+    persona_file: personas/squad-lead.md
+    display_name: null
+  engineer:
+    role_template: engineer
+    agent_id: engineer@task-chunk-a
+    tool_profile: implement.engineer
+    persona_file: personas/engineer.md
+  sdet:
+    role_template: sdet
+    agent_id: sdet@task-chunk-a
+    tool_profile: implement.sdet
+    persona_file: personas/sdet.md

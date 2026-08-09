@@ -1,0 +1,40 @@
+# tasks/<task_id>/brief/brief.yaml
+schema_version: "1"
+task_id: task-a-1
+chunk_id: chunk-a
+version: 1
+status: approved   # draft | in_review | approved | superseded
+title: "Implement module-a per chunk acceptance"
+# Human-facing body lives in WORK_BRIEF.md (same directory)
+
+# Authorship chain
+drafted_by: run-lead-1
+assembled_by: tech-writer@run-001    # docs doer
+intel_refs: []                       # optional paths under research/briefs/
+# intel_refs: ["research/briefs/2026-01-01-api-notes.md"]
+approved_by: run-lead-1
+approved_at: "2026-01-01T00:00:00Z"
+
+# What the triad must optimize for
+objectives:
+  - "..."
+non_goals:
+  - "..."
+acceptance_refs:
+  - "tasks/task-a-1/task.yaml#acceptance"
+write_paths: ["src/module-a/**"]
+read_paths: ["src/shared/public/**"]
+must_read_refs:
+  - "src/module-a/public/api.md"
+forbidden:
+  - "Do not modify files outside write_paths"
+  - "Do not fetch the web; use request_info"
+
+# Seat-specific emphasis (optional; orchestrator may slice WORK_BRIEF.md)
+seat_focus:
+  squad-lead: ["coordination", "handoff", "progress"]
+  engineer: ["implementation", "write_paths", "must_read_refs"]
+  sdet: ["acceptance", "evidence_format"]
+
+# Packets already approved for this task (inbox)
+inbox_packet_ids: []

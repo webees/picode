@@ -1,0 +1,6 @@
+task_id: task-a-1
+accepted_by:
+  - tpm-1
+  # or lead@task-b-1 when downstream exists
+accepted_at: "2026-01-01T00:00:00Z"
+notes: "handoff package complete"

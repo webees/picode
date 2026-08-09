@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.picode/runs/
+.picode/worktrees/
+**/.picode/runs/
+**/.picode/worktrees/
+**/secret.txt
+.DS_Store
+*.log

@@ -1,0 +1,8 @@
+task_id: task-a-1
+result: pass
+commands:
+  - cmd: "<project-test-command> --filter module-a"
+    exit_code: 0
+    log_ref: "tasks/task-a-1/evidence/test.log"
+tester_id: sdet@task-a-1
+at: "2026-01-01T00:00:00Z"

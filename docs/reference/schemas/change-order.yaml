@@ -1,0 +1,10 @@
+id: co-001
+goal_id: goal-001
+status: applied  # draft | applied | rejected
+summary: "User adjusted acceptance criteria for module-a"
+affects_chunks: ["chunk-a"]
+affects_tasks: ["task-a-1"]
+new_acceptance: []
+cancelled_tasks: []
+created_by: run-lead-1
+user_ack_at: "2026-01-01T00:00:00Z"

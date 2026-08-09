@@ -1,0 +1,23 @@
+{
+  "name": "@picode/orchestrator",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "picode": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "@picode/core": "0.1.0",
+    "@picode/bus": "0.1.0",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2",
+    "@types/node": "^22.13.10"
+  }
+}

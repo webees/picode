@@ -1,0 +1,28 @@
+config_schema_version: "1"
+active_profile: default
+
+paths:
+  runs_root: ".picode/runs"
+  skills_root: "skills"
+  knowledge_root: "docs/knowledge"
+  prompts_root: ".picode/prompts"
+
+git:
+  worktree_root: ".picode/worktrees"
+  branch_template: "picode/{run_id}/{task_id}"
+  base_branch: main
+
+scheduler:
+  max_parallel_triads: 3
+
+research:
+  parallel_on_intake: true
+
+work_brief:
+  require_run_lead_approval: true
+  seat_slicing: true
+  require_docs_assemble: true
+  allow_research_attach: true
+
+i18n:
+  locale: zh-CN

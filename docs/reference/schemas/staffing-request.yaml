@@ -1,0 +1,11 @@
+id: staff-req-001
+task_id: task-chunk-a
+from: run-lead
+status: submitted
+skills_wanted: []
+constraints:
+  - "no network"
+  - "write_paths only"
+notes: ""
+reuse_persona_ids: []
+created_at: "2026-01-01T00:00:00Z"

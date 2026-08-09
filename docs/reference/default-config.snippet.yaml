@@ -1,0 +1,55 @@
+# Defaults extract — keep in sync with packages/core DEFAULTS + docs/spec/17-agent-runtime.md
+# Full option table: docs/reference/decision-catalog.md
+
+rooms:
+  - { id: leadership, display_name: "工程领导", enabled: true }
+  - { id: product, display_name: "产品共创", enabled: true }
+  - { id: announce, display_name: "全员公告", enabled: true }
+  - { id: program, display_name: "项目统筹", enabled: true }
+  - { id: people, display_name: "人力资源", enabled: true }
+  - { id: research, display_name: "行业研究", enabled: true }
+  - { id: architecture, display_name: "架构设计", enabled: true }
+  - { id: knowledge, display_name: "知识管理", enabled: true }
+  - { id: docs, display_name: "技术文档", enabled: true }
+  - { id: collab, display_name: "跨组协同", enabled: true }
+  - { id: release, display_name: "发布工程", enabled: true }
+  - { id: quality, display_name: "质量保障", enabled: true }
+  - { id: security, display_name: "安全合规", enabled: true }
+
+roles:
+  - { id: sponsor, display_name: "业务赞助", tool_profile: human.sponsor }
+  - { id: sess-mgr, display_name: "会话调度", tool_profile: governance.sess-mgr }
+  - { id: run-lead, display_name: "工程主责", tool_profile: governance.run-lead }
+  - { id: tpm, display_name: "技术统筹", tool_profile: governance.tpm }
+  - { id: proc-audit, display_name: "流程审计", tool_profile: governance.proc-audit }
+  - { id: pm, display_name: "产品策划", tool_profile: product.pm }
+  - { id: ind-res, display_name: "行业分析", tool_profile: research.ind-res }
+  - { id: docs-lead, display_name: "文档主责", tool_profile: docs.lead }
+  - { id: tech-writer, display_name: "技术写作", tool_profile: docs.doer }
+  - { id: docs-qa, display_name: "文档质检", tool_profile: docs.check }
+  - { id: people-lead, display_name: "人才主责", tool_profile: people.lead }
+  - { id: recruiter, display_name: "招聘专员", tool_profile: people.doer }
+  - { id: people-qa, display_name: "编制合规", tool_profile: people.check }
+  - { id: scout, display_name: "代码勘察", tool_profile: architecture.scout }
+  - { id: sys-arch, display_name: "软件架构", tool_profile: architecture.sys-arch }
+  - { id: squad-lead, display_name: "小队主责", tool_profile: implement.squad-lead }
+  - { id: engineer, display_name: "软件开发", tool_profile: implement.engineer }
+  - { id: sdet, display_name: "测试验证", tool_profile: implement.sdet }
+  - { id: code-review, display_name: "代码审查", tool_profile: gate.code-review }
+  - { id: release-eng, display_name: "发布执行", tool_profile: gate.release-eng }
+  - { id: sec-eng, display_name: "安全工程", tool_profile: gate.sec-eng }
+
+research:
+  parallel_on_intake: true
+
+work_brief:
+  require_run_lead_approval: true
+  seat_slicing: true
+  require_docs_assemble: true
+  allow_research_attach: true
+
+# Overlay keys (see 17-agent-runtime §10)
+# sess_mgr: { enabled: true, idle_sleep_sec: 600, max_awake: 8, allow_orch_force_wake: true }
+# sponsor: { human_only: true }
+# staffing: { mode: real_recruit }
+# cells: { lifetime: per_run }

@@ -1,0 +1,15 @@
+# One JSON object per line in runs/<run>/bus/<room>.jsonl
+ts: "2026-01-01T00:00:00Z"
+id: msg-0001
+from: lead@task-a-1
+room: task
+type: progress
+body: "implementing core"
+refs: []
+reply_to: null
+meta:
+  task_id: task-a-1
+  phase: running
+  head_sha: "abc1234"
+  blocked: false
+  at_risk: false

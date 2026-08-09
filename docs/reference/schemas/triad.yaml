@@ -1,0 +1,15 @@
+schema_version: "1"
+task_id: task-a-1
+status: forming  # forming | active | dissolving | dissolved
+worktree_path: ".picode/worktrees/run-x/task-a-1"
+branch: "picode/run-x/task-a-1"
+seats:
+  squad-lead:
+    agent_id: squad-lead@task-a-1
+    token: "<issued>"
+  engineer:
+    agent_id: engineer@task-a-1
+    token: "<issued>"
+  sdet:
+    agent_id: sdet@task-a-1
+    token: "<issued>"

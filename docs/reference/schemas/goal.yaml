@@ -1,0 +1,20 @@
+# Example shape only — abstract placeholders
+id: goal-001
+title: "..."
+intent: "..."
+status: intake   # intake | draft | active | blocked | completed | cancelled
+scale: M         # S | M | L
+run_lead_id: run-lead
+open_questions: []
+assumptions: []
+non_goals: []
+acceptance: []
+# acceptance item:
+# - id: A1
+#   type: command    # command | file_exists | manual
+#   spec: "<project-test-command>"
+# product_acceptance: []  # from product room / pm
+plan_draft_ref: null
+# user_confirmed_at：规范字段名（稳定）；语义 = sponsor（人类）确认时刻，见 terminology
+user_confirmed_at: null
+created_at: "2026-01-01T00:00:00Z"

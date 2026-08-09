@@ -1,0 +1,13 @@
+# rooms/<room_id>/members.yaml
+room_id: squad-task-a-1
+members:
+  - id: squad-lead@task-a-1
+    access: post
+  - id: engineer@task-a-1
+    access: post
+  - id: sdet@task-a-1
+    access: post
+  - id: tpm-1
+    access: post   # optional program progress
+  - id: proc-audit-1
+    access: read

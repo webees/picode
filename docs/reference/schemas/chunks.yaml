@@ -1,0 +1,29 @@
+# Example shape — abstract modules
+chunks:
+  - id: chunk-a
+    write_paths: ["src/module-a/**"]
+    read_paths: ["src/shared/public/**"]
+    public_contract: "src/module-a/public/api.md"
+    depends_on: []
+    shared_files: []
+    # - path: "src/shared/x"
+    #   owner_chunk: chunk-a
+    acceptance:
+      - id: C1
+        type: command
+        spec: "<project-test-command> --filter module-a"
+    status: planned   # planned|ready|in_progress|testing|handoff|done|blocked|cancelled
+    task_id: null
+
+  - id: chunk-b
+    write_paths: ["src/module-b/**"]
+    read_paths: ["src/module-a/public/**", "src/shared/public/**"]
+    public_contract: "src/module-b/public/api.md"
+    depends_on: ["chunk-a"]
+    shared_files: []
+    acceptance:
+      - id: C2
+        type: command
+        spec: "<project-test-command> --filter module-b"
+    status: planned
+    task_id: null

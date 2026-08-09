@@ -1,0 +1,25 @@
+{
+  "name": "picode",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Configurable multi-agent coding runtime on Pi",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @picode/core && npm run build -w @picode/bus && npm run build -w @picode/orchestrator && npm run build -w @picode/pi-extension",
+    "test": "npm run test -w @picode/core && npm run test -w @picode/bus && npm run test -w @picode/orchestrator",
+    "picode": "node packages/orchestrator/dist/cli.js",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "agent",
+    "picode"
+  ]
+}

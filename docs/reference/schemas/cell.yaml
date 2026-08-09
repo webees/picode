@@ -1,0 +1,14 @@
+# boards/cells.yaml item
+id: cell-docs-1
+kind: docs   # governance|ind-res|research|implement|docs|archive|ops|security|review
+status: active  # active | done | failed
+room: docs
+lead: docs-lead@run-001
+doer: tech-writer@run-001
+check: docs-qa@run-001
+deliverable_refs: ["runs/run-001/docs/L2-brief.md"]
+check_signoff:
+  result: pending   # pending | pass | fail
+  by: null
+  at: null
+  notes: null

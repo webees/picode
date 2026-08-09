@@ -1,0 +1,11 @@
+# runs/<run_id>/sessions/<agent_id>.yaml — 会话花名册条目（见 17-agent-runtime）
+schema_version: "1"
+agent_id: run-lead
+role_id: run-lead
+state: sleeping   # registered | sleeping | awake | terminated
+pi_session_id: null
+last_wake_at: null
+last_sleep_at: null
+wake_reason: null
+persona_path: null   # 任务岗必填；平台岗可空
+error: null

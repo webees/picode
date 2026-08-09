@@ -1,0 +1,2 @@
+[permissions]
+allow = ["Bash=git -C /Users/x/Desktop/iOS/picode log --oneline -10 2>/dev/null; echo \"---\"; git -C /Users/x/Desktop/iOS/picode status --short 2>/dev/null | head -20"]

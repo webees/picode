@@ -1,0 +1,18 @@
+id: task-a-1
+chunk_id: chunk-a
+goal_id: goal-001
+kind: implement   # implement | integrate | explore | design
+status: running   # created|queued|assigned|running|verifying|handing_over|closed|failed
+write_paths: ["src/module-a/**"]
+acceptance:
+  - id: C1
+    type: command
+    spec: "<project-test-command> --filter module-a"
+triad:
+  squad-lead: squad-lead@task-a-1
+  engineer: engineer@task-a-1
+  sdet: sdet@task-a-1
+work_room: squad-task-a-1
+retries: 0
+max_retries: 3
+heartbeat_at: "2026-01-01T00:00:00Z"

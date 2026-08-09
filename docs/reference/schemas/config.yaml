@@ -1,0 +1,89 @@
+# .picode/config.yaml — illustrative project config
+# Full defaults: reference/default-config.snippet.yaml + packages/core
+config_schema_version: "1"
+active_profile: default
+
+paths:
+  runs_root: ".picode/runs"
+  skills_root: "skills"
+  knowledge_root: "docs/knowledge"
+  prompts_root: ".picode/prompts"
+  secret_globs:
+    - "**/.env"
+    - "**/.env.*"
+    - "**/secrets/**"
+
+git:
+  worktree_root: ".picode/worktrees"
+  branch_template: "picode/{run_id}/{task_id}"
+  base_branch: main
+  rebase_on_merge: true
+  merge_serial: true
+  force_dissolve_autocommit: true
+
+scheduler:
+  max_parallel_triads: 3
+
+timeouts:
+  progress_interval_sec: 300
+  task_timeout_sec: 7200
+  draft_idle_sec: 86400
+  draft_idle_policy: park
+  cross_room_ttl_sec: 1800
+  failed_branch_ttl_sec: 604800
+
+i18n:
+  locale: zh-CN
+  # strings:
+  #   role.run-lead: "工程主责"
+  #   room.product: "产品共创"
+
+rooms:
+  - id: leadership
+    display_name: "工程领导"
+    enabled: true
+  - id: product
+    display_name: "产品共创"
+  - id: program
+    display_name: "项目统筹"
+  - id: docs
+    display_name: "技术文档"
+
+roles:
+  - id: sponsor
+    display_name: "业务赞助"
+  - id: sess-mgr
+    display_name: "会话调度"
+  - id: run-lead
+    display_name: "工程主责"
+  - id: pm
+    display_name: "产品策划"
+  - id: engineer
+    display_name: "软件开发"
+
+cells:
+  templates:
+    implement:
+      lead_role: squad-lead
+      doer_role: engineer
+      check_role: sdet
+      room_kind: squad
+    docs:
+      lead_role: docs-lead
+      doer_role: tech-writer
+      check_role: docs-qa
+      room: docs
+    people:
+      lead_role: people-lead
+      doer_role: recruiter
+      check_role: people-qa
+      room: people
+
+research:
+  parallel_on_intake: true
+
+work_brief:
+  require_run_lead_approval: true
+  seat_slicing: true
+  require_docs_assemble: true
+  allow_research_attach: true

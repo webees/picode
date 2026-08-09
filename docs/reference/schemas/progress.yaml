@@ -1,0 +1,10 @@
+# Logical bus message type: progress (posted by task lead)
+task_id: task-a-1
+lead_id: squad-lead@task-a-1
+at: "2026-01-01T00:05:00Z"
+head_sha: "abc1234"
+phase: running   # running | verifying | handing_over
+summary: "engineer implementing module-a core"
+blocked: false
+blocker: null
+at_risk: false

@@ -1,0 +1,10 @@
+# type: request_info (via tool, not free-form chat)
+id: req-001
+from_agent: engineer@task-a-1
+task_id: task-a-1
+need: "clarification on public API error codes"
+context_refs: ["src/module-a/public/api.md"]
+status: pending  # pending | researching | run_lead_review | packaging | delivered | denied
+requires_web: false
+run_lead_decision: null  # approve | redact | deny
+packet_path: null
