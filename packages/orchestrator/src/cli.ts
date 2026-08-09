@@ -9,6 +9,7 @@ import {
   prepareTask,
   printSpawnEnv,
 } from "./task.js";
+import { SessionStore } from "./session-store.js";
 
 function arg(name: string, args: string[]): string | undefined {
   const i = args.indexOf(name);
@@ -26,6 +27,11 @@ function usage(): never {
   picode brief approve --repo <path> --run <id> --task <task_id> [--by run-lead]
   picode task prepare --repo <path> --run <id> --task <task_id>
   picode task spawn-print --repo <path> --run <id> --task <task_id> --seat squad-lead|engineer|sdet
+  picode session register --repo <path> --run <id> --agent <role_id> [--role <role_id>]
+  picode session wake --repo <path> --run <id> --agent <agent_id> [--reason <r>] [--force]
+  picode session sleep --repo <path> --run <id> --agent <agent_id> [--reason <r>]
+  picode session terminate --repo <path> --run <id> --agent <agent_id> [--reason <r>]
+  picode session list --repo <path> --run <id> [--state registered|sleeping|awake|terminated]
 `);
   process.exit(1);
 }
@@ -110,6 +116,47 @@ async function main(): Promise<void> {
     );
     console.log(printSpawnEnv(repo, dir, config, taskId, seat, ext));
     return;
+  }
+
+  if (cmd === "session") {
+    const sessions = new SessionStore(dir);
+    const sub = args[1];
+    const agent = arg("--agent", args);
+    const reason = arg("--reason", args) ?? "cli";
+    if (sub === "register") {
+      if (!agent) usage();
+      const role = arg("--role", args) ?? agent;
+      const rec = sessions.register(role, { agentId: agent, initialState: "sleeping" });
+      console.log(JSON.stringify(rec, null, 2));
+      return;
+    }
+    if (sub === "wake") {
+      if (!agent) usage();
+      const rec = await sessions.wake(agent, reason, {
+        maxAwake: config.sess_mgr.max_awake,
+        force: args.includes("--force"),
+      });
+      console.log(JSON.stringify(rec, null, 2));
+      return;
+    }
+    if (sub === "sleep") {
+      if (!agent) usage();
+      console.log(JSON.stringify(await sessions.sleep(agent, reason), null, 2));
+      return;
+    }
+    if (sub === "terminate") {
+      if (!agent) usage();
+      console.log(JSON.stringify(await sessions.terminate(agent, reason), null, 2));
+      return;
+    }
+    if (sub === "list") {
+      const state = arg("--state", args);
+      let rows = sessions.list();
+      if (state) rows = rows.filter((s) => s.state === state);
+      console.log(JSON.stringify({ count: rows.length, sessions: rows }, null, 2));
+      return;
+    }
+    usage();
   }
 
   usage();

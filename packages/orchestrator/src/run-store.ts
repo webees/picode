@@ -10,6 +10,7 @@ import {
   type PicodeConfig,
 } from "@picode/core";
 import { RoomStore } from "@picode/bus";
+import { SessionStore, PLATFORM_ROLES } from "./session-store.js";
 
 export interface GoalState {
   schema_version: string;
@@ -118,6 +119,15 @@ export function createRun(
     { id: "run-lead", access: "post" },
     { id: "tpm", access: "read" },
   ]);
+
+  // Stage A (18 §4): register every on platform role as sleeping (sponsor is
+  // never registered). Wake decisions belong to the stage-B rules engine.
+  const sessions = new SessionStore(dir);
+  if (config.sess_mgr.always_register) {
+    for (const roleId of PLATFORM_ROLES) {
+      sessions.register(roleId, { initialState: "sleeping" });
+    }
+  }
 
   return { runId, config, dir };
 }

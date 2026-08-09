@@ -32,9 +32,35 @@ export interface CellTemplate {
   room_kind?: string;
 }
 
+export interface SessMgrConfig {
+  enabled: boolean;
+  idle_sleep_sec: number;
+  allow_orch_force_wake: boolean;
+  max_awake: number;
+  always_register: boolean;
+}
+
+export interface SponsorConfig {
+  /** MUST be true in v1 (17 §10): sponsor is always human. */
+  human_only: boolean;
+}
+
+export interface StaffingConfig {
+  /** v1 fixed: real_recruit (17 §10 / D009). */
+  mode: "real_recruit" | "template";
+  persona_dimensions: "full";
+}
+
 export interface PicodeConfig {
   config_schema_version: string;
   active_profile?: string;
+  sess_mgr: SessMgrConfig;
+  sponsor: SponsorConfig;
+  staffing: StaffingConfig;
+  cells: {
+    lifetime: "per_run";
+    templates: Record<string, CellTemplate>;
+  };
   paths: {
     runs_root: string;
     skills_root: string;
@@ -61,7 +87,6 @@ export interface PicodeConfig {
   };
   rooms: RoomConfig[];
   roles: RoleConfig[];
-  cells: { templates: Record<string, CellTemplate> };
   models: { default: string | null; check_model: string | null };
   research: { parallel_on_intake: boolean };
   info_pipeline: { require_run_lead_review: boolean };
@@ -79,6 +104,15 @@ export interface PicodeConfig {
 
 const DEFAULTS: PicodeConfig = {
   config_schema_version: "1",
+  sess_mgr: {
+    enabled: true,
+    idle_sleep_sec: 600,
+    allow_orch_force_wake: true,
+    max_awake: 8,
+    always_register: true,
+  },
+  sponsor: { human_only: true },
+  staffing: { mode: "real_recruit", persona_dimensions: "full" },
   paths: {
     runs_root: ".picode/runs",
     skills_root: "skills",
@@ -142,6 +176,7 @@ const DEFAULTS: PicodeConfig = {
     { id: "sec-eng", display_name: "安全工程", tool_profile: "gate.sec-eng" },
   ],
   cells: {
+    lifetime: "per_run",
     templates: {
       implement: {
         lead_role: "squad-lead",
@@ -184,8 +219,7 @@ const DEFAULTS: PicodeConfig = {
   i18n: { locale: "zh-CN" },
 };
 
-// Note: sess_mgr / sponsor / staffing keys live in project config overlay;
-// see docs/spec/17-agent-runtime.md — typed fields may be added when orchestrator implements them.
+// Note: sess_mgr / sponsor / staffing / cells.lifetime are typed per 17 §10.
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -269,6 +303,22 @@ export function validateConfig(config: PicodeConfig): void {
     if (roomIds.has(r.id)) {
       throw new Error(`naming law R1: role id "${r.id}" collides with room id`);
     }
+  }
+  // 17 §10 v1-fixed values: changing them is a config error, not a silent override.
+  if (config.sponsor.human_only !== true) {
+    throw new Error("sponsor.human_only must be true in v1 (sponsor is always human)");
+  }
+  if (config.staffing.mode !== "real_recruit") {
+    throw new Error("staffing.mode must be real_recruit in v1 (true recruiting)");
+  }
+  if (config.staffing.persona_dimensions !== "full") {
+    throw new Error("staffing.persona_dimensions must be full in v1 (17 §6)");
+  }
+  if (config.cells.lifetime !== "per_run") {
+    throw new Error("cells.lifetime must be per_run in v1 (D019)");
+  }
+  if (!Number.isInteger(config.sess_mgr.max_awake) || config.sess_mgr.max_awake < 1) {
+    throw new Error("sess_mgr.max_awake must be a positive integer");
   }
   if (config.features.allow_implement_before_active) {
     console.warn("[picode] WARNING: allow_implement_before_active=true");

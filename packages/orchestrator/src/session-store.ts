@@ -1,0 +1,167 @@
+import fs from "node:fs";
+import path from "node:path";
+import YAML from "yaml";
+import {
+  assertTransition,
+  ensureDir,
+  withFileLock,
+  writeAtomic,
+  type SessionRecord,
+  type SessionState,
+} from "@picode/core";
+
+/**
+ * Platform sessions registered per run (17 §3.2 + §3.3).
+ * `sponsor` is human-only and never registered (17 §3.1).
+ */
+export const PLATFORM_ROLES: readonly string[] = [
+  "sess-mgr",
+  "run-lead",
+  "tpm",
+  "proc-audit",
+  "pm",
+  "ind-res",
+  "scout",
+  "sys-arch",
+  "docs-lead",
+  "tech-writer",
+  "docs-qa",
+  "people-lead",
+  "recruiter",
+  "people-qa",
+  "code-review",
+  "release-eng",
+  "sec-eng",
+] as const;
+
+const HUMAN_ONLY_ROLES: readonly string[] = ["sponsor"] as const;
+
+export class SessionStore {
+  constructor(private runDir: string) {}
+
+  private sessionsDir(): string {
+    return path.join(this.runDir, "sessions");
+  }
+
+  private sessionPath(agentId: string): string {
+    return path.join(this.sessionsDir(), `${agentId}.yaml`);
+  }
+
+  private lockPath(): string {
+    return path.join(this.sessionsDir(), ".lock");
+  }
+
+  get(agentId: string): SessionRecord | null {
+    const p = this.sessionPath(agentId);
+    if (!fs.existsSync(p)) return null;
+    return YAML.parse(fs.readFileSync(p, "utf8")) as SessionRecord;
+  }
+
+  list(): SessionRecord[] {
+    const dir = this.sessionsDir();
+    if (!fs.existsSync(dir)) return [];
+    return fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith(".yaml"))
+      .map((f) => YAML.parse(fs.readFileSync(path.join(dir, f), "utf8")) as SessionRecord)
+      .sort((a, b) => a.agent_id.localeCompare(b.agent_id));
+  }
+
+  /** Sessions currently awake (T21: sleeping sessions must not appear here). */
+  awake(): SessionRecord[] {
+    return this.list().filter((s) => s.state === "awake");
+  }
+
+  /**
+   * Register a session in the roster.
+   * Human-only roles (sponsor) are rejected; initialState may be
+   * "registered" (default) or "sleeping" (init fast-path per 18 phase A).
+   */
+  register(roleId: string, opts: { agentId?: string; initialState?: "registered" | "sleeping" } = {}): SessionRecord {
+    if (HUMAN_ONLY_ROLES.includes(roleId)) {
+      throw Object.assign(new Error("sponsor is human-only; cannot register session"), {
+        code: "SESSION_HUMAN_ONLY",
+      });
+    }
+    const agentId = opts.agentId ?? roleId;
+    const existing = this.get(agentId);
+    if (existing) throw new Error(`session already registered: ${agentId}`);
+
+    const state = opts.initialState ?? "registered";
+    const record: SessionRecord = {
+      schema_version: "1",
+      agent_id: agentId,
+      role_id: roleId,
+      state,
+      pi_session_id: null,
+      last_wake_at: null,
+      last_sleep_at: null,
+      wake_reason: null,
+      persona_path: null,
+      error: null,
+    };
+    ensureDir(this.sessionsDir());
+    writeAtomic(this.sessionPath(agentId), YAML.stringify(record));
+    return record;
+  }
+
+  /** Transition sleeping -> awake. maxAwake is a soft scheduling target (17 §5 / D012). */
+  async wake(
+    agentId: string,
+    reason: string,
+    opts: { maxAwake?: number; force?: boolean } = {},
+  ): Promise<SessionRecord> {
+    return this.transition(agentId, "awake", (cur) => {
+      if (!opts.force && opts.maxAwake !== undefined && opts.maxAwake >= 0) {
+        const over = this.awake().filter((s) => s.agent_id !== agentId).length >= opts.maxAwake;
+        if (over) {
+          throw Object.assign(
+            new Error(`max_awake=${opts.maxAwake} exceeded; wake "${agentId}" would exceed limit`),
+            { code: "MAX_AWAKE_EXCEEDED" },
+          );
+        }
+      }
+      return { ...cur, wake_reason: reason, last_wake_at: new Date().toISOString() };
+    });
+  }
+
+  /** Transition awake -> sleeping. */
+  async sleep(agentId: string, reason: string): Promise<SessionRecord> {
+    return this.transition(agentId, "sleeping", (cur) => {
+      void reason;
+      return {
+        ...cur,
+        pi_session_id: null,
+        wake_reason: null,
+        last_sleep_at: new Date().toISOString(),
+      };
+    });
+  }
+
+  /** Transition sleeping|awake -> terminated (task dissolved, run closed, …). */
+  async terminate(agentId: string, reason: string): Promise<SessionRecord> {
+    return this.transition(agentId, "terminated", (cur) => ({
+      ...cur,
+      error: null,
+      wake_reason: null,
+      pi_session_id: null,
+    }));
+  }
+
+  /** Read-modify-write under flock; enforces the 17 §4 state machine. */
+  private async transition(
+    agentId: string,
+    to: SessionState,
+    mutate: (cur: SessionRecord) => Partial<SessionRecord>,
+  ): Promise<SessionRecord> {
+    const p = this.sessionPath(agentId);
+    return withFileLock(this.lockPath(), () => {
+      if (!fs.existsSync(p)) throw new Error(`session not found: ${agentId}`);
+      const cur = YAML.parse(fs.readFileSync(p, "utf8")) as SessionRecord;
+      assertTransition(cur.state, to, agentId);
+      const next: SessionRecord = { ...cur, ...mutate(cur), state: to };
+      writeAtomic(p, YAML.stringify(next));
+      return next;
+    });
+  }
+}

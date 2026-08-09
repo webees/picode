@@ -26,6 +26,9 @@
 | D020 | 调度默认：**规则优先**，sess-mgr LLM 仅仲裁冲突/裁剪 |
 | D021 | 实现编码由项目方负责；策划见 18-v1-completion-plan |
 | D022 | 自我进化：goal.kind=self_evolve；分层 L0–L5；E1→E3 成熟度；叠加 E1–E7 门闩；权威 19-self-evolution |
+| D023 | init 机械注册全部平台岗为 sleeping（sponsor 不注册）；wake 决策归阶段 B 规则引擎（18 阶段 A 字面，T23 语义：intake_start 才唤醒 pm/run-lead） |
+| D024 | `max_awake` 由 orchestrator 机械执行软上限（MAX_AWAKE_EXCEEDED，`--force` 可绕过），与 D012 不冲突 |
+| D025 | 修复 `withFileLock` 吞掉临界区内异常的错误（I10 相关）：获取锁失败与 fn 异常分离重试 |
 
 ## 开放
 

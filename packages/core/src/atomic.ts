@@ -21,20 +21,23 @@ export async function withFileLock<T>(
   const delayMs = opts.delayMs ?? 20;
   mkdirSync(path.dirname(lockPath), { recursive: true });
   for (let i = 0; i < retries; i++) {
+    let fd: number | undefined;
     try {
-      const fd = openSync(lockPath, "wx");
-      try {
-        return await fn();
-      } finally {
-        closeSync(fd);
-        try {
-          fs.unlinkSync(lockPath);
-        } catch {
-          /* ignore */
-        }
-      }
+      fd = openSync(lockPath, "wx");
     } catch {
+      // lockfile exists (or uncreatable): another writer holds the lock — retry
       await new Promise((r) => setTimeout(r, delayMs));
+      continue;
+    }
+    try {
+      return await fn();
+    } finally {
+      closeSync(fd);
+      try {
+        fs.unlinkSync(lockPath);
+      } catch {
+        /* ignore */
+      }
     }
   }
   throw new Error(`Failed to acquire lock: ${lockPath}`);
