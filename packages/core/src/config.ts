@@ -64,6 +64,14 @@ export interface SponsorConfig {
   human_only: boolean;
 }
 
+/** Pi process binding (18 phase C): spawn adapter command template. */
+export interface PiConfig {
+  /** Wake actually spawns a Pi process only when enabled. */
+  enabled: boolean;
+  /** Shell command template run on wake (e.g. "pi --print"). Static config, no interpolation. */
+  command_template: string;
+}
+
 export interface StaffingConfig {
   /** v1 fixed: real_recruit (17 §10 / D009). */
   mode: "real_recruit" | "template";
@@ -119,6 +127,7 @@ export interface PicodeConfig {
   features: Record<string, boolean>;
   bus: { adapter: "file" | "messenger" };
   i18n: { locale: string; strings?: Record<string, string> };
+  pi: PiConfig;
 }
 
 const DEFAULTS: PicodeConfig = {
@@ -252,6 +261,7 @@ const DEFAULTS: PicodeConfig = {
   },
   bus: { adapter: "file" },
   i18n: { locale: "zh-CN" },
+  pi: { enabled: false, command_template: "pi --print" },
 };
 
 // Note: sess_mgr / sponsor / staffing / cells.lifetime are typed per 17 §10.
@@ -351,6 +361,9 @@ export function validateConfig(config: PicodeConfig): void {
   }
   if (config.cells.lifetime !== "per_run") {
     throw new Error("cells.lifetime must be per_run in v1 (D019)");
+  }
+  if (config.pi.enabled && !config.pi.command_template) {
+    throw new Error("pi.command_template required when pi.enabled (18 phase C)");
   }
   if (!Number.isInteger(config.sess_mgr.max_awake) || config.sess_mgr.max_awake < 1) {
     throw new Error("sess_mgr.max_awake must be a positive integer");

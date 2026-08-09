@@ -1,0 +1,220 @@
+import { spawn, type ChildProcess } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import type { PicodeConfig, SessionRecord } from "@picode/core";
+import { issueToken } from "@picode/bus";
+import { SessionStore } from "./session-store.js";
+
+/**
+ * Pi spawn adapter (18 phase C). Interface-isolated so a real `pi` binary,
+ * a long-running RPC, or a mock can back it without touching the state machine.
+ */
+export interface PiHandle {
+  pid: number;
+  pi_session_id: string;
+}
+
+export interface PiSpawner {
+  spawn(agentId: string, env: Record<string, string>): PiHandle;
+  stop(handle: PiHandle): void;
+  isAlive(handle: PiHandle): boolean;
+}
+
+/**
+ * Module-level handle registry: wake and sleep build fresh PiSpawner
+ * instances, but the ChildProcess must stay referenced so Node reaps the
+ * child (no zombies) and cross-instance stop works.
+ */
+const GLOBAL_HANDLES = new Map<number, ChildProcess>();
+
+/** Default spawner: runs the configured static command template (e.g. `pi --print`). */
+export class CommandPiSpawner implements PiSpawner {
+  spawn(_agentId: string, env: Record<string, string>): PiHandle {
+    const template = this.config.pi.command_template;
+    const child = spawn(template, {
+      shell: true,
+      detached: true,
+      stdio: "ignore",
+      env: { ...process.env, ...env },
+    });
+    const pid = child.pid ?? -1;
+    if (pid <= 0) {
+      throw new Error(`failed to spawn pi command: ${template}`);
+    }
+    const handle: PiHandle = { pid, pi_session_id: `pid-${pid}` };
+    GLOBAL_HANDLES.set(pid, child);
+    child.once("exit", () => GLOBAL_HANDLES.delete(pid));
+    return handle;
+  }
+
+  stop(handle: PiHandle): void {
+    const child = GLOBAL_HANDLES.get(handle.pid);
+    // Detached spawn creates a new process group (pgid == pid); signal the
+    // group even when this spawner instance did not spawn the child.
+    for (const sig of ["SIGTERM", "SIGKILL"] as const) {
+      try {
+        process.kill(-handle.pid, sig);
+        break;
+      } catch {
+        try {
+          process.kill(handle.pid, sig);
+          break;
+        } catch {
+          /* already gone */
+        }
+      }
+    }
+    void child;
+  }
+
+  isAlive(handle: PiHandle): boolean {
+    const child = GLOBAL_HANDLES.get(handle.pid);
+    if (!child || child.exitCode !== null) return false;
+    try {
+      process.kill(handle.pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  constructor(private config: PicodeConfig) {}
+}
+
+export function makeSpawner(config: PicodeConfig): PiSpawner {
+  return new CommandPiSpawner(config);
+}
+
+/** Primary room per 17 §3.3 (first column of the platform-roles table). */
+const ROLE_PRIMARY_ROOM: Record<string, string> = {
+  "run-lead": "leadership",
+  tpm: "program",
+  "proc-audit": "leadership",
+  pm: "product",
+  "ind-res": "research",
+  scout: "architecture",
+  "sys-arch": "architecture",
+  "docs-lead": "docs",
+  "tech-writer": "docs",
+  "docs-qa": "docs",
+  "people-lead": "people",
+  recruiter: "people",
+  "people-qa": "people",
+  "code-review": "quality",
+  "release-eng": "release",
+  "sec-eng": "security",
+  "sess-mgr": "leadership",
+};
+
+function readSecret(dir: string): string {
+  const p = path.join(dir, "secret.txt");
+  if (!fs.existsSync(p)) return "dev-secret";
+  return fs.readFileSync(p, "utf8").trim();
+}
+
+/** Build the Pi session env (18 phase C: token, profile, cwd, room, persona). */
+export function buildPiEnv(
+  dir: string,
+  config: PicodeConfig,
+  session: SessionRecord,
+): Record<string, string> {
+  const runId = path.basename(dir);
+  const secret = readSecret(dir);
+  const profile =
+    config.roles.find((r) => r.id === session.role_id)?.tool_profile ?? "implement.engineer";
+  const room = ROLE_PRIMARY_ROOM[session.role_id] ?? "leadership";
+  const persona = personaForSession(dir, session);
+
+  return {
+    PICODE_RUN_ID: runId,
+    PICODE_RUNS_ROOT: path.dirname(dir),
+    PICODE_AGENT_ID: session.agent_id,
+    PICODE_AGENT_TOKEN: issueToken(session.agent_id, secret),
+    PICODE_TOOL_PROFILE: profile,
+    PICODE_ROOM: room,
+    PICODE_PERSONA: persona,
+    PICODE_CWD: path.resolve(dir, "../.."),
+    PICODE_TRANSCRIPT_DIR: path.join(dir, "transcripts"),
+  };
+}
+
+function personaForSession(dir: string, session: SessionRecord): string {
+  // task seats carry an explicit persona file from staffing
+  if (session.persona_path) return path.join(dir, session.persona_path);
+  // platform seats fall back to the role template under <repo>/.picode/agents
+  const repoRoot = path.resolve(dir, "../../..");
+  const template = path.join(repoRoot, ".picode", "agents", `${session.role_id}.md`);
+  return fs.existsSync(template) ? template : "";
+}
+
+/**
+ * Wake with a real Pi process; spawn failure lands in session.error and the
+ * session rolls back to sleeping (17 §4: awake = live Pi session).
+ */
+export async function wakeWithPi(
+  dir: string,
+  config: PicodeConfig,
+  agentId: string,
+  reason: string,
+  opts: { maxAwake?: number; force?: boolean } = {},
+): Promise<{ session: SessionRecord; pi: PiHandle | null }> {
+  const store = new SessionStore(dir);
+  const session = await store.wake(agentId, reason, opts);
+  if (!config.pi.enabled) {
+    return { session, pi: null };
+  }
+  try {
+    const env = buildPiEnv(dir, config, session);
+    const spawner = makeSpawner(config);
+    const pi = spawner.spawn(session.agent_id, env);
+    // fast-fail: a command that exits immediately (missing binary, bad template)
+    // must not count as an awake Pi session
+    if (!(await waitAlive(spawner, pi, 250))) {
+      throw new Error(`pi command exited immediately: ${config.pi.command_template}`);
+    }
+    const updated = await store.attachPiSession(agentId, pi.pi_session_id);
+    return { session: updated, pi };
+  } catch (e) {
+    const msg = `pi spawn failed: ${e instanceof Error ? e.message : String(e)}`;
+    try {
+      await store.sleep(agentId, `spawn-failed`);
+    } catch {
+      /* keep error only */
+    }
+    await store.setError(agentId, msg);
+    throw Object.assign(new Error(msg), { code: "PI_SPAWN_FAILED" });
+  }
+}
+
+/** Parse the pid stored in a pi_session_id ("pid-<n>"). */
+export function piPidOf(piSessionId: string): number {
+  const n = Number(piSessionId.replace(/^pid-/, ""));
+  return Number.isInteger(n) && n > 0 ? n : -1;
+}
+
+async function waitAlive(spawner: PiSpawner, handle: PiHandle, ms: number): Promise<boolean> {
+  await new Promise((r) => setTimeout(r, ms));
+  return spawner.isAlive(handle);
+}
+
+/** Sleep: gracefully stop the Pi process (if any), then transition. */
+export async function sleepWithPi(
+  dir: string,
+  config: PicodeConfig,
+  agentId: string,
+  reason: string,
+): Promise<SessionRecord> {
+  const store = new SessionStore(dir);
+  const cur = store.get(agentId);
+  if (cur?.state === "awake" && cur.pi_session_id) {
+    const pid = piPidOf(cur.pi_session_id);
+    if (pid > 0) {
+      try {
+        makeSpawner(config).stop({ pid, pi_session_id: cur.pi_session_id });
+      } catch {
+        /* process may already be gone */
+      }
+    }
+  }
+  return store.sleep(agentId, reason);
+}

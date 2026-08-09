@@ -148,6 +148,33 @@ export class SessionStore {
     }));
   }
 
+  /** Record a session error (18 phase C: Pi spawn failure etc.). No state change. */
+  async setError(agentId: string, error: string): Promise<SessionRecord> {
+    const p = this.sessionPath(agentId);
+    return withFileLock(this.lockPath(), () => {
+      if (!fs.existsSync(p)) throw new Error(`session not found: ${agentId}`);
+      const cur = YAML.parse(fs.readFileSync(p, "utf8")) as SessionRecord;
+      const next = { ...cur, error };
+      writeAtomic(p, YAML.stringify(next));
+      return next;
+    });
+  }
+
+  /** Record the live Pi session id on an awake session (stage C). */
+  async attachPiSession(agentId: string, piSessionId: string): Promise<SessionRecord> {
+    return withFileLock(this.lockPath(), () => {
+      const p = this.sessionPath(agentId);
+      if (!fs.existsSync(p)) throw new Error(`session not found: ${agentId}`);
+      const cur = YAML.parse(fs.readFileSync(p, "utf8")) as SessionRecord;
+      if (cur.state !== "awake") {
+        throw new Error(`attachPiSession requires awake state, got ${cur.state}`);
+      }
+      const next: SessionRecord = { ...cur, pi_session_id: piSessionId };
+      writeAtomic(p, YAML.stringify(next));
+      return next;
+    });
+  }
+
   /** Read-modify-write under flock; enforces the 17 §4 state machine. */
   private async transition(
     agentId: string,

@@ -9,6 +9,7 @@ import {
   type SessMgrRule,
 } from "@picode/core";
 import { SessionStore } from "./session-store.js";
+import { sleepWithPi, wakeWithPi } from "./pi-adapter.js";
 
 /**
  * Deterministic rules engine (18 phase B / 17 §5.3).
@@ -259,13 +260,13 @@ export async function drainSessionCommands(
           } else if (cur.state !== "sleeping") {
             throw new Error(`cannot wake from ${cur.state}`);
           } else {
-            await store.wake(cmd.agent_id, cmd.reason, {
+            await wakeWithPi(dir, config, cmd.agent_id, cmd.reason, {
               maxAwake: cmd.force ? undefined : config.sess_mgr.max_awake,
               force: cmd.force,
             });
           }
         } else if (cmd.action === "sleep") {
-          await store.sleep(cmd.agent_id, cmd.reason);
+          await sleepWithPi(dir, config, cmd.agent_id, cmd.reason);
         } else if (cmd.action === "terminate") {
           await store.terminate(cmd.agent_id, cmd.reason);
         }

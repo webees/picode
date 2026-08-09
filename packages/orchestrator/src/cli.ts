@@ -11,6 +11,7 @@ import {
 } from "./task.js";
 import { SessionStore } from "./session-store.js";
 import { applyEvent, drainSessionCommands, rosterSnapshot } from "./rules-engine.js";
+import { sleepWithPi, wakeWithPi } from "./pi-adapter.js";
 import {
   approveStaffing,
   checkPersonas,
@@ -176,7 +177,7 @@ async function main(): Promise<void> {
     }
     if (sub === "wake") {
       if (!agent) usage();
-      const rec = await sessions.wake(agent, reason, {
+      const rec = await wakeWithPi(dir, config, agent, reason, {
         maxAwake: config.sess_mgr.max_awake,
         force: args.includes("--force"),
       });
@@ -185,7 +186,7 @@ async function main(): Promise<void> {
     }
     if (sub === "sleep") {
       if (!agent) usage();
-      console.log(JSON.stringify(await sessions.sleep(agent, reason), null, 2));
+      console.log(JSON.stringify(await sleepWithPi(dir, config, agent, reason), null, 2));
       return;
     }
     if (sub === "terminate") {

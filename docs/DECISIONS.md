@@ -35,13 +35,13 @@
 | D029 | 阶段 D：persona 以 YAML frontmatter 落 `staffing/personas/<seat>.md`（17 §6 全维度）；`draft-personas` 机械模板填充，真实 recruiter LLM 会话可覆盖同一结构 |
 | D030 | `staffing approve` 内联 people-qa 校验（缺失席/缺维度/seat/instance_id/tool_profile/write_paths 任一不符 → 拒绝），通过后写 staffing.yaml 并注册三角 sessions |
 | D031 | 双门闩在 `prepareTask` 机械 enforce（goal active ∧ brief approved ∧ staffing approved）；brief 已批时 `staffing approve` 联动触发 `task_ready` 唤醒三角 |
+| D032 | 阶段 C：`pi.enabled` 时 `wakeWithPi` 拉起真 Pi 进程（`pi.command_template` 可配）；spawn 失败 → 回滚 sleeping + `session.error` + `PI_SPAWN_FAILED`；`sleepWithPi` 优雅终止进程组 |
+| D033 | Pi 适配器用模块级句柄注册表 + 进程组信号（跨 spawner 实例 stop 可靠、防 zombie）；spawn 后 250ms 快速失败检测（`waitAlive`） |
 
 ## 开放
 
 | ID | 项 |
 |----|-----|
 | O001 | 多 goal / program 级 |
-| O002 | session wake/sleep 与 Pi 绑定实现 |
-| O003 | staffing CLI 与 persona schema 实现 |
 | O004 | 可选 pi-subagents 临时 fork（非主路径） |
 | O005 | self_evolve write_paths 生成器与 verify_commands 接入 |
