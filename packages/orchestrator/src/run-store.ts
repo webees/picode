@@ -166,6 +166,43 @@ export function setGoalStatus(
   return goal;
 }
 
+/**
+ * Draft park (07§7 / 12-threat-model): a parked draft cannot silently become
+ * active — activation requires an explicit sponsor/run-lead unpark.
+ */
+export function parkGoal(dir: string, reason = "draft-idle"): GoalState {
+  const goal = readGoal(dir);
+  if (goal.status !== "draft") {
+    throw new Error(`only draft goals can be parked (current: ${goal.status})`);
+  }
+  goal.parked_at = new Date().toISOString();
+  goal.park_reason = reason;
+  writeGoal(dir, goal);
+  return goal;
+}
+
+export function unparkGoal(dir: string): GoalState {
+  const goal = readGoal(dir);
+  goal.parked_at = null;
+  goal.park_reason = null;
+  writeGoal(dir, goal);
+  return goal;
+}
+
+/** `draft` goals idle beyond draft_idle_sec are parked by default (park policy). */
+export function sweepDraftPark(dir: string, config: PicodeConfig): GoalState | null {
+  const goal = readGoal(dir);
+  if (goal.status !== "draft" || goal.parked_at) return null;
+  if (config.timeouts.draft_idle_policy !== "park") return null;
+  const idleSec = config.timeouts.draft_idle_sec;
+  const lastTouch = goal.created_at;
+  const idle = (Date.now() - Date.parse(lastTouch)) / 1000;
+  if (idle >= idleSec) {
+    return parkGoal(dir, "draft-idle-sweep");
+  }
+  return null;
+}
+
 /** Record product acceptance criteria (pm) and write product/brief.md (P01). */
 export function setProductAcceptance(dir: string, items: string[]): GoalState {
   const goal = readGoal(dir);

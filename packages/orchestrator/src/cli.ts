@@ -4,6 +4,14 @@ import { fileURLToPath } from "node:url";
 import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
 import { enqueueMerge, mergeNext, readMergeQueue } from "./merge.js";
 import { sweepProgress } from "./progress.js";
+import { statusSnapshot } from "./status.js";
+import {
+  createChangeOrder,
+  ingestTaskKnowledge,
+  parkDraft,
+  readChangeOrders,
+  transitionChangeOrder,
+} from "./memory.js";
 import {
   addChunkAndTask,
   approveBrief,
@@ -36,6 +44,13 @@ function usage(): never {
   picode merge enqueue --repo <path> --run <id> --task <task_id> [--by release-eng]
   picode merge process --repo <path> --run <id>
   picode progress check --repo <path> --run <id>
+  picode status --repo <path> --run <id>
+  picode change-order create --repo <path> --run <id> --task <task_id> --summary "..." [--by run-lead]
+  picode change-order apply --repo <path> --run <id> --id <co_id>
+  picode change-order close --repo <path> --run <id> --id <co_id>
+  picode change-order list --repo <path> --run <id>
+  picode draft park --repo <path> --run <id> --task <task_id>
+  picode knowledge ingest --repo <path> --run <id> --task <task_id>
   picode chunk add --repo <path> --run <id> --id chunk-a --write "src/**"
   picode brief draft --repo <path> --run <id> --task <task_id>
   picode brief approve --repo <path> --run <id> --task <task_id> [--by run-lead]
@@ -108,6 +123,39 @@ async function main(): Promise<void> {
   }
   if (cmd === "progress" && args[1] === "check") {
     console.log(JSON.stringify(await sweepProgress(dir, config), null, 2));
+    return;
+  }
+  if (cmd === "status") {
+    console.log(JSON.stringify(statusSnapshot(dir, config), null, 2));
+    return;
+  }
+  if (cmd === "change-order" && args[1] === "create") {
+    const taskId = arg("--task", args);
+    const summary = arg("--summary", args);
+    if (!taskId || !summary) usage();
+    console.log(JSON.stringify(await createChangeOrder(dir, taskId, summary, arg("--by", args) ?? "run-lead"), null, 2));
+    return;
+  }
+  if (cmd === "change-order" && (args[1] === "apply" || args[1] === "close")) {
+    const id = arg("--id", args);
+    if (!id) usage();
+    console.log(JSON.stringify(transitionChangeOrder(dir, id, args[1] === "apply" ? "applied" : "closed"), null, 2));
+    return;
+  }
+  if (cmd === "change-order" && args[1] === "list") {
+    console.log(JSON.stringify(readChangeOrders(dir), null, 2));
+    return;
+  }
+  if (cmd === "draft" && args[1] === "park") {
+    const taskId = arg("--task", args);
+    if (!taskId) usage();
+    console.log(JSON.stringify(parkDraft(dir, taskId), null, 2));
+    return;
+  }
+  if (cmd === "knowledge" && args[1] === "ingest") {
+    const taskId = arg("--task", args);
+    if (!taskId) usage();
+    console.log(JSON.stringify({ written: ingestTaskKnowledge(repo, dir, config, taskId) }, null, 2));
     return;
   }
 

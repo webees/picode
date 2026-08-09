@@ -160,6 +160,7 @@ const DEFAULTS: PicodeConfig = {
       { event: "progress_due", wake_squad_lead: true },
       { event: "merge_ready", wake: ["release-eng"], wake_gates: true },
       { event: "task_dissolved", terminate_squad: true },
+      { event: "change_applied", wake_squad_lead: true },
     ],
   },
   sponsor: { human_only: true },
