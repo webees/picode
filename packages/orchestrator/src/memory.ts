@@ -75,8 +75,23 @@ export function transitionChangeOrder(dir: string, id: string, to: "applied" | "
   const co = YAML.parse(fs.readFileSync(p, "utf8")) as ChangeOrder;
   if (co.status === "closed") throw new Error(`change order already closed: ${id}`);
   co.status = to;
-  if (to === "applied") co.applied_at = new Date().toISOString();
-  else co.closed_at = new Date().toISOString();
+  if (to === "applied") {
+    co.applied_at = new Date().toISOString();
+    // DoD (18 phase G): the change updates the in-flight task — record it on
+    // task.yaml so the squad sees the new requirement without losing work.
+    const tp = path.join(dir, "tasks", co.task_id, "task.yaml");
+    if (fs.existsSync(tp)) {
+      const task = YAML.parse(fs.readFileSync(tp, "utf8")) as {
+        change_orders?: Array<{ co_id: string; summary: string; applied_at: string }>;
+      };
+      const list = task.change_orders ?? [];
+      list.push({ co_id: co.id, summary: co.summary, applied_at: co.applied_at });
+      task.change_orders = list;
+      writeAtomic(tp, YAML.stringify(task));
+    }
+  } else {
+    co.closed_at = new Date().toISOString();
+  }
   writeAtomic(p, YAML.stringify(co));
   return co;
 }

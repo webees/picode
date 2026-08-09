@@ -1,10 +1,23 @@
 #!/usr/bin/env node
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
+import {
+  createRun,
+  resolveRunDir,
+  setGoalStatus,
+  setProductAcceptance,
+  parkGoal,
+  unparkGoal,
+  sweepDraftPark,
+} from "./run-store.js";
 import { enqueueMerge, mergeNext, readMergeQueue } from "./merge.js";
 import { sweepProgress } from "./progress.js";
 import { statusSnapshot } from "./status.js";
+import {
+  ackMemoryBrief,
+  listMemoryBriefs,
+  writeMemoryBrief,
+} from "./docs-memory.js";
 import {
   createChangeOrder,
   ingestTaskKnowledge,
@@ -49,7 +62,14 @@ function usage(): never {
   picode change-order apply --repo <path> --run <id> --id <co_id>
   picode change-order close --repo <path> --run <id> --id <co_id>
   picode change-order list --repo <path> --run <id>
+  picode memory brief write --repo <path> --run <id> --summary "..." [--l2 a.md,b.md] [--risk "r"] [--by docs-lead]
+  picode memory brief ack --repo <path> --run <id> --id <mb_id> [--by run-lead]
+  picode memory brief list --repo <path> --run <id>
+  picode goal park --repo <path> --run <id> [--reason r]
+  picode goal unpark --repo <path> --run <id>
   picode draft park --repo <path> --run <id> --task <task_id>
+  picode draft park-goal --repo <path> --run <id>
+  picode draft unpark --repo <path> --run <id>
   picode knowledge ingest --repo <path> --run <id> --task <task_id>
   picode chunk add --repo <path> --run <id> --id chunk-a --write "src/**"
   picode brief draft --repo <path> --run <id> --task <task_id>
@@ -122,7 +142,9 @@ async function main(): Promise<void> {
     return;
   }
   if (cmd === "progress" && args[1] === "check") {
-    console.log(JSON.stringify(await sweepProgress(dir, config), null, 2));
+    const parked = sweepDraftPark(dir, config);
+    const res = await sweepProgress(dir, config);
+    console.log(JSON.stringify({ ...res, draft_parked: parked?.parked_at ?? null }, null, 2));
     return;
   }
   if (cmd === "status") {
@@ -150,6 +172,14 @@ async function main(): Promise<void> {
     const taskId = arg("--task", args);
     if (!taskId) usage();
     console.log(JSON.stringify(parkDraft(dir, taskId), null, 2));
+    return;
+  }
+  if (cmd === "draft" && args[1] === "park-goal") {
+    console.log(JSON.stringify(parkGoal(dir), null, 2));
+    return;
+  }
+  if (cmd === "draft" && args[1] === "unpark") {
+    console.log(JSON.stringify(unparkGoal(dir), null, 2));
     return;
   }
   if (cmd === "knowledge" && args[1] === "ingest") {

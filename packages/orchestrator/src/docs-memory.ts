@@ -1,18 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { ensureDir, writeAtomic, type PicodeConfig } from "@picode/core";
+import { ensureDir, writeAtomic } from "@picode/core";
 
 /**
- * Memory & knowledge (18 phase G, I14): the docs cell owns run memory
- * (L1/L2 Memory Brief) and the knowledge base. Implementation triads must
- * not touch the main knowledge index.
+ * Memory Brief (18 phase G / 08-invariants I14): the docs lead (docs-lead)
+ * reports the L1/L2 memory surface to the engineering lead (run-lead), who
+ * must ack it before the memory face can be closed (11 playbook DoD).
+ * Knowledge ingest lives in memory.ts (ingestTaskKnowledge).
  */
-
-// ---------------------------------------------------------------------------
-// Memory Brief (docs-lead → run-lead)
-// ---------------------------------------------------------------------------
-
 export interface MemoryBrief {
   schema_version: "1";
   id: string;
@@ -51,11 +47,12 @@ export function writeMemoryBrief(
   return brief;
 }
 
+/** run-lead acknowledges the memory surface (idempotent). */
 export function ackMemoryBrief(dir: string, id: string, by = "run-lead"): MemoryBrief {
   const p = path.join(briefsDir(dir), `${id}.yaml`);
   if (!fs.existsSync(p)) throw new Error(`memory brief not found: ${id}`);
   const brief = YAML.parse(fs.readFileSync(p, "utf8")) as MemoryBrief;
-  if (brief.status === "acked") return brief; // idempotent
+  if (brief.status === "acked") return brief;
   const next: MemoryBrief = {
     ...brief,
     status: "acked",
@@ -74,57 +71,4 @@ export function listMemoryBriefs(dir: string): MemoryBrief[] {
     .filter((f) => f.endsWith(".yaml"))
     .map((f) => YAML.parse(fs.readFileSync(path.join(d, f), "utf8")) as MemoryBrief)
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
-}
-
-// ---------------------------------------------------------------------------
-// Knowledge candidates (docs cell stages; docs-qa approves into the base)
-// ---------------------------------------------------------------------------
-
-export function knowledgeDraftPath(config: PicodeConfig, repoRoot: string, id: string): string {
-  return path.join(repoRoot, config.paths.knowledge_root, "drafts", `${id}.md`);
-}
-
-export function knowledgeFinalPath(config: PicodeConfig, repoRoot: string, id: string): string {
-  return path.join(repoRoot, config.paths.knowledge_root, `${id}.md`);
-}
-
-/** Stage a knowledge candidate under docs/knowledge/drafts (tech-writer). */
-export function stageKnowledge(
-  config: PicodeConfig,
-  repoRoot: string,
-  opts: { id: string; title: string; body: string; by?: string },
-): string {
-  const p = knowledgeDraftPath(config, repoRoot, opts.id);
-  if (fs.existsSync(p)) throw new Error(`knowledge draft already staged: ${opts.id}`);
-  ensureDir(path.dirname(p));
-  writeAtomic(
-    p,
-    `---\nid: ${opts.id}\ntitle: "${opts.title}"\nstatus: draft\nstaged_by: ${opts.by ?? "tech-writer"}\nstaged_at: ${new Date().toISOString()}\n---\n\n${opts.body}\n`,
-  );
-  return p;
-}
-
-/** Approve a staged candidate into the knowledge base (docs-qa). */
-export function approveKnowledge(
-  config: PicodeConfig,
-  repoRoot: string,
-  id: string,
-  by = "docs-qa",
-): string {
-  const draft = knowledgeDraftPath(config, repoRoot, id);
-  if (!fs.existsSync(draft)) throw new Error(`knowledge draft not found: ${id}`);
-  const final = knowledgeFinalPath(config, repoRoot, id);
-  ensureDir(path.dirname(final));
-  let content = fs.readFileSync(draft, "utf8");
-  content = content.replace("status: draft", `status: approved\napproved_by: ${by}\napproved_at: ${new Date().toISOString()}`);
-  writeAtomic(final, content);
-  fs.unlinkSync(draft);
-  // append to the main index (docs cell owns it — I14)
-  const index = path.join(repoRoot, config.paths.knowledge_root, "README.md");
-  ensureDir(path.dirname(index));
-  if (!fs.existsSync(index)) {
-    writeAtomic(index, "# Knowledge Base\n\n");
-  }
-  fs.appendFileSync(index, `- [${id}](./${id}.md)\n`);
-  return final;
 }

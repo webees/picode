@@ -27,6 +27,9 @@ export interface GoalState {
   run_lead_id: string;
   user_confirmed_at: string | null;
   created_at: string;
+  /** Draft park (07§7): set when a draft is parked; unpark clears it. */
+  parked_at: string | null;
+  park_reason: string | null;
 }
 
 export function assertGitRepo(repoRoot: string): void {
@@ -67,6 +70,8 @@ export function createRun(
     run_lead_id: "run-lead",
     user_confirmed_at: null,
     created_at: new Date().toISOString(),
+    parked_at: null,
+    park_reason: null,
   };
   writeAtomic(path.join(dir, "goal.yaml"), YAML.stringify(goal));
   writeAtomic(
