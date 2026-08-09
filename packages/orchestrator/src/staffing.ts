@@ -309,6 +309,15 @@ export async function approveStaffing(
   request.status = "approved";
   writeAtomic(path.join(staffingDir(dir, taskId), "request.yaml"), YAML.stringify(request));
 
+  // P04 delivery: the people cell's job is done — put it back to sleep so
+  // gate wakes (merge_ready etc.) are not throttled by max_awake.
+  for (const p of ["people-lead", "recruiter", "people-qa"]) {
+    const s = sessions.get(p);
+    if (s?.state === "awake") {
+      await sessions.sleep(p, "staffing-delivered");
+    }
+  }
+
   // Double latch: wake squad when the work brief is also approved (P05).
   let wokeSquad = false;
   if (briefApproved(dir, taskId, config)) {

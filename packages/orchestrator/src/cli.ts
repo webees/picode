@@ -2,6 +2,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
+import { enqueueMerge, mergeNext, readMergeQueue } from "./merge.js";
+import { sweepProgress } from "./progress.js";
 import {
   addChunkAndTask,
   approveBrief,
@@ -31,6 +33,9 @@ function usage(): never {
   picode init --repo <path> --goal-title <title> [--scale S|M|L]
   picode goal set-status --repo <path> --run <id> --status intake|draft|active|...
   picode goal set-product-acceptance --repo <path> --run <id> --acceptance "a; b; c"
+  picode merge enqueue --repo <path> --run <id> --task <task_id> [--by release-eng]
+  picode merge process --repo <path> --run <id>
+  picode progress check --repo <path> --run <id>
   picode chunk add --repo <path> --run <id> --id chunk-a --write "src/**"
   picode brief draft --repo <path> --run <id> --task <task_id>
   picode brief approve --repo <path> --run <id> --task <task_id> [--by run-lead]
@@ -47,6 +52,9 @@ function usage(): never {
   picode staffing draft-personas --repo <path> --run <id> --task <task_id>
   picode staffing check --repo <path> --run <id> --task <task_id>
   picode staffing approve --repo <path> --run <id> --task <task_id> [--by run-lead]
+  picode progress sweep --repo <path> --run <id>
+  picode merge request --repo <path> --run <id> --task <task_id>
+  picode merge next --repo <path> --run <id>
 `);
   process.exit(1);
 }
@@ -85,6 +93,21 @@ async function main(): Promise<void> {
       skipProductAcceptanceCheck: !config.product.require_acceptance_before_active,
     });
     console.log(JSON.stringify(goal, null, 2));
+    return;
+  }
+
+  if (cmd === "merge" && args[1] === "enqueue") {
+    const taskId = arg("--task", args);
+    if (!taskId) usage();
+    console.log(JSON.stringify(await enqueueMerge(dir, taskId, arg("--by", args) ?? "release-eng"), null, 2));
+    return;
+  }
+  if (cmd === "merge" && args[1] === "process") {
+    console.log(JSON.stringify(await mergeNext(repo, dir, config), null, 2));
+    return;
+  }
+  if (cmd === "progress" && args[1] === "check") {
+    console.log(JSON.stringify(await sweepProgress(dir, config), null, 2));
     return;
   }
 
@@ -173,6 +196,29 @@ async function main(): Promise<void> {
     if (sub === "approve") {
       const r = await approveStaffing(dir, config, taskId, arg("--by", args) ?? "run-lead");
       console.log(JSON.stringify(r, null, 2));
+      return;
+    }
+    usage();
+  }
+
+  if (cmd === "progress" && args[1] === "sweep") {
+    const res = await sweepProgress(dir, config);
+    console.log(JSON.stringify(res, null, 2));
+    return;
+  }
+
+  if (cmd === "merge") {
+    const sub = args[1];
+    if (sub === "request") {
+      const taskId = arg("--task", args);
+      if (!taskId) usage();
+      const req = await enqueueMerge(dir, taskId);
+      console.log(JSON.stringify(req, null, 2));
+      return;
+    }
+    if (sub === "next") {
+      const res = await mergeNext(repo, dir, config);
+      console.log(JSON.stringify(res, null, 2));
       return;
     }
     usage();

@@ -96,15 +96,11 @@ export async function applyEvent(
   // Gate wakes by scale (merge_ready → code-review/sec-eng, decision-catalog §8)
   if (rule.wake_gates) {
     const scale = readGoalScale(dir);
-    if (scale === "S") {
-      push("code-review", "wake"); // SHOULD (soft)
-    } else if (scale === "M") {
-      push("code-review", "wake");
-      push("sec-eng", "wake"); // risk-triggered: keep mechanical for determinism
-    } else {
-      push("code-review", "wake");
-      push("sec-eng", "wake");
+    push("code-review", "wake"); // SHOULD→MUST per scale (decision-catalog §8)
+    if (scale === "L") {
+      push("sec-eng", "wake"); // MUST at L
     }
+    // M/S: sec-eng is risk-triggered — left to LLM arbitration, not mechanical
   }
 
   // Execute sequentially

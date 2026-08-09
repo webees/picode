@@ -259,6 +259,24 @@ export default function picodeExtension(pi: PiApi): void {
             task_id: env("PICODE_TASK_ID"),
           },
         });
+        // phase F: also write the machine-readable progress state for sweeps
+        const taskId = env("PICODE_TASK_ID");
+        if (taskId && runDir) {
+          const prog = {
+            task_id: taskId,
+            phase: params.phase ?? "running",
+            blocked: !!params.blocked,
+            summary: String(params.summary),
+            updated_at: new Date().toISOString(),
+          };
+          await withFileLock(path.join(runDir, ".progress.lock"), () => {
+            fs.mkdirSync(path.join(runDir, "tasks", taskId), { recursive: true });
+            fs.writeFileSync(
+              path.join(runDir, "tasks", taskId, "progress.json"),
+              JSON.stringify(prog, null, 2),
+            );
+          });
+        }
         return jsonResult({ ok: true, message: msg });
       } catch (e) {
         return err("BUS_ERROR", e instanceof Error ? e.message : String(e));
