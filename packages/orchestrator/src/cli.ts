@@ -11,6 +11,12 @@ import {
 } from "./task.js";
 import { SessionStore } from "./session-store.js";
 import { applyEvent, drainSessionCommands, rosterSnapshot } from "./rules-engine.js";
+import {
+  approveStaffing,
+  checkPersonas,
+  createStaffingRequest,
+  draftPersonas,
+} from "./staffing.js";
 
 function arg(name: string, args: string[]): string | undefined {
   const i = args.indexOf(name);
@@ -35,6 +41,10 @@ function usage(): never {
   picode session list --repo <path> --run <id> [--state registered|sleeping|awake|terminated]
   picode session event --repo <path> --run <id> --event <name> [--task <task_id>]
   picode session drain --repo <path> --run <id>
+  picode staffing request --repo <path> --run <id> --task <task_id> [--skills a,b] [--notes <n>]
+  picode staffing draft-personas --repo <path> --run <id> --task <task_id>
+  picode staffing check --repo <path> --run <id> --task <task_id>
+  picode staffing approve --repo <path> --run <id> --task <task_id> [--by run-lead]
 `);
   process.exit(1);
 }
@@ -119,6 +129,37 @@ async function main(): Promise<void> {
     );
     console.log(printSpawnEnv(repo, dir, config, taskId, seat, ext));
     return;
+  }
+
+  if (cmd === "staffing") {
+    const sub = args[1];
+    const taskId = arg("--task", args);
+    if (!taskId) usage();
+    if (sub === "request") {
+      const skills = (arg("--skills", args) ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      const r = await createStaffingRequest(dir, config, taskId, {
+        skills,
+        notes: arg("--notes", args),
+      });
+      console.log(JSON.stringify(r, null, 2));
+      return;
+    }
+    if (sub === "draft-personas") {
+      const r = draftPersonas(repo, dir, config, taskId);
+      console.log(JSON.stringify(r, null, 2));
+      return;
+    }
+    if (sub === "check") {
+      const issues = checkPersonas(dir, config, taskId);
+      console.log(JSON.stringify({ ok: issues.length === 0, issues }, null, 2));
+      return;
+    }
+    if (sub === "approve") {
+      const r = await approveStaffing(dir, config, taskId, arg("--by", args) ?? "run-lead");
+      console.log(JSON.stringify(r, null, 2));
+      return;
+    }
+    usage();
   }
 
   if (cmd === "session") {

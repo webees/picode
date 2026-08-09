@@ -12,6 +12,7 @@ import {
 } from "@picode/core";
 import { RoomStore, issueToken } from "@picode/bus";
 import { readGoal } from "./run-store.js";
+import { assertStaffingApproved } from "./staffing.js";
 
 export interface TaskState {
   id: string;
@@ -140,17 +141,30 @@ export function assertBriefApproved(dir: string, taskId: string, config: PicodeC
   }
 }
 
+/** P05 double latch: goal active ∧ work brief approved ∧ staffing approved. */
+export function assertPrepareAllowed(
+  repoRoot: string,
+  dir: string,
+  config: PicodeConfig,
+  taskId: string,
+): void {
+  void repoRoot;
+  const goal = readGoal(dir);
+  if (goal.status !== "active" && !config.features.allow_implement_before_active) {
+    throw new Error("goal not active");
+  }
+  assertBriefApproved(dir, taskId, config);
+  assertStaffingApproved(dir, taskId);
+}
+
 export function prepareTask(
   repoRoot: string,
   dir: string,
   config: PicodeConfig,
   taskId: string,
 ): { worktree: string; branch: string } {
-  const goal = readGoal(dir);
-  if (goal.status !== "active" && !config.features.allow_implement_before_active) {
-    throw new Error("goal not active");
-  }
-  assertBriefApproved(dir, taskId, config);
+  // P05 double latch: goal active ∧ work brief approved ∧ staffing approved.
+  assertPrepareAllowed(repoRoot, dir, config, taskId);
 
   const task = YAML.parse(
     fs.readFileSync(path.join(dir, "tasks", taskId, "task.yaml"), "utf8"),

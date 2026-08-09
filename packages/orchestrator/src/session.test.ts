@@ -14,7 +14,7 @@ import { SessionStore, PLATFORM_ROLES } from "./session-store.js";
 
 function tmpGitRepo(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-test-"));
-  execFileSync("git", ["init", "-q"], { cwd: dir });
+  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
   return dir;
 }
 
