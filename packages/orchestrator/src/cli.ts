@@ -42,7 +42,8 @@ import {
 } from "./closure.js";
 import { SessionStore } from "./session-store.js";
 import { applyEvent, drainSessionCommands, rosterSnapshot } from "./rules-engine.js";
-import { sleepWithPi, wakeWithPi } from "./pi-adapter.js";
+import { sleepWithPi, wakeWithPi, buildPiEnv } from "./pi-adapter.js";
+import { OpencodeSpawner, wakeWithOpencode } from "./opencode-adapter.js";
 import { writeEvolveKnowledgeLog } from "./evolve-run.js";
 import { compressRunWindows, windowStatus } from "./window-store.js";
 import { evolveWritePaths, type EvolveGoalSpec } from "@picode/core";
@@ -505,15 +506,32 @@ async function main(): Promise<void> {
     }
     if (sub === "wake") {
       if (!agent) usage();
-      const rec = await wakeWithPi(dir, config, agent, reason, {
-        maxAwake: config.sess_mgr.max_awake,
-        force: args.includes("--force"),
-      });
-      console.log(JSON.stringify(rec, null, 2));
+      if (config.opencode.enabled) {
+        const session = new SessionStore(dir).get(agent);
+        if (!session) throw new Error(`session not found: ${agent}`);
+        const env = buildPiEnv(dir, config, session);
+        const r = await wakeWithOpencode(dir, config, agent, reason, env, {
+          maxAwake: config.sess_mgr.max_awake,
+          force: args.includes("--force"),
+        });
+        console.log(JSON.stringify(r, null, 2));
+      } else {
+        const rec = await wakeWithPi(dir, config, agent, reason, {
+          maxAwake: config.sess_mgr.max_awake,
+          force: args.includes("--force"),
+        });
+        console.log(JSON.stringify(rec, null, 2));
+      }
       return;
     }
     if (sub === "sleep") {
       if (!agent) usage();
+      // opencode sessions carry an "oc-<id>" pi_session_id; stop them server-side
+      const cur = sessions.get(agent);
+      if (config.opencode.enabled && cur?.pi_session_id?.startsWith("oc-")) {
+        const spawner = new OpencodeSpawner(config);
+        await spawner.stop({ pid: -1, pi_session_id: cur.pi_session_id });
+      }
       console.log(JSON.stringify(await sleepWithPi(dir, config, agent, reason), null, 2));
       return;
     }

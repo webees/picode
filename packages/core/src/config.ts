@@ -72,6 +72,19 @@ export interface PiConfig {
   command_template: string;
 }
 
+/** Opencode backend (D044): route sessions through an opencode server's HTTP API. */
+export interface OpencodeConfig {
+  /** Use the opencode adapter instead of the pi command template. */
+  enabled: boolean;
+  /** Opencode server base URL, e.g. http://127.0.0.1:7788 (opencode serve). */
+  base_url: string;
+  /** Optional provider/model pair; defaults to the server's configured model. */
+  provider_id: string | null;
+  model_id: string | null;
+  /** System-prompt prefix injected into every session (role + picode env). */
+  system_prompt_prefix: string;
+}
+
 /** Product intake (18 phase E / U7): acceptance criteria gate on active. */
 export interface ProductConfig {
   /** goal must carry product_acceptance[] before intake → active (P01). */
@@ -194,6 +207,7 @@ export interface PicodeConfig {
   bus: { adapter: "file" | "messenger" };
   i18n: { locale: string; strings?: Record<string, string> };
   pi: PiConfig;
+  opencode: OpencodeConfig;
   product: ProductConfig;
   windows: WindowsConfig;
   run_allowlist: string[];
@@ -333,6 +347,13 @@ const DEFAULTS: PicodeConfig = {
   bus: { adapter: "file" },
   i18n: { locale: "zh-CN" },
   pi: { enabled: false, command_template: "pi --print" },
+  opencode: {
+    enabled: false,
+    base_url: "http://127.0.0.1:7788",
+    provider_id: null,
+    model_id: null,
+    system_prompt_prefix: "You are a picode agent. Follow your role prompt.",
+  },
   product: { require_acceptance_before_active: true },
   windows: {
     split_hour: 12,
@@ -454,6 +475,9 @@ export function validateConfig(config: PicodeConfig): void {
   }
   if (config.pi.enabled && !config.pi.command_template) {
     throw new Error("pi.command_template required when pi.enabled (18 phase C)");
+  }
+  if (config.opencode.enabled && !/^https?:\/\/.+/.test(config.opencode.base_url)) {
+    throw new Error("opencode.base_url must be an http(s) URL when opencode.enabled (D044)");
   }
   if (
     !Number.isInteger(config.windows.split_hour) ||

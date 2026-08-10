@@ -229,6 +229,22 @@ windows:
 
 CLI：`picode window compress [--rooms a,b]`、`picode window status`。
 
+## 8.2 LLM 后端：pi 命令模板 或 opencode serve（可配，D044）
+
+`session wake` 默认走 `pi.command_template`（18 phase C）。配置 `opencode.enabled` 后改走 **opencode serve** HTTP API：`POST /session` + `POST /session/{id}/message` 建真实会话（`pi_session_id = oc-<id>`），`session sleep` 调 `DELETE /session/{id}` 关闭。provider/model 留空用服务端默认模型；spawn 失败回滚 sleeping + 记 error。
+
+```yaml
+pi:
+  enabled: false
+  command_template: "pi --print"
+opencode:
+  enabled: true
+  base_url: "http://127.0.0.1:7788"   # opencode serve 地址
+  provider_id: null                    # 可指定，如 opencode-go
+  model_id: null                       # 可指定，如 deepseek-v4-flash；null = 服务端默认
+  system_prompt_prefix: "You are a picode agent. Follow your role prompt."
+```
+
 ## 9. Git / 路径可配
 
 ```yaml
