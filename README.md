@@ -29,3 +29,7 @@ npm install && npm run build && npm test
 
 文档按 A–F 分类（见 `docs/AUTHORITY.md`）：流程 / 术语单源；岗位全目录在 `docs/reference/glossary.md`。  
 MVP 骨架可编译测试；真 Pi 会话需本机安装 Pi 与模型。
+
+## License
+
+[MIT](./LICENSE) — Copyright (c) 2026 webees

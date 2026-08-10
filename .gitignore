@@ -8,3 +8,5 @@ dist/
 **/secret.txt
 .DS_Store
 *.log
+reasonix.toml
+.reasonix/

@@ -36,10 +36,10 @@
 
 ## 阶段 3 — Git worktree
 
-- [ ] create/remove worktree + branch  
-- [ ] dirty force-dissolve：auto-commit WIP 或 backup ref  
-- [ ] failed 回收 + prune  
-- [ ] merge.lock 串行 merge  
+- [x] create/remove worktree + branch  
+- [x] dirty force-dissolve：auto-commit WIP 或 backup ref  
+- [x] failed 回收 + prune  
+- [x] merge.lock 串行 merge  
 
 **DoD**：两 task 并行改不同 write_paths 不互相覆盖工作区。
 
@@ -67,10 +67,10 @@
 - [ ] **工程主责签发 work brief** + 文档小组落盘 + 可选调研供料  
 - [ ] 无 brief 或无 staffing 批准则拒绝 spawn  
 - [ ] 按 staffing 的 agent_id + persona spawn 于 worktree  
-- [ ] progress 定时  
-- [ ] evidence 校验  
-- [ ] handoff 包 + docs/tpm ack  
-- [ ] dissolve  
+- [x] progress 定时  
+- [x] evidence 校验  
+- [x] handoff 包 + docs/tpm ack  
+- [x] dissolve  
 
 **DoD**：无 run-lead 批准 brief 不能 spawn；无 evidence 不能 handoff；无 ack 不能 dissolve。
 
