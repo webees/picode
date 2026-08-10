@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
-import YAML from "yaml";
 import {
   ErrorCode,
   PicodeError,
   assertTransition,
   ensureDir,
+  readYamlFile,
   withFileLock,
-  writeAtomic,
+  writeYamlFile,
   type SessionRecord,
   type SessionState,
 } from "@picode/core";
@@ -54,9 +54,7 @@ export class SessionStore {
   }
 
   get(agentId: string): SessionRecord | null {
-    const p = this.sessionPath(agentId);
-    if (!fs.existsSync(p)) return null;
-    return YAML.parse(fs.readFileSync(p, "utf8")) as SessionRecord;
+    return readYamlFile<SessionRecord>(this.sessionPath(agentId));
   }
 
   list(): SessionRecord[] {
@@ -65,7 +63,7 @@ export class SessionStore {
     return fs
       .readdirSync(dir)
       .filter((f) => f.endsWith(".yaml"))
-      .map((f) => YAML.parse(fs.readFileSync(path.join(dir, f), "utf8")) as SessionRecord)
+      .map((f) => readYamlFile<SessionRecord>(path.join(dir, f))!)
       .sort((a, b) => a.agent_id.localeCompare(b.agent_id));
   }
 
@@ -106,7 +104,7 @@ export class SessionStore {
       error: null,
     };
     ensureDir(this.sessionsDir());
-    writeAtomic(this.sessionPath(agentId), YAML.stringify(record));
+    writeYamlFile(this.sessionPath(agentId), record);
     return record;
   }
 
@@ -157,12 +155,12 @@ export class SessionStore {
   async setError(agentId: string, error: string): Promise<SessionRecord> {
     const p = this.sessionPath(agentId);
     return withFileLock(this.lockPath(), () => {
-      if (!fs.existsSync(p)) {
+      const cur = readYamlFile<SessionRecord>(p);
+      if (!cur) {
         throw new PicodeError(ErrorCode.SESSION_NOT_FOUND, `session not found: ${agentId}`);
       }
-      const cur = YAML.parse(fs.readFileSync(p, "utf8")) as SessionRecord;
       const next = { ...cur, error };
-      writeAtomic(p, YAML.stringify(next));
+      writeYamlFile(p, next);
       return next;
     });
   }
@@ -171,10 +169,10 @@ export class SessionStore {
   async attachPiSession(agentId: string, piSessionId: string): Promise<SessionRecord> {
     return withFileLock(this.lockPath(), () => {
       const p = this.sessionPath(agentId);
-      if (!fs.existsSync(p)) {
+      const cur = readYamlFile<SessionRecord>(p);
+      if (!cur) {
         throw new PicodeError(ErrorCode.SESSION_NOT_FOUND, `session not found: ${agentId}`);
       }
-      const cur = YAML.parse(fs.readFileSync(p, "utf8")) as SessionRecord;
       if (cur.state !== "awake") {
         throw new PicodeError(
           ErrorCode.ILLEGAL_STATE,
@@ -182,7 +180,7 @@ export class SessionStore {
         );
       }
       const next: SessionRecord = { ...cur, pi_session_id: piSessionId };
-      writeAtomic(p, YAML.stringify(next));
+      writeYamlFile(p, next);
       return next;
     });
   }
@@ -195,13 +193,13 @@ export class SessionStore {
   ): Promise<SessionRecord> {
     const p = this.sessionPath(agentId);
     return withFileLock(this.lockPath(), () => {
-      if (!fs.existsSync(p)) {
+      const cur = readYamlFile<SessionRecord>(p);
+      if (!cur) {
         throw new PicodeError(ErrorCode.SESSION_NOT_FOUND, `session not found: ${agentId}`);
       }
-      const cur = YAML.parse(fs.readFileSync(p, "utf8")) as SessionRecord;
       assertTransition(cur.state, to, agentId);
       const next: SessionRecord = { ...cur, ...mutate(cur), state: to };
-      writeAtomic(p, YAML.stringify(next));
+      writeYamlFile(p, next);
       return next;
     });
   }

@@ -16,6 +16,8 @@ export const ErrorCode = {
   // config / infra
   CONFIG_INVALID: "CONFIG_INVALID",
   LOCK_TIMEOUT: "LOCK_TIMEOUT",
+  // CLI surface (方向 E1: missing/invalid arguments)
+  USAGE: "USAGE",
   // session state machine (17 §4)
   SESSION_HUMAN_ONLY: "SESSION_HUMAN_ONLY",
   SESSION_ALREADY_REGISTERED: "SESSION_ALREADY_REGISTERED",

@@ -1,13 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import YAML from "yaml";
 import {
+  assertEvolveTargetRoot,
   ensureDir,
   loadConfig,
+  readYamlFile,
   runDir,
   writeAtomic,
-  assertEvolveTargetRoot,
+  writeYamlFile,
   type EvolveGoalSpec,
   type GoalKind,
   type PicodeConfig,
@@ -110,23 +111,20 @@ export function createRun(
     parked_at: null,
     park_reason: null,
   };
-  writeAtomic(path.join(dir, "goal.yaml"), YAML.stringify(goal));
-  writeAtomic(
+  writeYamlFile(path.join(dir, "goal.yaml"), goal);
+  writeYamlFile(
     path.join(dir, "run.yaml"),
-    YAML.stringify({
+    {
       schema_version: "1",
       run_id: runId,
       created_at: goal.created_at,
       repo_root: path.resolve(repoRoot),
       status: "open",
       halt: false,
-    }),
+    },
   );
   // 11 stage 0: schema_version on every run state root file
-  writeAtomic(
-    path.join(dir, "chunks.yaml"),
-    YAML.stringify({ schema_version: "1", chunks: [] }),
-  );
+  writeYamlFile(path.join(dir, "chunks.yaml"), { schema_version: "1", chunks: [] });
   writeAtomic(path.join(dir, "secret.txt"), crypto.randomBytes(32).toString("hex"));
 
   const bus = new RoomStore(dir);
@@ -215,13 +213,13 @@ export function createRun(
 }
 
 export function readGoal(dir: string): GoalState {
-  const raw = YAML.parse(fs.readFileSync(path.join(dir, "goal.yaml"), "utf8")) as Partial<GoalState>;
+  const raw = readYamlFile<Partial<GoalState>>(path.join(dir, "goal.yaml")) ?? {};
   // Backward-compat: older goals have no kind — treat as delivery.
   return Object.assign({ kind: "delivery", target_repo: null, evolve: null }, raw) as GoalState;
 }
 
 export function writeGoal(dir: string, goal: GoalState): void {
-  writeAtomic(path.join(dir, "goal.yaml"), YAML.stringify(goal));
+  writeYamlFile(path.join(dir, "goal.yaml"), goal);
 }
 
 export function setGoalStatus(

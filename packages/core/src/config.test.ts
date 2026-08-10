@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { getDefaultConfig, loadConfig, validateConfig } from "./config.js";
+import { getDefaultConfig, validateConfig } from "./config.js";
+import { loadConfig } from "./loader.js";
 
 function tmpRepoWithConfig(yaml: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-cfg-"));

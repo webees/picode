@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import YAML from "yaml";
-import { ensureDir, writeAtomic, type PicodeConfig } from "@picode/core";
+import {
+  ensureDir,
+  readYamlFile,
+  writeYamlFile,
+  type PicodeConfig,
+} from "@picode/core";
 import { RoomStore, windowIdOf } from "@picode/bus";
 
 /**
@@ -76,7 +80,7 @@ export async function compressRunWindows(
     archive_path: archivePath,
   };
   ensureDir(path.dirname(archivePath));
-  writeAtomic(archivePath, YAML.stringify(archive));
+  writeYamlFile(archivePath, archive);
   return archive;
 }
 
@@ -89,9 +93,7 @@ export function readWindowArchive(dir: string): RunWindowArchive | null {
     .filter((f) => f.endsWith(".yaml"))
     .sort();
   if (files.length === 0) return null;
-  return YAML.parse(
-    fs.readFileSync(path.join(d, files[files.length - 1]), "utf8"),
-  ) as RunWindowArchive;
+  return readYamlFile<RunWindowArchive>(path.join(d, files[files.length - 1]));
 }
 
 /** Window status: current window + per-room message counts (read-only). */

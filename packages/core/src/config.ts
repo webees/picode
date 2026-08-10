@@ -1,9 +1,10 @@
-import fs from "node:fs";
-import path from "node:path";
-import YAML from "yaml";
+/**
+ * Config schema, defaults and validation (13-configuration).
+ *
+ * Pure module: no node:fs / yaml file I/O — loading lives in `loader.ts`
+ * (方向 B1). Everything here is deterministic and testable in isolation.
+ */
 import { ErrorCode, PicodeError } from "./errors.js";
-
-export type Access = "post" | "read";
 
 export interface RoomConfig {
   id: string;
@@ -214,7 +215,7 @@ export interface PicodeConfig {
   self_evolve: SelfEvolveConfig;
 }
 
-const DEFAULTS: PicodeConfig = {
+export const DEFAULTS: PicodeConfig = {
   config_schema_version: "1",
   sess_mgr: {
     enabled: true,
@@ -377,11 +378,17 @@ const DEFAULTS: PicodeConfig = {
 
 // Note: sess_mgr / sponsor / staffing / cells.lifetime are typed per 17 §10.
 
-function isPlainObject(v: unknown): v is Record<string, unknown> {
+export function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-function deepMerge(a: unknown, b: unknown): unknown {
+/**
+ * Layered deep merge (13 §2): maps/objects merge recursively; arrays merge by
+ * `id` (same id overrides fields, `_delete: true` / `enabled: false` removes);
+ * items without an id are appended. Used by the loader for
+ * DEFAULTS → project → profile → run override.
+ */
+export function deepMerge(a: unknown, b: unknown): unknown {
   if (Array.isArray(a) && Array.isArray(b)) {
     const byId = new Map<string, Record<string, unknown>>();
     const rest: unknown[] = [];
@@ -410,32 +417,6 @@ function deepMerge(a: unknown, b: unknown): unknown {
     return out;
   }
   return b === undefined ? a : b;
-}
-
-function loadYamlFile(filePath: string): unknown {
-  if (!fs.existsSync(filePath)) return {};
-  return YAML.parse(fs.readFileSync(filePath, "utf8")) ?? {};
-}
-
-export function loadConfig(repoRoot: string, runId?: string): PicodeConfig {
-  const project = loadYamlFile(path.join(repoRoot, ".picode", "config.yaml"));
-  let merged = deepMerge(DEFAULTS, project) as PicodeConfig;
-
-  const profile = merged.active_profile;
-  if (profile && profile !== "default") {
-    const p = loadYamlFile(path.join(repoRoot, ".picode", "profiles", `${profile}.yaml`));
-    merged = deepMerge(merged, p) as PicodeConfig;
-  }
-
-  if (runId) {
-    const o = loadYamlFile(
-      path.join(repoRoot, merged.paths.runs_root, runId, "config.override.yaml"),
-    );
-    merged = deepMerge(merged, o) as PicodeConfig;
-  }
-
-  validateConfig(merged);
-  return merged;
 }
 
 /** Throw a coded config-validation error (方向 A2: uniform ErrorCode registry). */
