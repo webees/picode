@@ -131,16 +131,26 @@ d=json.load(sys.stdin)
 s=next(x for x in d['sessions'] if x['agent_id']=='engineer@$TASK')
 print(s['pi_session_id'].replace('oc-',''))
 ")"
+# 必须带 model 对象（{providerID, modelID}）：serve v1.18 的模型在消息级指定，
+# 不带则回退 serve 默认模型（本机曾出现 gpt-5.6-luna → 403 region 不可用）
 REPLY="$(curl -s -m 300 "$SERVE_URL/session/$SID/message" -X POST -H "Content-Type: application/json" \
-  -d '{"parts":[{"type":"text","text":"输出最小 TypeScript add(a,b) 函数，只回代码。"}]}' \
+  -d '{"model":{"providerID":"opencode-go","modelID":"deepseek-v4-flash"},"parts":[{"type":"text","text":"输出最小 TypeScript add(a,b) 函数，只回代码。"}]}' \
   | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
+info=d.get('info',{})
+err=info.get('error')
+if err:
+    print('MODEL_ERROR: '+(err.get('data',{}).get('message') or str(err))[:200]); sys.exit(0)
 text=''.join(p.get('text','') for p in d.get('parts',[]) if p.get('type')=='text')
 print(text.strip()[:200])
 ")"
 echo "  模型产出: ${REPLY:0:80}..."
-[ -n "$REPLY" ] && echo "  对话: OK"
+case "$REPLY" in
+  MODEL_ERROR:*) echo "  ❌ 上游模型错误: ${REPLY#MODEL_ERROR: }"; exit 1;;
+  "") echo "  ❌ 空响应"; exit 1;;
+  *) echo "  对话: OK";;
+esac
 
 step "8/11 task prepare + 模拟 engineer 交付（worktree 提交）"
 PREP="$($CLI task prepare --repo "$TMP_REPO" --run "$RUN" --task "$TASK")"

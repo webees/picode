@@ -45,7 +45,7 @@
 |4|brief draft + run-lead approve（双门闩之一）|
 |5|staffing request → draft-personas → people-qa check → run-lead approve（双门闩之二）|
 |6|**三角会话真实 awake，`pi_session_id = oc-<id>`**（规则引擎经 opencode 建会话，D057）|
-|7|向 engineer 会话发消息，模型真实产出（LLM 链路）|
+|7|向 engineer 会话发消息（**必须带 `model: {providerID, modelID}` 对象**——serve v1.18 模型在消息级指定，不带则回退 serve 默认模型，本机曾遇 `gpt-5.6-luna` 区域 403），模型真实产出（LLM 链路）|
 |8|task prepare → worktree 提交交付文件（模拟 engineer 产出）|
 |9|三角 sleep（服务端会话 DELETE）→ evidence → handoff package+ack → dissolve|
 |10|merge enqueue → **串行 merge 真实合入 main**（文件在 main 上可见）|
