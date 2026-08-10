@@ -1,0 +1,8 @@
+{
+  // 项目级 markdownlint 配置（VSCode 扩展与 markdownlint-cli2 共用）。
+  // 覆盖默认规则，使其匹配本仓库中文文档的实际写法。
+  "MD013": false,
+  "MD024": {
+    "siblings_only": true
+  }
+}

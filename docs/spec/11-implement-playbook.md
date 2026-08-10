@@ -96,24 +96,24 @@
 
 ## 回归测试清单（MUST 自动化）
 
-| ID | 断言 |
+|ID|断言|
 |----|------|
-| T01 | intake 禁 implement |
-| T02 | open_questions 非空禁 active |
-| T03 | bus 无 token 拒绝 |
-| T04 | 非成员 post 拒绝 |
-| T05 | write 越界拒绝 |
-| T06 | diff 越界禁 handoff success |
-| T07 | 无 evidence 禁 pass 路径 |
-| T08 | 无 handoff ack 禁 dissolve |
-| T09 | web 非调研拒绝 |
-| T10 | 非 git 仓 init 失败 |
-| T11 | 串行 merge 锁 |
-| T12 | force dissolve 保留 backup ref |
-| T13 | 配置覆盖 room display_name 不影响 bus room id |
-| T14 | 禁用核心 room 且无替代时 init 失败 |
-| T15 | cells.templates 指向未知 role 时校验失败 |
-| T16 | 无 run-lead 批准 work brief 时 implement spawn 失败 |
-| T17 | engineer prompt 不含未批准调研全文 |
-| T18 | 无 staffing 批准时 prepare/spawn 失败 |
-| T19 | staffing 人设缺席位时 people-qa 应失败 |
+|T01|intake 禁 implement|
+|T02|open_questions 非空禁 active|
+|T03|bus 无 token 拒绝|
+|T04|非成员 post 拒绝|
+|T05|write 越界拒绝|
+|T06|diff 越界禁 handoff success|
+|T07|无 evidence 禁 pass 路径|
+|T08|无 handoff ack 禁 dissolve|
+|T09|web 非调研拒绝|
+|T10|非 git 仓 init 失败|
+|T11|串行 merge 锁|
+|T12|force dissolve 保留 backup ref|
+|T13|配置覆盖 room display_name 不影响 bus room id|
+|T14|禁用核心 room 且无替代时 init 失败|
+|T15|cells.templates 指向未知 role 时校验失败|
+|T16|无 run-lead 批准 work brief 时 implement spawn 失败|
+|T17|engineer prompt 不含未批准调研全文|
+|T18|无 staffing 批准时 prepare/spawn 失败|
+|T19|staffing 人设缺席位时 people-qa 应失败|

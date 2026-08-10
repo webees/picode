@@ -5,11 +5,11 @@
 
 ## 1. 编制（MUST 三人）
 
-| 席位 | ID | 中文 | 一句话 |
+|席位|ID|中文|一句话|
 |------|-----|------|--------|
-| 领导 | `docs-lead` | 文档主责 | 记忆/知识策略；向工程主责汇报；下发与 brief 组装的质量责任人 |
-| 执行 | `tech-writer` | 技术写作 | 写 L1/L2、整理 brief/packet、执行知识入库草稿 |
-| 监督 | `docs-qa` | 文档质检 | 一致性、来源/TTL、挡不合格记忆与知识 |
+|领导|`docs-lead`|文档主责|记忆/知识策略；向工程主责汇报；下发与 brief 组装的质量责任人|
+|执行|`tech-writer`|技术写作|写 L1/L2、整理 brief/packet、执行知识入库草稿|
+|监督|`docs-qa`|文档质检|一致性、来源/TTL、挡不合格记忆与知识|
 
 配置模板键：`cells.templates.docs`（默认 lead/doer/check 如上）。  
 展示名可配（13）；逻辑 id 稳定。
@@ -18,14 +18,14 @@
 
 ### 2.1 文档小组 **负责**
 
-| 域 | 内容 |
+|域|内容|
 |----|------|
-| **Run 记忆** | L0 收口、L1 规范叙事、L2 工程主责简报、handoff 归档索引 |
-| **知识管理** | `skills/`、`docs/knowledge/` 编目、版本、过期标记、ingest 建议 |
-| **信息下发** | 将工程主责批准的内容打成 packet / 写入 work brief 附件结构 |
-| **工作 brief 组装** | 工程主责意图 + 调研要点 → 结构化 WORK_BRIEF；**工程主责仍为签发人** |
-| **向工程主责汇报** | 周期 Memory Brief；阶段风险；「记忆面可关闭」签字 |
-| **申请队列** | 处理 `request_info` 队列的文档侧 |
+|**Run 记忆**|L0 收口、L1 规范叙事、L2 工程主责简报、handoff 归档索引|
+|**知识管理**|`skills/`、`docs/knowledge/` 编目、版本、过期标记、ingest 建议|
+|**信息下发**|将工程主责批准的内容打成 packet / 写入 work brief 附件结构|
+|**工作 brief 组装**|工程主责意图 + 调研要点 → 结构化 WORK_BRIEF；**工程主责仍为签发人**|
+|**向工程主责汇报**|周期 Memory Brief；阶段风险；「记忆面可关闭」签字|
+|**申请队列**|处理 `request_info` 队列的文档侧|
 
 ### 2.2 文档小组 **不负责**
 
@@ -46,12 +46,12 @@
 
 ## 3. 房间
 
-| 房间 | 用途 |
+|房间|用途|
 |------|------|
-| `docs` | 技术文档：申请队列、L1/L2、汇报稿、packet |
-| `knowledge` | 跨 run 知识写入与 ingest |
-| `leadership` | 工程领导：投递 Memory Brief；接收工程主责指令 |
-| `program` | 项目统筹：brief_ready / packet 送达通知（可选） |
+|`docs`|技术文档：申请队列、L1/L2、汇报稿、packet|
+|`knowledge`|跨 run 知识写入与 ingest|
+|`leadership`|工程领导：投递 Memory Brief；接收工程主责指令|
+|`program`|项目统筹：brief_ready / packet 送达通知（可选）|
 
 ## 4. 关键流程
 
@@ -61,11 +61,11 @@
 
 ## 5. 与 scale
 
-| 规模 | 文档小组 |
+|规模|文档小组|
 |------|----------|
-| S | MUST 三人编制（可 1～2 实例多帽 + seat 留痕） |
-| M | MUST 分席建议 |
-| L | MUST 分席；可加 knowledge 执行实例仍归 docs-lead |
+|S|MUST 三人编制（可 1～2 实例多帽 + seat 留痕）|
+|M|MUST 分席建议|
+|L|MUST 分席；可加 knowledge 执行实例仍归 docs-lead|
 
 **禁止** 为省事取消文档小组，仅留「实现三角自写 README」——违反记忆与过滤设计。
 

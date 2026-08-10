@@ -11,20 +11,20 @@
 
 ## 2. 三层写安全
 
-| 层 | 机制 |
+|层|机制|
 |----|------|
-| L1 工具 | 仅 `repo_write`；路径 ∈ write_paths |
-| L2 隔离 | cwd = task worktree |
-| L3 门禁 | handoff/merge 前 `git diff` ⊆ write_paths |
+|L1 工具|仅 `repo_write`；路径 ∈ write_paths|
+|L2 隔离|cwd = task worktree|
+|L3 门禁|handoff/merge 前 `git diff` ⊆ write_paths|
 
 ## 3. 关键限制
 
-| 能力 | 谁 |
+|能力|谁|
 |------|-----|
-| web_* | 仅调研 doer |
-| 业务 write | 默认仅 engineer |
-| run 命令 | `run_allowlisted` + acceptance 登记 |
-| bare bash | 默认禁止 |
+|web_*|仅调研 doer|
+|业务 write|默认仅 engineer|
+|run 命令|`run_allowlisted` + acceptance 登记|
+|bare bash|默认禁止|
 
 ## 4. 监督席
 

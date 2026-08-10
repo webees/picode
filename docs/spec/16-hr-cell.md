@@ -10,11 +10,11 @@
 
 ## 2. 人事部编制（三三制）
 
-| 席位 | ID | 中文 | 职责 |
+|席位|ID|中文|职责|
 |------|-----|------|------|
-| 领导 | `people-lead` | 人才主责 | 接收工程主责用工单、把关人设质量、向工程主责呈报候选编制、建组后登记 |
-| 执行 | `recruiter` | 招聘专员 | 起草人设（persona）、生成 agent 实例 id、写 triad 档案、准备 prompt 片段 |
-| 监督 | `people-qa` | 编制合规 | 校验三人席位完整、tool_profile 合法、无越权工具、与 write_paths/brief 匹配 |
+|领导|`people-lead`|人才主责|接收工程主责用工单、把关人设质量、向工程主责呈报候选编制、建组后登记|
+|执行|`recruiter`|招聘专员|起草人设（persona）、生成 agent 实例 id、写 triad 档案、准备 prompt 片段|
+|监督|`people-qa`|编制合规|校验三人席位完整、tool_profile 合法、无越权工具、与 write_paths/brief 匹配|
 
 主房：`[room:people]` **人力资源**（可配置 display_name）。
 
@@ -84,27 +84,27 @@ triad:
 
 ### 5.1 最低可读清单（与 17 对齐的检查表）
 
-| 检查 | 说明 |
+|检查|说明|
 |------|------|
-| mission | 本 task 使命 |
-| scope_in / scope_out | 边界 |
-| skills / stack | 能力 |
-| codename | 人设名（身份维，§8） |
-| tool_profile + paths | 与配置一致 |
-| forbidden | 禁区 |
-| must_read_refs | brief/packet |
-| collaboration | 与另两席 |
-| DoD / check_rubric | 成功标准 |
+|mission|本 task 使命|
+|scope_in / scope_out|边界|
+|skills / stack|能力|
+|codename|人设名（身份维，§8）|
+|tool_profile + paths|与配置一致|
+|forbidden|禁区|
+|must_read_refs|brief/packet|
+|collaboration|与另两席|
+|DoD / check_rubric|成功标准|
 
 ## 6. 与其它部门协作
 
-| 部门 | 在招聘中的角色 |
+|部门|在招聘中的角色|
 |------|----------------|
-| 工程主责 | 提用工标准；核对人设；批准建组 |
-| 人事部 | 人设生产与建组执行 |
-| 文档小组 | 提供 brief 结构、历史任务记忆摘要（供人设「必读」refs）；不替代人事做人设 |
-| 调研 | 若用工需要特殊技能背景资料，由工程主责/人事 `request_info` 触发，不直接招人 |
-| 技术统筹 | 登记 task 与 staffing 状态；名额与依赖；催办 |
+|工程主责|提用工标准；核对人设；批准建组|
+|人事部|人设生产与建组执行|
+|文档小组|提供 brief 结构、历史任务记忆摘要（供人设「必读」refs）；不替代人事做人设|
+|调研|若用工需要特殊技能背景资料，由工程主责/人事 `request_info` 触发，不直接招人|
+|技术统筹|登记 task 与 staffing 状态；名额与依赖；催办|
 
 ## 7. 复用策略（可配）
 
@@ -115,10 +115,10 @@ hr:
   require_run_lead_staffing_approval: true
 ```
 
-| 模式 | 含义 | 建议 |
+|模式|含义|建议|
 |------|------|------|
-| `hire_fresh` | 每 task 新人设 + 新 agent_id | **★ 默认**（真招聘） |
-| `pool_reuse` | 复用已解散三角的 persona **模板**，仍新签 token / 新实例 | **不推荐**；仅性能实验；仍 MUST run-lead 批准 |
+|`hire_fresh`|每 task 新人设 + 新 agent_id|**★ 默认**（真招聘）|
+|`pool_reuse`|复用已解散三角的 persona **模板**，仍新签 token / 新实例|**不推荐**；仅性能实验；仍 MUST run-lead 批准|
 
 v1 公司仿真以 `hire_fresh` 为准；开启 `pool_reuse` 不得跳过 people-qa 维度校验。
 
@@ -146,14 +146,14 @@ CLI：`staffing request --team-name <n> --codename seat:name`（`--codename` 可
 
 ### 9.2 公式（0–100，base 50）
 
-| 项 | 团队分与人设分共同 | 人设分额外（seat） |
+|项|团队分与人设分共同|人设分额外（seat）|
 |----|-------------------|--------------------|
-| base | 50 | — |
-| evidence | pass +30 / fail −30 / 缺失 −20 | engineer：pass +5；sdet：命令全绿 +5 或 fail −5 |
-| status | dissolved +10 / failed −10 / cancelled −5 | squad-lead：dissolved +5 |
-| handoff | 每缺 1 文件 −5 | — |
-| ack | ≥1 个 +5 | — |
-| retries | 每 1 次 −5（上限 −10） | — |
+|base|50|—|
+|evidence|pass +30 / fail −30 / 缺失 −20|engineer：pass +5；sdet：命令全绿 +5 或 fail −5|
+|status|dissolved +10 / failed −10 / cancelled −5|squad-lead：dissolved +5|
+|handoff|每缺 1 文件 −5|—|
+|ack|≥1 个 +5|—|
+|retries|每 1 次 −5（上限 −10）|—|
 
 团队分 = 公共项之和（clamp 0–100）；人设分 = 公共项 + seat 项（clamp 0–100）。
 
@@ -169,11 +169,11 @@ CLI：`staffing score --task <id> [--by people-qa] [--note "..."]`；`staffing s
 
 ## 10. 房间 `people`
 
-| 可 post | 用途 |
+|可 post|用途|
 |---------|------|
-| run-lead, people-lead, recruiter, people-qa | 用工单、人设稿、批准、评分 |
-| tpm read/post 调度类 | 催办 |
-| 实现三角 | **默认不可**（招好再进 work 房） |
+|run-lead, people-lead, recruiter, people-qa|用工单、人设稿、批准、评分|
+|tpm read/post 调度类|催办|
+|实现三角|**默认不可**（招好再进 work 房）|
 
 ## 11. 状态机衔接
 

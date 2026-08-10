@@ -45,13 +45,13 @@ intake → draft ⇄ intake
     completed | cancelled
 ```
 
-| 状态 | 含义 | MUST |
+|状态|含义|MUST|
 |------|------|------|
-| `intake` | 用户与工程领导讨论；调研并行 | MUST NOT spawn implement 三角 |
-| `draft` | 工程主责已交 plan_draft，待用户确认 | MUST NOT spawn implement；`open_questions` 非空 MUST NOT → active |
-| `active` | 用户已确认 | 允许规划与实现调度 |
-| `blocked` | 外部阻塞 / halt | MUST NOT 新 spawn 实现 |
-| `completed` / `cancelled` | 终态 | — |
+|`intake`|用户与工程领导讨论；调研并行|MUST NOT spawn implement 三角|
+|`draft`|工程主责已交 plan_draft，待用户确认|MUST NOT spawn implement；`open_questions` 非空 MUST NOT → active|
+|`active`|用户已确认|允许规划与实现调度|
+|`blocked`|外部阻塞 / halt|MUST NOT 新 spawn 实现|
+|`completed` / `cancelled`|终态|—|
 
 ### 2.2 Chunk
 
@@ -61,14 +61,14 @@ planned → ready → in_progress → testing → handoff → done
        → cancelled
 ```
 
-| 状态 | 含义 |
+|状态|含义|
 |------|------|
-| `planned` | 分块表中，依赖未齐或未排期 |
-| `ready` | 依赖方均为 `done`（含交接 ack），等名额 |
-| `in_progress` | 实现三角已组队 |
-| `testing` | 测试验证出 evidence |
-| `collab` | 证据已 pass，交接中（人未散） |
-| `done` | handoff 已 ack；可解锁下游；**≠ 已合主干** |
+|`planned`|分块表中，依赖未齐或未排期|
+|`ready`|依赖方均为 `done`（含交接 ack），等名额|
+|`in_progress`|实现三角已组队|
+|`testing`|测试验证出 evidence|
+|`collab`|证据已 pass，交接中（人未散）|
+|`done`|handoff 已 ack；可解锁下游；**≠ 已合主干**|
 
 ### 2.3 Task
 
@@ -88,15 +88,15 @@ forming → active → handing_over → dissolving → dissolved
 
 ### 2.5 编排器自动迁移（MUST 不经 LLM 决策）
 
-| 条件 | 动作 |
+|条件|动作|
 |------|------|
-| goal=active 且依赖全 done | chunk planned→ready |
-| ready 且名额>0 且 work brief 已批 且 staffing 已批 | spawn 实现三角；in_progress |
-| evidence 合法 pass | → handoff / handing_over |
-| handoff 包齐 + acceptance.yaml | 允许 dissolving |
-| dissolving 完成 | chunk=done, task=closed, triad=dissolved, 释放名额 |
-| 心跳超时 | blocked/failed + 红灯 |
-| 小管理 progress 超时/无进展 | at_risk → 升级 tpm（见 06 §5） |
+|goal=active 且依赖全 done|chunk planned→ready|
+|ready 且名额>0 且 work brief 已批 且 staffing 已批|spawn 实现三角；in_progress|
+|evidence 合法 pass|→ handoff / handing_over|
+|handoff 包齐 + acceptance.yaml|允许 dissolving|
+|dissolving 完成|chunk=done, task=closed, triad=dissolved, 释放名额|
+|心跳超时|blocked/failed + 红灯|
+|小管理 progress 超时/无进展|at_risk → 升级 tpm（见 06 §5）|
 
 ## 3. 主循环（伪代码）
 
@@ -159,20 +159,20 @@ loop until goal in (completed, cancelled) or run.halt:
 
 ## 5. 人类操作面
 
-| 动作 | 效果 |
+|动作|效果|
 |------|------|
-| 提出需求 | → intake；启动调研并行 |
-| 确认/驳回 draft | → active 或回 intake |
-| halt | 停止新 spawn |
-| manual acceptance | `human_ack` |
-| 合并签名（L 可选） | approvals/merge |
-| 仲裁 | 覆盖争议 |
+|提出需求|→ intake；启动调研并行|
+|确认/驳回 draft|→ active 或回 intake|
+|halt|停止新 spawn|
+|manual acceptance|`human_ack`|
+|合并签名（L 可选）|approvals/merge|
+|仲裁|覆盖争议|
 
 ## 6. 失败默认
 
-| 事件 | 动作 |
+|事件|动作|
 |------|------|
-| sdet fail | 同组返工；retries++ |
-| retries > max（默认 3） | task failed；技术统筹例外处理 |
-| 越界写 | 拒绝 + violations；超阈暂停 triad |
-| 跨块死锁 | meeting 或改 depends_on |
+|sdet fail|同组返工；retries++|
+|retries > max（默认 3）|task failed；技术统筹例外处理|
+|越界写|拒绝 + violations；超阈暂停 triad|
+|跨块死锁|meeting 或改 depends_on|

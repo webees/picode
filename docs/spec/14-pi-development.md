@@ -41,10 +41,10 @@ npm run build
 
 ### 推荐一并安装的 Pi 包
 
-| 包 | 用途 |
+|包|用途|
 |----|------|
-| `@tintinweb/pi-subagents` 或 `pi-subagents` | Claude 风格子代理 / 自定义 `.pi/agents` |
-| `pi-messenger`（可选） | Bus 的 messenger 适配后端 |
+|`@tintinweb/pi-subagents` 或 `pi-subagents`|Claude 风格子代理 / 自定义 `.pi/agents`|
+|`pi-messenger`（可选）|Bus 的 messenger 适配后端|
 
 ```bash
 pi install npm:@tintinweb/pi-subagents
@@ -141,13 +141,13 @@ node .../cli.js task check-handoff --run <run_id> --task <task_id>
 
 ## 6. Pi 扩展必须注册的工具
 
-| Tool | 实现包 |
+|Tool|实现包|
 |------|--------|
-| `bus_post` / `bus_history` | `@picode/bus` + pi-extension |
-| `repo_read` / `repo_write` | pi-extension（读 write_paths / read_paths） |
-| `request_info` / `request_cross_room` | pi-extension → 写 runs 申请队列 |
-| `progress_report` | pi-extension → bus type progress |
-| `run_allowlisted` | pi-extension |
+|`bus_post` / `bus_history`|`@picode/bus` + pi-extension|
+|`repo_read` / `repo_write`|pi-extension（读 write_paths / read_paths）|
+|`request_info` / `request_cross_room`|pi-extension → 写 runs 申请队列|
+|`progress_report`|pi-extension → bus type progress|
+|`run_allowlisted`|pi-extension|
 
 **MUST NOT** 在实现三角会话中依赖未包装的通用 write 作为唯一写入口（可在扩展里 `tool_call` 拦截或覆盖）。
 
@@ -174,29 +174,29 @@ pi -e /abs/path/to/picode/packages/pi-extension/src/index.ts
 
 环境变量（spawn 时由 orchestrator 注入）：
 
-| 变量 | 含义 |
+|变量|含义|
 |------|------|
-| `PICODE_RUN_ID` | 当前 run |
-| `PICODE_RUNS_ROOT` | runs 根目录 |
-| `PICODE_AGENT_ID` | 如 engineer@task-a-1 |
-| `PICODE_AGENT_TOKEN` | HMAC/随机 token |
-| `PICODE_TOOL_PROFILE` | implement.engineer |
-| `PICODE_WRITE_PATHS` | JSON 数组 |
-| `PICODE_READ_PATHS` | JSON 数组 |
-| `PICODE_CWD` | worktree 路径 |
-| `PICODE_CONFIG` | 合并后 config 路径 |
+|`PICODE_RUN_ID`|当前 run|
+|`PICODE_RUNS_ROOT`|runs 根目录|
+|`PICODE_AGENT_ID`|如 engineer@task-a-1|
+|`PICODE_AGENT_TOKEN`|HMAC/随机 token|
+|`PICODE_TOOL_PROFILE`|implement.engineer|
+|`PICODE_WRITE_PATHS`|JSON 数组|
+|`PICODE_READ_PATHS`|JSON 数组|
+|`PICODE_CWD`|worktree 路径|
+|`PICODE_CONFIG`|合并后 config 路径|
 
 ## 8. 与规范章节映射
 
-| 要实现 | 读 spec | 代码位置 |
+|要实现|读 spec|代码位置|
 |--------|---------|----------|
-| 配置合并 | 13 | `packages/core` |
-| Bus ACL | 04, 07, 10 | `packages/bus` |
-| 状态机 | 01, 08 | `packages/orchestrator` |
-| 工具画像 | 09 | `packages/pi-extension` + core |
-| worktree | 06, 07 | `packages/orchestrator` |
-| 全部业务流程 | [PROCESSES.md](../PROCESSES.md) | orchestrator 状态机 |
-| brief / 人事门闩 | PROCESSES P03–P05 | `packages/orchestrator` |
+|配置合并|13|`packages/core`|
+|Bus ACL|04, 07, 10|`packages/bus`|
+|状态机|01, 08|`packages/orchestrator`|
+|工具画像|09|`packages/pi-extension` + core|
+|worktree|06, 07|`packages/orchestrator`|
+|全部业务流程|[PROCESSES.md](../PROCESSES.md)|orchestrator 状态机|
+|brief / 人事门闩|PROCESSES P03–P05|`packages/orchestrator`|
 
 ## 9. 完成定义（可开发）
 

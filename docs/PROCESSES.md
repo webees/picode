@@ -2,20 +2,20 @@
 
 **本文是所有业务流程步骤的唯一权威正文。**
 
-| 相关 | 文档 |
+|相关|文档|
 |------|------|
-| 权威 / 分类 | [AUTHORITY.md](./AUTHORITY.md) |
-| 术语（on） | [standards/terminology.md](./standards/terminology.md) |
-| 岗位全目录 | [reference/glossary.md](./reference/glossary.md) |
-| 组织登记 | [spec/02-organization.md](./spec/02-organization.md) |
-| 文档小组 | [spec/15-docs-cell.md](./spec/15-docs-cell.md) |
-| 人事 | [spec/16-hr-cell.md](./spec/16-hr-cell.md) |
-| 状态机 | [spec/01-runtime.md](./spec/01-runtime.md) |
-| 信息 / Git | [domains/](./domains/) |
-| 架构一页 | [ARCHITECTURE.md](./ARCHITECTURE.md) |
-| agent / 唤醒 / 人设 | [spec/17-agent-runtime.md](./spec/17-agent-runtime.md) |
-| 自我进化 | [spec/19-self-evolution.md](./spec/19-self-evolution.md) |
-| 选项与默认 | [reference/decision-catalog.md](./reference/decision-catalog.md) |
+|权威 / 分类|[AUTHORITY.md](./AUTHORITY.md)|
+|术语（on）|[standards/terminology.md](./standards/terminology.md)|
+|岗位全目录|[reference/glossary.md](./reference/glossary.md)|
+|组织登记|[spec/02-organization.md](./spec/02-organization.md)|
+|文档小组|[spec/15-docs-cell.md](./spec/15-docs-cell.md)|
+|人事|[spec/16-hr-cell.md](./spec/16-hr-cell.md)|
+|状态机|[spec/01-runtime.md](./spec/01-runtime.md)|
+|信息 / Git|[domains/](./domains/)|
+|架构一页|[ARCHITECTURE.md](./ARCHITECTURE.md)|
+|agent / 唤醒 / 人设|[spec/17-agent-runtime.md](./spec/17-agent-runtime.md)|
+|自我进化|[spec/19-self-evolution.md](./spec/19-self-evolution.md)|
+|选项与默认|[reference/decision-catalog.md](./reference/decision-catalog.md)|
 
 规范用语：MUST / MUST NOT / SHOULD / MAY（见 [AUTHORITY.md](./AUTHORITY.md)）。  
 **改流程只改本文**；改会话调度/人设维度只改 **17**；改 ★默认只改 **decision-catalog** 并回写权威正文。
@@ -81,11 +81,11 @@ sponsor（人类）提出需求 → `goal.status = intake`；sess-mgr 唤醒相�
 
 ### 并行轨道（MUST）
 
-| 轨道 | 房间 | 动作 |
+|轨道|房间|动作|
 |------|------|------|
-| A 产品共创 | `product` | pm ↔ sponsor 澄清要什么、优先级、验收口径 |
-| B 工程领导 | `leadership` | run-lead ↔ sponsor/pm；tpm 记确认项与 `open_questions` |
-| C 行业研究 | `research` | **同时** 外部检索（若 `parallel_on_intake`）；brief 须 URL + retrieved_at |
+|A 产品共创|`product`|pm ↔ sponsor 澄清要什么、优先级、验收口径|
+|B 工程领导|`leadership`|run-lead ↔ sponsor/pm；tpm 记确认项与 `open_questions`|
+|C 行业研究|`research`|**同时** 外部检索（若 `parallel_on_intake`）；brief 须 URL + retrieved_at|
 
 - 实现小队：此阶段 **MUST NOT** spawn。  
 - 文档小组：MAY 记 intake 纪要。  
@@ -155,11 +155,11 @@ tasks/<task_id>/brief/
 
 ### 席位裁剪（SHOULD）
 
-| 席位 | 侧重 |
+|席位|侧重|
 |------|------|
-| squad-lead | 全量 + 汇报/交接 |
-| engineer | 实现、写集、技术 refs |
-| sdet | acceptance、证据格式 |
+|squad-lead|全量 + 汇报/交接|
+|engineer|实现、写集、技术 refs|
+|sdet|acceptance、证据格式|
 
 ### 硬规则
 
@@ -231,11 +231,11 @@ tasks/<task_id>/staffing/
 
 ### 执行中
 
-| 席位 | 动作 |
+|席位|动作|
 |------|------|
-| squad-lead | 协调；`progress_report` 定时（默认 300s）上报 task/work 房 |
-| engineer | `repo_write` 仅 write_paths；commit |
-| sdet | `run_allowlisted`；写 evidence |
+|squad-lead|协调；`progress_report` 定时（默认 300s）上报 task/work 房|
+|engineer|`repo_write` 仅 write_paths；commit|
+|sdet|`run_allowlisted`；写 evidence|
 
 ### 进度
 
@@ -265,22 +265,22 @@ verifying：sdet evidence pass（command exit_code=0 + log_ref）
 
 ### 交接包 `tasks/<id>/handoff/`
 
-| 文件 | 主责 |
+|文件|主责|
 |------|------|
-| summary.md | squad-lead |
-| artifact_index.md | engineer |
-| public_contract 更新（若需） | engineer/lead |
-| known_issues.md | 三人 |
-| diff_scope.md | lead/编排器（⊆ write_paths） |
-| 证据索引 | sdet |
-| acceptance.yaml | 接收方 |
+|summary.md|squad-lead|
+|artifact_index.md|engineer|
+|public_contract 更新（若需）|engineer/lead|
+|known_issues.md|三人|
+|diff_scope.md|lead/编排器（⊆ write_paths）|
+|证据索引|sdet|
+|acceptance.yaml|接收方|
 
 ### 接收方
 
-| 场景 | ack |
+|场景|ack|
 |------|-----|
-| 有下游 | 下游 `squad-lead`；超时：tpm + **docs-lead 代持** |
-| 无下游 | **docs-lead 或 tpm** |
+|有下游|下游 `squad-lead`；超时：tpm + **docs-lead 代持**|
+|无下游|**docs-lead 或 tpm**|
 
 交接材料由 **文档小组** 归档进 run 记忆，并评估是否入库知识管理。
 
@@ -306,11 +306,11 @@ verifying：sdet evidence pass（command exit_code=0 + log_ref）
   → 工作组只读 packet + 当前 brief + 原 read/write 集
 ```
 
-| 工程主责决策 | 含义 |
+|工程主责决策|含义|
 |----------|------|
-| approve | 下发 |
-| redact | 删减后再下发 |
-| deny | 不下发细节 |
+|approve|下发|
+|redact|删减后再下发|
+|deny|不下发细节|
 
 ---
 
@@ -359,16 +359,16 @@ chunk done → 分支 merge_ready
 
 ### 门禁检查（读状态文件，不读聊天）
 
-| 检查 | S | M | L |
+|检查|S|M|L|
 |------|---|---|---|
-| chunk done + evidence | ✅ | ✅ | ✅ |
-| 集成 task（若有） | 若有 | 若有 | 通常 |
-| gates/review.yaml | — | 里程碑/高风险 | ✅ |
-| gates/security.yaml | — | 风险触发 | ✅ |
-| 无阻塞级 doc_issue | — | ✅ | ✅ |
-| 无高危 violation | ✅ | ✅ | ✅ |
-| approvals/merge.yaml | ✅ | ✅ | ✅ |
-| 人类签名 | — | — | MAY |
+|chunk done + evidence|✅|✅|✅|
+|集成 task（若有）|若有|若有|通常|
+|gates/review.yaml|—|里程碑/高风险|✅|
+|gates/security.yaml|—|风险触发|✅|
+|无阻塞级 doc_issue|—|✅|✅|
+|无高危 violation|✅|✅|✅|
+|approvals/merge.yaml|✅|✅|✅|
+|人类签名|—|—|MAY|
 
 ---
 
@@ -396,12 +396,12 @@ L0 各方产出 → 技术写作 → L1
 
 ### 向工程主责汇报
 
-| 触发 | 动作 |
+|触发|动作|
 |------|------|
-| 每 N 个 task closed（默 3） | L2 增量 |
-| 审计红灯后 | 记忆是否需更正 |
-| 阶段门禁前 | 完整 Memory Brief |
-| goal 完成前 | docs-qa：记忆面可关闭 |
+|每 N 个 task closed（默 3）|L2 增量|
+|审计红灯后|记忆是否需更正|
+|阶段门禁前|完整 Memory Brief|
+|goal 完成前|docs-qa：记忆面可关闭|
 
 投递：`leadership`，type `memory_brief`。
 
@@ -424,11 +424,11 @@ L0 各方产出 → 技术写作 → L1
 
 配置 `draft_idle_policy`：
 
-| 值 | 行为 |
+|值|行为|
 |----|------|
-| `park`（默认） | 本 run 挂起；编排器可跑其它 active run |
-| `stop` | blocked/cancelled |
-| `run_lead_advance` | 工程主责+调研更新 draft 后仍须用户确认（除非危险开关 force） |
+|`park`（默认）|本 run 挂起；编排器可跑其它 active run|
+|`stop`|blocked/cancelled|
+|`run_lead_advance`|工程主责+调研更新 draft 后仍须用户确认（除非危险开关 force）|
 
 超时提醒：`draft_idle_sec`（默认 86400）。  
 **禁止** 静默 draft→active。
@@ -464,13 +464,13 @@ L0 各方产出 → 技术写作 → L1
 
 **权威正文：** [spec/19-self-evolution.md](./spec/19-self-evolution.md)（本文不展开步骤）。
 
-| 项 | 现行规则摘要 |
+|项|现行规则摘要|
 |----|----------------|
-| 触发 | `goal.kind = self_evolve`；target 为 picode 仓 |
-| 流程 | 仍走 P01–P15；写集受 `evolve.layers` 约束 |
-| 人类 | sponsor 批合入；policy 层额外确认 |
-| 知识 | merge 后 SHOULD 写 `knowledge/evolve/<run_id>.md` |
-| 成熟度 | E0→E1→E2→E3，见 19 §7 |
+|触发|`goal.kind = self_evolve`；target 为 picode 仓|
+|流程|仍走 P01–P15；写集受 `evolve.layers` 约束|
+|人类|sponsor 批合入；policy 层额外确认|
+|知识|merge 后 SHOULD 写 `knowledge/evolve/<run_id>.md`|
+|成熟度|E0→E1→E2→E3，见 19 §7|
 
 ---
 
@@ -478,13 +478,13 @@ L0 各方产出 → 技术写作 → L1
 
 ### 实现 spawn 前（MUST 全满足）
 
-| # | 条件 |
+|#|条件|
 |---|------|
-| 1 | goal = active |
-| 2 | chunk ready（依赖 done） |
-| 3 | work brief approved by run-lead |
-| 4 | staffing approved by run-lead |
-| 5 | 并行名额可用 |
+|1|goal = active|
+|2|chunk ready（依赖 done）|
+|3|work brief approved by run-lead|
+|4|staffing approved by run-lead|
+|5|并行名额可用|
 
 ### Chunk 状态
 
@@ -504,11 +504,11 @@ L0 各方产出 → 技术写作 → L1
 
 ## 修订
 
-| 改什么 | 改哪里 |
+|改什么|改哪里|
 |--------|--------|
-| 流程步骤 | **仅本文** |
-| 流程编号索引 | `spec/03-workflows.md`（指针） |
-| 编制细节 | `15` / `16` / `02` |
-| 术语 | `standards/terminology.md` |
+|流程步骤|**仅本文**|
+|流程编号索引|`spec/03-workflows.md`（指针）|
+|编制细节|`15` / `16` / `02`|
+|术语|`standards/terminology.md`|
 
 步骤冲突时以 **本文** 为准。

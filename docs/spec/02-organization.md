@@ -13,11 +13,11 @@
 
 每个 **被 scale 激活的工作环节** MUST 具备三席（可折叠见 [05](./05-scaling-mvp.md)）：
 
-| 席位 | 职能 |
+|席位|职能|
 |------|------|
-| **领导 Lead** | 对齐、拆步、对外呈报、宣布本环节完成 |
-| **执行 Doer** | 主交付物 |
-| **监督 Check** | 按标准验收 / 打回 |
+|**领导 Lead**|对齐、拆步、对外呈报、宣布本环节完成|
+|**执行 Doer**|主交付物|
+|**监督 Check**|按标准验收 / 打回|
 
 规则：
 
@@ -33,17 +33,17 @@
 
 细节只在专册；此处 **只登记**。
 
-| cell | 领导 | 执行 | 监督 | 主房 | 专册 |
+|cell|领导|执行|监督|主房|专册|
 |------|------|------|------|------|------|
-| 治理 | `run-lead` | `tpm` | `proc-audit` | `leadership` · `program` | 本文 §1 + PROCESSES |
-| 调度 | `sess-mgr` | — | — | （跨房只读 + leadership post） | **[17-agent-runtime](./17-agent-runtime.md)** |
-| 产品 | `pm` | — | run-lead 可检 | `product` | 17 + PROCESSES P01 |
-| 调研 | （可兼） | `ind-res` | （可兼 docs-qa） | `research` | intake 起 MUST 可跑执行席 |
-| 文档 | `docs-lead` | `tech-writer` | `docs-qa` | `docs`（+`knowledge`） | **[15-docs-cell](./15-docs-cell.md)** |
-| 人才 | `people-lead` | `recruiter` | `people-qa` | `people` | **[16-hr-cell](./16-hr-cell.md)** |
-| 实现 | `squad-lead` | `engineer` | `sdet` | `squad-<task_id>` | 按任务招聘；先交接再解散 |
-| 规划 | — | `scout` · `sys-arch` | （run-lead / docs-qa 可检） | `architecture` | active 后本仓方案；不套实现三角 |
-| 门禁 | — | `code-review` · `release-eng` · `sec-eng` | — | `quality` · `release` · `security` | 不占实现三角席 |
+|治理|`run-lead`|`tpm`|`proc-audit`|`leadership` · `program`|本文 §1 + PROCESSES|
+|调度|`sess-mgr`|—|—|（跨房只读 + leadership post）|**[17-agent-runtime](./17-agent-runtime.md)**|
+|产品|`pm`|—|run-lead 可检|`product`|17 + PROCESSES P01|
+|调研|（可兼）|`ind-res`|（可兼 docs-qa）|`research`|intake 起 MUST 可跑执行席|
+|文档|`docs-lead`|`tech-writer`|`docs-qa`|`docs`（+`knowledge`）|**[15-docs-cell](./15-docs-cell.md)**|
+|人才|`people-lead`|`recruiter`|`people-qa`|`people`|**[16-hr-cell](./16-hr-cell.md)**|
+|实现|`squad-lead`|`engineer`|`sdet`|`squad-<task_id>`|按任务招聘；先交接再解散|
+|规划|—|`scout` · `sys-arch`|（run-lead / docs-qa 可检）|`architecture`|active 后本仓方案；不套实现三角|
+|门禁|—|`code-review` · `release-eng` · `sec-eng`|—|`quality` · `release` · `security`|不占实现三角席|
 
 配置键：`cells.templates.*`（implement / docs / people 为默认模板）。
 

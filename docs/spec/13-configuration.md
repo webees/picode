@@ -2,13 +2,13 @@
 
 ## 1. 原则
 
-| # | 原则 |
+|#|原则|
 |---|------|
-| 1 | **逻辑 ID 稳定、展示名可配**：代码与状态机使用稳定 `id`；用户/UI/prompt 展示用 `display_name` / `locale`。 |
-| 2 | **默认内置 + 分层覆盖**：内置 defaults → 全局用户配置 → 项目配置 → run 覆盖。 |
-| 3 | **能配就不写死**：房间、角色、三角编制、工具画像、阈值、文案、门禁开关、路径约定均可配。 |
-| 4 | **校验后加载**：配置 MUST 通过 schema 校验；未知键 MAY warn；非法 MUST 拒绝启动。 |
-| 5 | **领域中立默认**：默认配置无业务案例关键字；使用方可自建 profile。 |
+|1|**逻辑 ID 稳定、展示名可配**：代码与状态机使用稳定 `id`；用户/UI/prompt 展示用 `display_name` / `locale`。|
+|2|**默认内置 + 分层覆盖**：内置 defaults → 全局用户配置 → 项目配置 → run 覆盖。|
+|3|**能配就不写死**：房间、角色、三角编制、工具画像、阈值、文案、门禁开关、路径约定均可配。|
+|4|**校验后加载**：配置 MUST 通过 schema 校验；未知键 MAY warn；非法 MUST 拒绝启动。|
+|5|**领域中立默认**：默认配置无业务案例关键字；使用方可自建 profile。|
 
 ## 2. 配置文件层级（MUST）
 
@@ -30,24 +30,24 @@
 
 ## 3. 可配置范围总表
 
-| 类别 | 可配置内容 | 配置键（逻辑） |
+|类别|可配置内容|配置键（逻辑）|
 |------|------------|----------------|
-| **房间** | id 保留或映射、display_name、purpose、默认 members 模板、是否启用、room prompt 路径 | `rooms[]` |
-| **角色** | id、display_name、description、tool_profile、默认 model、system_prompt 路径 | `roles[]` |
-| **三角/细胞** | 某 kind 的 lead/doer/check 绑定哪个 role id | `cells.templates[]` |
-| **工具画像** | 各 profile 允许的 tool 列表与路径策略 | `tool_profiles` |
-| **Bus** | 存储适配器、路径、type 扩展、保留天数 | `bus` |
-| **Git** | worktree 根路径、分支命名模板、merge 策略、备份 TTL | `git` |
-| **调度** | 并行数、超时、progress 间隔、draft 策略 | `scheduler` / `timeouts` |
-| **门禁** | S/M/L 下 review/security 是否启用、命令模板 | `gates` / `scale` |
-| **文案/Locale** | 中英显示名、prompt 片段、公告模板 | `i18n` / `prompts` |
-| **工作 brief 模板** | 工程主责 brief 章节骨架、席位裁剪规则 | `work_brief` |
-| **路径** | runs 根、skills 根、knowledge 根、secret 排除 | `paths` |
-| **调研** | 是否默认并行、允许域名、TTL | `research` |
-| **信息过滤** | 申请 SLA、是否强制 run-lead 审阅 | `info_pipeline` |
-| **跨房** | TTL、是否必须 run-lead 在场 | `cross_room` |
-| **模型路由** | role/seat → model | `models` |
-| **Profile 包** | 一组覆盖的命名集合 | `profiles` |
+|**房间**|id 保留或映射、display_name、purpose、默认 members 模板、是否启用、room prompt 路径|`rooms[]`|
+|**角色**|id、display_name、description、tool_profile、默认 model、system_prompt 路径|`roles[]`|
+|**三角/细胞**|某 kind 的 lead/doer/check 绑定哪个 role id|`cells.templates[]`|
+|**工具画像**|各 profile 允许的 tool 列表与路径策略|`tool_profiles`|
+|**Bus**|存储适配器、路径、type 扩展、保留天数|`bus`|
+|**Git**|worktree 根路径、分支命名模板、merge 策略、备份 TTL|`git`|
+|**调度**|并行数、超时、progress 间隔、draft 策略|`scheduler` / `timeouts`|
+|**门禁**|S/M/L 下 review/security 是否启用、命令模板|`gates` / `scale`|
+|**文案/Locale**|中英显示名、prompt 片段、公告模板|`i18n` / `prompts`|
+|**工作 brief 模板**|工程主责 brief 章节骨架、席位裁剪规则|`work_brief`|
+|**路径**|runs 根、skills 根、knowledge 根、secret 排除|`paths`|
+|**调研**|是否默认并行、允许域名、TTL|`research`|
+|**信息过滤**|申请 SLA、是否强制 run-lead 审阅|`info_pipeline`|
+|**跨房**|TTL、是否必须 run-lead 在场|`cross_room`|
+|**模型路由**|role/seat → model|`models`|
+|**Profile 包**|一组覆盖的命名集合|`profiles`|
 
 **不宜配置（行为语义，只可扩展不可否定核心不变量）：**
 
@@ -285,12 +285,12 @@ Agent prompt 渲染 MUST 走上述 API，避免硬编码中文名。
 
 ## 15. 与不变量关系
 
-| 可配 | 不可配掉（除非 features 危险开关） |
+|可配|不可配掉（除非 features 危险开关）|
 |------|-----------------------------------|
-| 房间叫什么 | active 前禁实现 |
-| 角色叫什么 | bus token、写集校验 |
-| 谁当 doer | handoff 前 evidence |
-| 间隔秒数 | 串行 merge |
-| 是否启用某扩展房 | 工作组专一与信息过滤默认开 |
+|房间叫什么|active 前禁实现|
+|角色叫什么|bus token、写集校验|
+|谁当 doer|handoff 前 evidence|
+|间隔秒数|串行 merge|
+|是否启用某扩展房|工作组专一与信息过滤默认开|
 
 详见 [08-invariants.md](./08-invariants.md)。

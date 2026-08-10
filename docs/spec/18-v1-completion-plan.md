@@ -10,54 +10,54 @@
 
 ### 1.1 Pi 生态（直接相关）
 
-| 来源 | 关键设计 | 对 picode 的借鉴 |
+|来源|关键设计|对 picode 的借鉴|
 |------|----------|------------------|
-| **Pi 本体** ([pi.dev](https://pi.dev/)) | 最小 harness；**无内置 sub-agent**；扩展/tmux/包自行组队 | 与我们一致：**编排器在 Pi 外**；Pi 只当「会思考的工位」 |
-| **@tintinweb/pi-subagents** | 隔离会话；自有 tools/prompt/model；前台/后台；**并发上限默认 4**；可 mid-run steer；可 resume；自定义 agent type；嵌套默认关 | `max_awake`；session resume；steer=注入消息；agent type=角色模板 |
-| **pi-messenger** (nicobailon) | **无 daemon**：共享文件夹通信；join/在线状态；claim task；**reserve files**；房间式聊天 | 强化我们已有 **文件 Bus + 房间**；任务 claim 可对齐 task 队列；文件预留≈ write_paths 声明 |
-| **社区实践** (fork + observational memory + reviewer/advisor) | 主 agent 瘦上下文；fork 做探索；advisor/reviewer 干净上下文第三者视角 | 平台岗 **sleep 时不占上下文**；code-review / proc-audit 独立会话避免污染 engineer |
+|**Pi 本体** ([pi.dev](https://pi.dev/))|最小 harness；**无内置 sub-agent**；扩展/tmux/包自行组队|与我们一致：**编排器在 Pi 外**；Pi 只当「会思考的工位」|
+|**@tintinweb/pi-subagents**|隔离会话；自有 tools/prompt/model；前台/后台；**并发上限默认 4**；可 mid-run steer；可 resume；自定义 agent type；嵌套默认关|`max_awake`；session resume；steer=注入消息；agent type=角色模板|
+|**pi-messenger** (nicobailon)|**无 daemon**：共享文件夹通信；join/在线状态；claim task；**reserve files**；房间式聊天|强化我们已有 **文件 Bus + 房间**；任务 claim 可对齐 task 队列；文件预留≈ write_paths 声明|
+|**社区实践** (fork + observational memory + reviewer/advisor)|主 agent 瘦上下文；fork 做探索；advisor/reviewer 干净上下文第三者视角|平台岗 **sleep 时不占上下文**；code-review / proc-audit 独立会话避免污染 engineer|
 
 **Pi 侧不要做的事：** 不要把「公司仿真」全塞进一个 Pi 扩展里重写；保持 **orchestrator 无 LLM + 多 Pi 会话有 LLM**。
 
 ### 1.2 主流多 Agent 框架（模式层）
 
-| 模式 / 产品 | 要点 | 我们怎么用 |
+|模式 / 产品|要点|我们怎么用|
 |-------------|------|------------|
-| **Supervisor（2026 生产默认）** | 中心路由 → 专家 → 汇总；子 agent 互不可见任务内输出 | **`sess-mgr` = 轻量 supervisor**（只调度生命周期，不终裁业务） |
-| **CrewAI Role/Goal/Backstory** | 角色 + 目标 + 人设故事；Task 明确 expected output | **真招聘 persona 多维** = 强化版 Role/Goal/Backstory |
-| **MetaGPT「虚拟软件公司」** | PM / Architect / Engineer 流水线角色仿真 | 对齐我们 **product → architecture → squad** 链路；MetaGPT 偏顺序 SOP，我们加 **封闭房间 + 门闩** |
-| **LangGraph** | 显式图状态、检查点、HITL | goal/task 状态机 + approvals 文件 = 检查点；sponsor 确认 = HITL |
-| **Orchestrator-Worker** | 中心拆任务、工人执行 | orchestrator 机械拆 task；工人 = 实现三角；**不要**让 sess-mgr 又拆业务步骤（避免双脑） |
-| **Swarm** | 对等交接控制权 | 我们 **不做** 对等 swarm（易乱）；跨域用 meeting-* + run-lead 监督 |
+|**Supervisor（2026 生产默认）**|中心路由 → 专家 → 汇总；子 agent 互不可见任务内输出|**`sess-mgr` = 轻量 supervisor**（只调度生命周期，不终裁业务）|
+|**CrewAI Role/Goal/Backstory**|角色 + 目标 + 人设故事；Task 明确 expected output|**真招聘 persona 多维** = 强化版 Role/Goal/Backstory|
+|**MetaGPT「虚拟软件公司」**|PM / Architect / Engineer 流水线角色仿真|对齐我们 **product → architecture → squad** 链路；MetaGPT 偏顺序 SOP，我们加 **封闭房间 + 门闩**|
+|**LangGraph**|显式图状态、检查点、HITL|goal/task 状态机 + approvals 文件 = 检查点；sponsor 确认 = HITL|
+|**Orchestrator-Worker**|中心拆任务、工人执行|orchestrator 机械拆 task；工人 = 实现三角；**不要**让 sess-mgr 又拆业务步骤（避免双脑）|
+|**Swarm**|对等交接控制权|我们 **不做** 对等 swarm（易乱）；跨域用 meeting-* + run-lead 监督|
 
 ### 1.3 失败模式（调研共识 → 我们的防法）
 
-| 失败 | 表现 | picode 对策 |
+|失败|表现|picode 对策|
 |------|------|-------------|
-| Supervisor 单点过载 | 上下文塞满、串行瓶颈 | sess-mgr **只读状态 + 短决策**；业务终裁在 run-lead；max_awake 并行工人 |
-| 上下文串味 | 全员共 chat | **封闭房间 + 过滤 packet**；sleep 释放会话 |
-| 黑盒 sub-agent | 不可见、难 steer | 每会话独立 transcript 落盘；Bus 可审计 |
-| 并发写冲突 | 多 agent 改同文件 | **worktree + write_paths + 串行 merge** |
-| 假招聘 | 模板无差异 | **people-qa 卡多维人设** |
+|Supervisor 单点过载|上下文塞满、串行瓶颈|sess-mgr **只读状态 + 短决策**；业务终裁在 run-lead；max_awake 并行工人|
+|上下文串味|全员共 chat|**封闭房间 + 过滤 packet**；sleep 释放会话|
+|黑盒 sub-agent|不可见、难 steer|每会话独立 transcript 落盘；Bus 可审计|
+|并发写冲突|多 agent 改同文件|**worktree + write_paths + 串行 merge**|
+|假招聘|模板无差异|**people-qa 卡多维人设**|
 
 ---
 
 ## 2. 未完成项总表（现状 → 目标）
 
-| ID | 模块 | 现状 | v1 目标 | 优先级 |
+|ID|模块|现状|v1 目标|优先级|
 |----|------|------|---------|--------|
-| U1 | **Session 运行时** | 无 sessions 落盘 | registered/sleeping/awake/terminated + API | P0 |
-| U2 | **sess-mgr 策略引擎** | 仅文档 | 事件→wake/sleep 表 + LLM 可选仲裁 | P0 |
-| U3 | **Pi 会话绑定** | spawn-print 手工 | orchestrator 启动/停 Pi（或子进程包装） | P0 |
-| U4 | **真招聘 staffing** | brief 有，staffing CLI 无 | request→personas 多维→approve→锁 | P0 |
-| U5 | **双门闩 enforce** | 主要卡 brief | prepare/spawn 同时卡 staffing | P0 |
-| U6 | **平台岗注册** | 部分 members | on 岗全注册 sleeping | P0 |
-| U7 | **product 链路** | 房/岗有 | P01 强制 product 轨道产物 | P1 |
-| U8 | **progress 调度** | 配置有 | 到期 wake squad-lead | P1 |
-| U9 | **门禁列车** | 文档有 | merge.lock + 按 scale wake 门禁岗 | P1 |
-| U10 | **docs L1/L2 + knowledge** | 部分目录 | Memory Brief + 入库流水线 | P1 |
-| U11 | **change_order / draft park** | 文档有 | 状态机 + 文件 | P2 |
-| U12 | **观测面板** | 无 | sessions 列表 / awake 数 / 房间未读 | P2 |
+|U1|**Session 运行时**|无 sessions 落盘|registered/sleeping/awake/terminated + API|P0|
+|U2|**sess-mgr 策略引擎**|仅文档|事件→wake/sleep 表 + LLM 可选仲裁|P0|
+|U3|**Pi 会话绑定**|spawn-print 手工|orchestrator 启动/停 Pi（或子进程包装）|P0|
+|U4|**真招聘 staffing**|brief 有，staffing CLI 无|request→personas 多维→approve→锁|P0|
+|U5|**双门闩 enforce**|主要卡 brief|prepare/spawn 同时卡 staffing|P0|
+|U6|**平台岗注册**|部分 members|on 岗全注册 sleeping|P0|
+|U7|**product 链路**|房/岗有|P01 强制 product 轨道产物|P1|
+|U8|**progress 调度**|配置有|到期 wake squad-lead|P1|
+|U9|**门禁列车**|文档有|merge.lock + 按 scale wake 门禁岗|P1|
+|U10|**docs L1/L2 + knowledge**|部分目录|Memory Brief + 入库流水线|P1|
+|U11|**change_order / draft park**|文档有|状态机 + 文件|P2|
+|U12|**观测面板**|无|sessions 列表 / awake 数 / 房间未读|P2|
 
 ---
 
@@ -90,12 +90,12 @@
 
 **与 pi-subagents 的边界：**
 
-| | pi-subagents | picode |
+||pi-subagents|picode|
 |--|--------------|--------|
-| 谁决定 spawn | 父 Pi 会话 | **orchestrator + sess-mgr** |
-| 通信 | 父子回传为主 | **封闭房间 Bus**（组织仿真） |
-| 文件隔离 | 通常同仓 | **worktree + write_paths** |
-| 并发 | 扩展内队列 | **max_awake + 任务队列** |
+|谁决定 spawn|父 Pi 会话|**orchestrator + sess-mgr**|
+|通信|父子回传为主|**封闭房间 Bus**（组织仿真）|
+|文件隔离|通常同仓|**worktree + write_paths**|
+|并发|扩展内队列|**max_awake + 任务队列**|
 
 可 **可选** 用 pi-subagents 作为「单 Pi 内临时 fork」；**公司仿真主路径不依赖它**。
 
@@ -140,12 +140,12 @@ persona_path: null   # 平台岗可空；任务岗必填
 4. **文件指令队列**（无 daemon 偏好，对齐 pi-messenger 哲学）：  
    `runs/<id>/session_commands.jsonl` ← sess-mgr 写；orchestrator 轮询执行  
 
-**推荐默认：混合调度**
+推荐默认：混合调度
 
-| 层 | 谁 | 何时 |
+|层|谁|何时|
 |----|-----|------|
-| L0 规则 | orchestrator | intake 开始、双门闩齐、merge_ready、timeout |
-| L1 仲裁 | sess-mgr LLM | 超 max_awake、多候选裁剪、异常恢复 |
+|L0 规则|orchestrator|intake 开始、双门闩齐、merge_ready、timeout|
+|L1 仲裁|sess-mgr LLM|超 max_awake、多候选裁剪、异常恢复|
 
 **DoD：** 模拟事件序列后 awake 集合符合表；max_awake=2 时不会出现 3 个 awake 实现岗。
 
@@ -252,41 +252,41 @@ A Session 内核
 
 ## 6. 包级任务拆分
 
-| 包 | 任务 |
+|包|任务|
 |----|------|
-| `@picode/core` | session 类型；persona schema；config `sess_mgr` 类型化 |
-| `@picode/bus` | 可选：在线状态心跳字段；session 相关 system 消息 type |
-| `@picode/orchestrator` | session CLI；规则引擎；staffing CLI；merge 队列；Pi spawn 适配器 |
-| `@picode/pi-extension` | session_wake/sleep 工具；state_read 扩展；禁止 sleeping 调模型（宿主保证） |
-| `.picode/agents` | 已有模板；按招聘输出覆盖实例 |
+|`@picode/core`|session 类型；persona schema；config `sess_mgr` 类型化|
+|`@picode/bus`|可选：在线状态心跳字段；session 相关 system 消息 type|
+|`@picode/orchestrator`|session CLI；规则引擎；staffing CLI；merge 队列；Pi spawn 适配器|
+|`@picode/pi-extension`|session_wake/sleep 工具；state_read 扩展；禁止 sleeping 调模型（宿主保证）|
+|`.picode/agents`|已有模板；按招聘输出覆盖实例|
 
 ---
 
 ## 7. 测试矩阵（在 T01–T19 上追加）
 
-| ID | 断言 |
+|ID|断言|
 |----|------|
-| T20 | init 后平台岗全部 registered/sleeping（除策略要求 awake） |
-| T21 | sleeping agent 不产生模型调用计数 |
-| T22 | max_awake 限制生效 |
-| T23 | 事件 intake_start 唤醒 pm+run-lead（±ind-res） |
-| T24 | 双门闩缺一 prepare 失败 |
-| T25 | persona 缺 mission 时 people-qa 失败 |
-| T26 | sponsor 配置禁止 LLM profile 调用 |
-| T27 | task dissolve 后三实例 terminated |
-| T28 | product 房 members 含 pm+sponsor |
+|T20|init 后平台岗全部 registered/sleeping（除策略要求 awake）|
+|T21|sleeping agent 不产生模型调用计数|
+|T22|max_awake 限制生效|
+|T23|事件 intake_start 唤醒 pm+run-lead（±ind-res）|
+|T24|双门闩缺一 prepare 失败|
+|T25|persona 缺 mission 时 people-qa 失败|
+|T26|sponsor 配置禁止 LLM profile 调用|
+|T27|task dissolve 后三实例 terminated|
+|T28|product 房 members 含 pm+sponsor|
 
 ---
 
 ## 8. 风险与缓解
 
-| 风险 | 缓解 |
+|风险|缓解|
 |------|------|
-| 全岗 LLM 太贵/太慢 | max_awake + 规则优先 + 小模型跑 sess-mgr/people-qa |
-| sess-mgr 乱杀关键岗 | 规则表保底；allow_orch_force_wake；proc-audit 可告警 |
-| Pi 版本 API 不一 | spawn 适配器接口隔离；先 mock release-eng |
-| 招聘人设幻觉 | people-qa 机械字段 + run-lead 人工批 |
-| 与 pi-subagents 功能重叠 | 文档标明边界：组织仿真走 picode，临时 fork 可选扩展 |
+|全岗 LLM 太贵/太慢|max_awake + 规则优先 + 小模型跑 sess-mgr/people-qa|
+|sess-mgr 乱杀关键岗|规则表保底；allow_orch_force_wake；proc-audit 可告警|
+|Pi 版本 API 不一|spawn 适配器接口隔离；先 mock release-eng|
+|招聘人设幻觉|people-qa 机械字段 + run-lead 人工批|
+|与 pi-subagents 功能重叠|文档标明边界：组织仿真走 picode，临时 fork 可选扩展|
 
 ---
 

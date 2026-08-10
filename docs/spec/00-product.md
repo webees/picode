@@ -16,13 +16,13 @@
 
 ## 技术基线
 
-| 层 | 选型 |
+|层|选型|
 |----|------|
-| Agent 运行时 | Pi（短会话） |
-| 多 agent 消息 | pi-messenger（或等价）+ **bus 适配层** |
-| 编排 | 自研编排器 + Pi 扩展 |
-| 状态/档案 | **仅文件**（`runs/<run_id>/`） |
-| 差异化能力 | 使用方 profile + Pi skills |
+|Agent 运行时|Pi（短会话）|
+|多 agent 消息|pi-messenger（或等价）+ **bus 适配层**|
+|编排|自研编排器 + Pi 扩展|
+|状态/档案|**仅文件**（`runs/<run_id>/`）|
+|差异化能力|使用方 profile + Pi skills|
 
 ## 核心组织原则
 

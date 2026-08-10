@@ -1,18 +1,18 @@
 # Pi 最短开发路径
 
-| 完整内容 | 链接 |
+|完整内容|链接|
 |----------|------|
-| 安装与 CLI 命令流 | [GETTING_STARTED.md](../GETTING_STARTED.md) |
-| Pi 包与扩展设计 | [spec/14-pi-development.md](../spec/14-pi-development.md) |
-| 架构一页 | [ARCHITECTURE.md](../ARCHITECTURE.md) |
+|安装与 CLI 命令流|[GETTING_STARTED.md](../GETTING_STARTED.md)|
+|Pi 包与扩展设计|[spec/14-pi-development.md](../spec/14-pi-development.md)|
+|架构一页|[ARCHITECTURE.md](../ARCHITECTURE.md)|
 
 ## 组件（30 秒）
 
-| 组件 | LLM | 职责 |
+|组件|LLM|职责|
 |------|-----|------|
-| `orchestrator` CLI | 无 | 状态、双门闩、worktree、spawn 环境 |
-| Pi + `@picode/pi-extension` | 有 | 角色思考；bus / repo / request |
-| `.picode/agents/*.md` | — | 角色 system 模板 |
+|`orchestrator` CLI|无|状态、双门闩、worktree、spawn 环境|
+|Pi + `@picode/pi-extension`|有|角色思考；bus / repo / request|
+|`.picode/agents/*.md`|—|角色 system 模板|
 
 ## 一条龙（目标 git 仓）
 

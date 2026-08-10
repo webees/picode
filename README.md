@@ -4,13 +4,13 @@
 
 ## 文档（实现必读）
 
-| 文档 | 说明 |
+|文档|说明|
 |------|------|
-| **[docs/README.md](./docs/README.md)** | 文档中心与地图 |
-| **[docs/PROCESSES.md](./docs/PROCESSES.md)** | 全部业务流程 |
-| **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** | 系统架构一页纸 |
-| **[docs/standards/terminology.md](./docs/standards/terminology.md)** | 术语口径 |
-| **[docs/GETTING_STARTED.md](./docs/GETTING_STARTED.md)** | 安装与 CLI |
+|**[docs/README.md](./docs/README.md)**|文档中心与地图|
+|**[docs/PROCESSES.md](./docs/PROCESSES.md)**|全部业务流程|
+|**[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)**|系统架构一页纸|
+|**[docs/standards/terminology.md](./docs/standards/terminology.md)**|术语口径|
+|**[docs/GETTING_STARTED.md](./docs/GETTING_STARTED.md)**|安装与 CLI|
 
 ## 代码
 
@@ -18,12 +18,12 @@
 npm install && npm run build && npm test
 ```
 
-| 包 | 职责 |
+|包|职责|
 |----|------|
-| `@picode/core` | 配置、路径、工具画像 |
-| `@picode/bus` | token + 房间 ACL |
-| `@picode/orchestrator` | 状态机 CLI |
-| `@picode/pi-extension` | Pi 工具扩展 |
+|`@picode/core`|配置、路径、工具画像|
+|`@picode/bus`|token + 房间 ACL|
+|`@picode/orchestrator`|状态机 CLI|
+|`@picode/pi-extension`|Pi 工具扩展|
 
 ## 状态
 
