@@ -133,7 +133,7 @@ CLI：`staffing request --team-name <n> --codename seat:name`（`--codename` 可
 
 ## 9. 评分（人设分 · 团队分）
 
-任务结束后（P07 dissolve 后）人事部执行 `staffing score`：对**每个 persona**（按 codename）与**整个三人团队**（按 team_name）各打 0–100 分，沉淀评分档案供后续优化人设与团队组合（17 §7 pool_reuse / 19 self-evolution 可引用）。
+任务结束后（P07 dissolve 后）人事部执行 `staffing score`：对**每个 persona**（按 codename）与**整个三人团队**（按 team_name）各打 0–100 分，沉淀评分档案供后续优化人设与团队组合（16 §7 pool_reuse / 19 self-evolution 可引用）。
 
 ### 9.1 信号（全部为文件事实，无 LLM 参与）
 
