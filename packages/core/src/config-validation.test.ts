@@ -121,3 +121,36 @@ test("E5: code layer requires require_code_review_on_code_layer", () => {
   cfg.self_evolve.require_code_review_on_code_layer = false;
   expectConfigError(cfg, /require_code_review_on_code_layer must be true/);
 });
+
+test("C4: room/role ids must be path-safe lowercase-hyphen (命名律)", () => {
+  for (const bad of ["../escape", "Upper", "with space", "lead/er", "9lead", "x_y"]) {
+    {
+      const cfg = getDefaultConfig();
+      cfg.rooms = [{ ...cfg.rooms[0], id: bad }];
+      expectConfigError(cfg, /rooms\[\]\.id .* invalid/);
+    }
+    {
+      const cfg = getDefaultConfig();
+      cfg.roles = [{ ...cfg.roles[0], id: bad }];
+      expectConfigError(cfg, /roles\[\]\.id .* invalid/);
+    }
+  }
+  // legitimate ids pass
+  const cfg = getDefaultConfig();
+  cfg.rooms = [...cfg.rooms, { id: "meeting-room", enabled: true }];
+  cfg.roles = [...cfg.roles, { id: "org-cto2", enabled: true, display_name: "x" }];
+  assert.doesNotThrow(() => validateConfig(cfg));
+});
+
+test("C4: duplicate room/role ids are rejected (13 §2 array-merge semantics)", () => {
+  {
+    const cfg = getDefaultConfig();
+    cfg.rooms = [cfg.rooms[0], { ...cfg.rooms[0] }];
+    expectConfigError(cfg, /duplicate room id/);
+  }
+  {
+    const cfg = getDefaultConfig();
+    cfg.roles = [cfg.roles[0], { ...cfg.roles[0] }];
+    expectConfigError(cfg, /duplicate role id/);
+  }
+});

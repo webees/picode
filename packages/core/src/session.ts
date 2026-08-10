@@ -51,3 +51,27 @@ export function canConsumeModel(session: Pick<SessionRecord, "state">): boolean 
 
 /** Human sponsor must never be registered as a session (17 §3.1 / T26). */
 export const NON_SESSION_ROLES: readonly string[] = ["sponsor"] as const;
+
+/**
+ * Deterministic scheduler events (17 §5.3 / D026). Single source of truth for
+ * the event ids used in `sess_mgr.rules[]` and by `applyEvent` callers, so a
+ * typo in one place fails at compile time (方向 C3).
+ */
+export const SESSION_EVENTS = {
+  RUN_CREATED: "run_created",
+  INTAKE_START: "intake_start",
+  SPONSOR_MESSAGE: "sponsor_message",
+  GOAL_ACTIVE: "goal_active",
+  STAFFING_REQUEST: "staffing_request",
+  BRIEF_ASSEMBLE: "brief_assemble",
+  TASK_READY: "task_ready",
+  PROGRESS_DUE: "progress_due",
+  MERGE_READY: "merge_ready",
+  TASK_DISSOLVED: "task_dissolved",
+  CHANGE_APPLIED: "change_applied",
+} as const;
+
+export type SessionEvent = (typeof SESSION_EVENTS)[keyof typeof SESSION_EVENTS];
+
+/** All event ids (for config validation of rule tables). */
+export const SESSION_EVENT_IDS: readonly string[] = Object.values(SESSION_EVENTS);

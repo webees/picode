@@ -13,6 +13,7 @@ import {
   type Persona,
   type PicodeConfig,
 } from "@picode/core";
+import { SESSION_EVENTS } from "@picode/core";
 import { readGoal } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
 import { applyEvent } from "./rules-engine.js";
@@ -125,7 +126,7 @@ export async function createStaffingRequest(
   };
   ensureDir(staffingDir(dir, taskId));
   writeAtomic(path.join(staffingDir(dir, taskId), "request.yaml"), YAML.stringify(request));
-  await applyEvent(dir, config, "staffing_request");
+  await applyEvent(dir, config, SESSION_EVENTS.STAFFING_REQUEST);
   return { request };
 }
 
@@ -377,7 +378,7 @@ export async function approveStaffing(
   // Double latch: wake squad when the work brief is also approved (P05).
   let wokeSquad = false;
   if (briefApproved(dir, taskId, config)) {
-    await applyEvent(dir, config, "task_ready", { taskId });
+    await applyEvent(dir, config, SESSION_EVENTS.TASK_READY, { taskId });
     wokeSquad = true;
   }
   return { staffing, wokeSquad };

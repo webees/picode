@@ -6,6 +6,7 @@ import {
   writeAtomic,
   type PicodeConfig,
 } from "@picode/core";
+import { SESSION_EVENTS } from "@picode/core";
 import { applyEvent } from "./rules-engine.js";
 
 /**
@@ -84,7 +85,7 @@ export async function sweepProgress(dir: string, config: PicodeConfig): Promise<
     }
     if (staleSec > timeoutSec) {
       res.overdue.push({ task_id: taskId, stale_sec: Math.round(staleSec) });
-      const ev = await applyEvent(dir, config, "progress_due", { taskId });
+      const ev = await applyEvent(dir, config, SESSION_EVENTS.PROGRESS_DUE, { taskId });
       for (const a of ev.actions) {
         if (a.outcome === "ok" || a.outcome === "skipped") res.woke.push(a.agent_id);
       }

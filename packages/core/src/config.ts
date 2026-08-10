@@ -5,6 +5,7 @@
  * (方向 B1). Everything here is deterministic and testable in isolation.
  */
 import { ErrorCode, PicodeError } from "./errors.js";
+import { SESSION_EVENTS } from "./session.js";
 
 export interface RoomConfig {
   id: string;
@@ -224,21 +225,21 @@ export const DEFAULTS: PicodeConfig = {
     max_awake: 8,
     always_register: true,
     rules: [
-      { event: "run_created", wake: ["sess-mgr", "run-lead", "pm"] },
+      { event: SESSION_EVENTS.RUN_CREATED, wake: ["sess-mgr", "run-lead", "pm"] },
       {
-        event: "intake_start",
+        event: SESSION_EVENTS.INTAKE_START,
         wake: ["run-lead", "pm"],
         wake_if: ["ind-res"],
       },
-      { event: "sponsor_message", wake: ["run-lead"] },
-      { event: "goal_active", wake: ["scout", "sys-arch"] },
-      { event: "staffing_request", wake: ["people-lead", "recruiter", "people-qa"] },
-      { event: "brief_assemble", wake: ["docs-lead", "tech-writer", "docs-qa"] },
-      { event: "task_ready", wake_squad: true },
-      { event: "progress_due", wake_squad_lead: true },
-      { event: "merge_ready", wake: ["release-eng"], wake_gates: true },
-      { event: "task_dissolved", terminate_squad: true },
-      { event: "change_applied", wake_squad_lead: true },
+      { event: SESSION_EVENTS.SPONSOR_MESSAGE, wake: ["run-lead"] },
+      { event: SESSION_EVENTS.GOAL_ACTIVE, wake: ["scout", "sys-arch"] },
+      { event: SESSION_EVENTS.STAFFING_REQUEST, wake: ["people-lead", "recruiter", "people-qa"] },
+      { event: SESSION_EVENTS.BRIEF_ASSEMBLE, wake: ["docs-lead", "tech-writer", "docs-qa"] },
+      { event: SESSION_EVENTS.TASK_READY, wake_squad: true },
+      { event: SESSION_EVENTS.PROGRESS_DUE, wake_squad_lead: true },
+      { event: SESSION_EVENTS.MERGE_READY, wake: ["release-eng"], wake_gates: true },
+      { event: SESSION_EVENTS.TASK_DISSOLVED, terminate_squad: true },
+      { event: SESSION_EVENTS.CHANGE_APPLIED, wake_squad_lead: true },
     ],
   },
   sponsor: { human_only: true },
@@ -424,8 +425,45 @@ function configError(message: string): never {
   throw new PicodeError(ErrorCode.CONFIG_INVALID, message);
 }
 
+/**
+ * Naming-law id charset (glossary §0 / 方向 C4): ids double as file/dir names,
+ * so only lowercase letters/digits/hyphens are allowed and the first char must
+ * be a letter (a room or role id like `../x` would otherwise escape its
+ * directory). Enforced for `rooms[].id` and `roles[].id`.
+ */
+export const SAFE_ID_RE = /^[a-z][a-z0-9-]*$/;
+
 export function validateConfig(config: PicodeConfig): void {
   const roleIds = new Set(config.roles.filter((r) => r.enabled !== false).map((r) => r.id));
+  // C4 (命名律 R2–R7 复核): ids become file/dir names (sessions/<id>.yaml,
+  // rooms/<id>/members.yaml), so they must be path-safe and match the
+  // lowercase-hyphen convention. R1 (role ∩ room = ∅) is enforced below.
+  for (const room of config.rooms) {
+    if (!SAFE_ID_RE.test(room.id)) {
+      configError(
+        `rooms[].id "${room.id}" invalid — must match ${String(SAFE_ID_RE)} (lowercase letters/digits/hyphen, leading letter)`,
+      );
+    }
+  }
+  for (const role of config.roles) {
+    if (!SAFE_ID_RE.test(role.id)) {
+      configError(
+        `roles[].id "${role.id}" invalid — must match ${String(SAFE_ID_RE)} (lowercase letters/digits/hyphen, leading letter)`,
+      );
+    }
+  }
+  // Duplicate ids would break array-merge-by-id semantics (13 §2) and the
+  // session roster (one file per agent).
+  const seenRooms = new Set<string>();
+  for (const room of config.rooms) {
+    if (seenRooms.has(room.id)) configError(`duplicate room id: ${room.id}`);
+    seenRooms.add(room.id);
+  }
+  const seenRoles = new Set<string>();
+  for (const role of config.roles) {
+    if (seenRoles.has(role.id)) configError(`duplicate role id: ${role.id}`);
+    seenRoles.add(role.id);
+  }
   for (const [kind, t] of Object.entries(config.cells.templates)) {
     for (const key of ["lead_role", "doer_role", "check_role"] as const) {
       if (!roleIds.has(t[key])) {
