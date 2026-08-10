@@ -4,6 +4,8 @@ import YAML from "yaml";
 import {
   ensureDir,
   evolveWritePaths,
+  generateCodename,
+  generateTeamName,
   missingPersonaDimensions,
   simpleGlobMatch,
   writeAtomic,
@@ -23,6 +25,10 @@ export interface StaffingRequest {
   constraints: string[];
   notes: string;
   reuse_persona_ids: string[];
+  /** Optional triad team name; defaults to a deterministic name (16 §8). */
+  team_name?: string;
+  /** Optional per-seat codename overrides, e.g. { engineer: "白泽" } (16 §8). */
+  codename_overrides?: Record<string, string>;
   created_at: string;
 }
 
@@ -41,6 +47,8 @@ export interface StaffingState {
   status: "approved" | "rejected";
   approved_by: string | null;
   approved_at: string | null;
+  /** Triad team name (16 §8) — deterministic or requested override. */
+  team_name: string;
   triad: Record<string, StaffingSeat>;
 }
 
@@ -89,7 +97,13 @@ export async function createStaffingRequest(
   dir: string,
   config: PicodeConfig,
   taskId: string,
-  opts: { skills?: string[]; constraints?: string[]; notes?: string } = {},
+  opts: {
+    skills?: string[];
+    constraints?: string[];
+    notes?: string;
+    teamName?: string;
+    codenameOverrides?: Record<string, string>;
+  } = {},
 ): Promise<{ request: StaffingRequest }> {
   if (readStaffingRequest(dir, taskId)) {
     throw new Error(`staffing request already exists for ${taskId}`);
@@ -103,6 +117,10 @@ export async function createStaffingRequest(
     constraints: opts.constraints ?? [],
     notes: opts.notes ?? "",
     reuse_persona_ids: [],
+    ...(opts.teamName ? { team_name: opts.teamName } : {}),
+    ...(opts.codenameOverrides && Object.keys(opts.codenameOverrides).length > 0
+      ? { codename_overrides: opts.codenameOverrides }
+      : {}),
     created_at: new Date().toISOString(),
   };
   ensureDir(staffingDir(dir, taskId));
@@ -144,6 +162,7 @@ export function draftPersonas(
   ensureDir(outDir);
 
   const roles = new Map(config.roles.map((r) => [r.id, r]));
+  const overrides = request.codename_overrides ?? {};
   const written: string[] = [];
   for (const seat of SEATS) {
     const instanceId = `${seat}@${taskId}`;
@@ -157,6 +176,7 @@ export function draftPersonas(
       schema_version: "1",
       seat,
       instance_id: instanceId,
+      codename: overrides[seat] ?? generateCodename(instanceId),
       display_name: role?.display_name ?? seat,
       mission: `完成 ${taskId} 的职责(见 brief 与 acceptance)`,
       scope_in: task.write_paths,
@@ -321,6 +341,7 @@ export async function approveStaffing(
     status: "approved",
     approved_by: by,
     approved_at: new Date().toISOString(),
+    team_name: request.team_name ?? generateTeamName(taskId),
     triad,
   };
   writeAtomic(path.join(staffingDir(dir, taskId), "staffing.yaml"), YAML.stringify(staffing));

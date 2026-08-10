@@ -33,6 +33,13 @@ import {
   prepareTask,
   printSpawnEnv,
 } from "./task.js";
+import {
+  ackHandoff,
+  dissolveTask,
+  gcFailedWorktrees,
+  packageHandoff,
+  submitEvidence,
+} from "./closure.js";
 import { SessionStore } from "./session-store.js";
 import { applyEvent, drainSessionCommands, rosterSnapshot } from "./rules-engine.js";
 import { sleepWithPi, wakeWithPi } from "./pi-adapter.js";
@@ -44,6 +51,7 @@ import {
   createStaffingRequest,
   draftPersonas,
 } from "./staffing.js";
+import { readScores, scoreTask } from "./hr-score.js";
 
 function arg(name: string, args: string[]): string | undefined {
   const i = args.indexOf(name);
@@ -79,6 +87,11 @@ function usage(): never {
   picode brief approve --repo <path> --run <id> --task <task_id> [--by run-lead]
   picode task prepare --repo <path> --run <id> --task <task_id>
   picode task spawn-print --repo <path> --run <id> --task <task_id> --seat squad-lead|engineer|sdet
+  picode task dissolve --repo <path> --run <id> --task <task_id> [--force] [--status failed|cancelled]
+  picode evidence submit --repo <path> --run <id> --task <task_id> --cmd "..." [--exit-code 0] [--log-ref <path>] [--by sdet@task_id]   # pass 需要 exit-code=0 且 --log-ref
+  picode handoff package --repo <path> --run <id> --task <task_id>
+  picode handoff ack --repo <path> --run <id> --task <task_id> --by docs-lead|tpm [--notes "..."]
+  picode worktree gc --repo <path> --run <id>
   picode session register --repo <path> --run <id> --agent <role_id> [--role <role_id>]
   picode session wake --repo <path> --run <id> --agent <agent_id> [--reason <r>] [--force]
   picode session sleep --repo <path> --run <id> --agent <agent_id> [--reason <r>]
@@ -86,10 +99,12 @@ function usage(): never {
   picode session list --repo <path> --run <id> [--state registered|sleeping|awake|terminated]
   picode session event --repo <path> --run <id> --event <name> [--task <task_id>]
   picode session drain --repo <path> --run <id>
-  picode staffing request --repo <path> --run <id> --task <task_id> [--skills a,b] [--notes <n>]
+  picode staffing request --repo <path> --run <id> --task <task_id> [--skills a,b] [--notes <n>] [--team-name <n>] [--codename seat:name]
   picode staffing draft-personas --repo <path> --run <id> --task <task_id>
   picode staffing check --repo <path> --run <id> --task <task_id>
   picode staffing approve --repo <path> --run <id> --task <task_id> [--by run-lead]
+  picode staffing score --repo <path> --run <id> --task <task_id> [--by people-qa] [--note "..."]
+  picode staffing scores --repo <path> --run <id> --task <task_id>
   picode progress sweep --repo <path> --run <id>
   picode merge enqueue --repo <path> --run <id> --task <task_id> [--by release-eng]
   picode merge process --repo <path> --run <id>
@@ -311,15 +326,76 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (cmd === "task" && args[1] === "dissolve") {
+    const taskId = arg("--task", args);
+    if (!taskId) usage();
+    const r = await dissolveTask(repo, dir, config, taskId, {
+      force: args.includes("--force"),
+      status: arg("--status", args) as "failed" | "cancelled" | undefined,
+    });
+    console.log(JSON.stringify(r, null, 2));
+    return;
+  }
+
+  if (cmd === "evidence" && args[1] === "submit") {
+    const taskId = arg("--task", args);
+    const cmdText = arg("--cmd", args);
+    if (!taskId || !cmdText) usage();
+    const ev = submitEvidence(dir, taskId, {
+      cmds: [
+        {
+          cmd: cmdText,
+          exit_code: Number(arg("--exit-code", args) ?? "0"),
+          log_ref: arg("--log-ref", args) ?? null,
+        },
+      ],
+      by: arg("--by", args) ?? `sdet@${taskId}`,
+    });
+    console.log(JSON.stringify(ev, null, 2));
+    return;
+  }
+
+  if (cmd === "handoff" && args[1] === "package") {
+    const taskId = arg("--task", args);
+    if (!taskId) usage();
+    console.log(JSON.stringify(packageHandoff(repo, dir, config, taskId), null, 2));
+    return;
+  }
+
+  if (cmd === "handoff" && args[1] === "ack") {
+    const taskId = arg("--task", args);
+    const by = arg("--by", args);
+    if (!taskId || !by) usage();
+    console.log(JSON.stringify(ackHandoff(dir, taskId, by, arg("--notes", args)), null, 2));
+    return;
+  }
+
+  if (cmd === "worktree" && args[1] === "gc") {
+    console.log(JSON.stringify(gcFailedWorktrees(repo, dir, config), null, 2));
+    return;
+  }
+
   if (cmd === "staffing") {
     const sub = args[1];
     const taskId = arg("--task", args);
     if (!taskId) usage();
     if (sub === "request") {
       const skills = (arg("--skills", args) ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      // repeated `--codename seat:name` (16 §8 naming overrides)
+      const codenameOverrides: Record<string, string> = {};
+      for (let i = 0; i < args.length - 1; i++) {
+        if (args[i] === "--codename") {
+          const m = args[i + 1].match(/^([a-z-]+):(.+)$/);
+          if (m) codenameOverrides[m[1]] = m[2];
+          i++;
+        }
+      }
       const r = await createStaffingRequest(dir, config, taskId, {
         skills,
         notes: arg("--notes", args),
+        teamName: arg("--team-name", args),
+        codenameOverrides:
+          Object.keys(codenameOverrides).length > 0 ? codenameOverrides : undefined,
       });
       console.log(JSON.stringify(r, null, 2));
       return;
@@ -337,6 +413,24 @@ async function main(): Promise<void> {
     if (sub === "approve") {
       const r = await approveStaffing(dir, config, taskId, arg("--by", args) ?? "run-lead");
       console.log(JSON.stringify(r, null, 2));
+      return;
+    }
+    if (sub === "score") {
+      const r = scoreTask(repo, dir, config, taskId, {
+        by: arg("--by", args),
+        note: arg("--note", args),
+      });
+      console.log(JSON.stringify(r, null, 2));
+      return;
+    }
+    if (sub === "scores") {
+      const s = readScores(dir, taskId);
+      if (!s) {
+        console.log(JSON.stringify({ error: `no scores yet for ${taskId}` }, null, 2));
+        process.exitCode = 1;
+        return;
+      }
+      console.log(JSON.stringify(s, null, 2));
       return;
     }
     usage();

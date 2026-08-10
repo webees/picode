@@ -173,13 +173,13 @@ tasks/<task_id>/brief/
 **实现组不预置；每 task 新招（默认）。** 详见编制 `16-hr-cell`。
 
 ```text
-工程主责 → people：staffing_request（标准、技能、约束、想法）
-  → recruiter：三人设 personas（squad-lead / engineer / sdet）
-  → people-qa：合规
+工程主责 → people：staffing_request（标准、技能、约束、想法；可带 team_name / codename_overrides，见 16 §8）
+  → recruiter：三人设 personas（frontmatter 含 codename 人设名，确定性生成）
+  → people-qa：合规（含命名覆盖项）
   → people-lead：呈报工程主责
   → 工程主责：approve | revise | reject
   → recruiter：建组
-       agent_id、staffing.yaml、personas/*
+       agent_id、team_name、staffing.yaml、personas/*
   → 通知编排器可 prepare
 ```
 
@@ -257,6 +257,7 @@ verifying：sdet evidence pass（command exit_code=0 + log_ref）
   → handing_over（人未散，work 仍可 post）
   → 交接包齐全 + acceptance.yaml
   → dissolving → dissolved
+  → staffing score：人事按 16 §9 评分沉淀（非阻断；scores.yaml + docs/knowledge/hr/）
   → chunk.status = done（解锁下游 depends_on）
 ```
 

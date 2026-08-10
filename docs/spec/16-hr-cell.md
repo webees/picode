@@ -33,12 +33,13 @@
 
 ```text
 tasks/<task_id>/staffing/
-  request.yaml          # 工程主责用工单
+  request.yaml          # 工程主责用工单（可含命名覆盖，见 §8）
   personas/
-    squad-lead.md       # 人设正文（可合并进 system）
+    squad-lead.md       # 人设正文（frontmatter 含 codename 人设名，见 §8）
     engineer.md
     sdet.md
-  staffing.yaml         # 机器可读：三角绑定、profile、status
+  staffing.yaml         # 机器可读：三角绑定、team_name、profile、status
+  scores.yaml           # task 结束后的评分档案（见 §9）
 ```
 
 ### 4.1 request.yaml（工程主责 → 人事）
@@ -52,6 +53,8 @@ skills_wanted: ["typescript", "testing"]
 constraints: ["no network", "write_paths only"]
 notes: "Prefer careful sdet"
 reuse_persona_ids: []   # optional past persona templates
+team_name: "北辰"        # optional 团队名覆盖（缺省确定性生成，§8）
+codename_overrides: { engineer: "白泽" }   # optional 人设名覆盖（§8）
 ```
 
 ### 4.2 staffing.yaml（人事 → 工程主责批准后锁定）
@@ -62,6 +65,7 @@ task_id: task-chunk-a
 status: approved
 approved_by: run-lead
 approved_at: "..."
+team_name: "北辰"    # 团队名（§8）：request 覆盖或按 task_id 确定性生成
 triad:
   squad-lead: { role_template: squad-lead, agent_id: squad-lead@task-chunk-a, tool_profile: implement.squad-lead, persona_file: personas/squad-lead.md }
   engineer: { role_template: engineer, agent_id: engineer@task-chunk-a, tool_profile: implement.engineer, persona_file: personas/engineer.md }
@@ -75,7 +79,7 @@ triad:
 本节不重复展开，避免双源。摘要：
 
 - 模板：`.picode/agents/<role_id>.md`  
-- 实例：`staffing/personas/*.md`（**以批准后的实例为准**）  
+- 实例：`staffing/personas/*.md`（**以批准后的实例为准**；身份维含 `codename` 人设名，见 §8）  
 - `people-qa` MUST 校验维度齐全后再呈报 `run-lead`  
 
 ### 5.1 最低可读清单（与 17 对齐的检查表）
@@ -85,6 +89,7 @@ triad:
 | mission | 本 task 使命 |
 | scope_in / scope_out | 边界 |
 | skills / stack | 能力 |
+| codename | 人设名（身份维，§8） |
 | tool_profile + paths | 与配置一致 |
 | forbidden | 禁区 |
 | must_read_refs | brief/packet |
@@ -117,15 +122,59 @@ hr:
 
 v1 公司仿真以 `hire_fresh` 为准；开启 `pool_reuse` 不得跳过 people-qa 维度校验。
 
-## 8. 房间 `people`
+## 8. 命名（人设名 · 团队名）
+
+1. 每个 persona 实例 **MUST** 有 `codename`（人设名/代号，身份维，见 [17 §6](./17-agent-runtime.md)）：`recruiter` 起草时确定性生成（`generateCodename(instance_id)`；池见 `@picode/core/src/naming.ts`），同一 instance_id 跨重写稳定。  
+2. 每个已批准三角 **MUST** 有 `team_name`（团队名）：`approve` 时确定性生成（`generateTeamName(task_id)`）并锁定进 `staffing.yaml`。  
+3. 工程主责可在 `staffing request` 中覆盖：`team_name`、`codename_overrides`（seat → 名）。覆盖项仍需 people-qa 维度校验通过后随 staffing 批准落盘。  
+4. 命名用于跨 run 对话与评分档案聚合（`docs/knowledge/hr/…`，见 §9），**不改变逻辑 seat**（仍为 squad-lead / engineer / sdet），也不替代角色模板。
+
+CLI：`staffing request --team-name <n> --codename seat:name`（`--codename` 可重复）。
+
+## 9. 评分（人设分 · 团队分）
+
+任务结束后（P07 dissolve 后）人事部执行 `staffing score`：对**每个 persona**（按 codename）与**整个三人团队**（按 team_name）各打 0–100 分，沉淀评分档案供后续优化人设与团队组合（17 §7 pool_reuse / 19 self-evolution 可引用）。
+
+### 9.1 信号（全部为文件事实，无 LLM 参与）
+
+- `evidence`（tasks/&lt;id&gt;/evidence/evidence.yaml）：pass / fail / 缺失
+- `task.status`：dissolved / failed / cancelled
+- handoff 包完整度（缺文件数，HANDOFF_FILES）
+- acceptance ack 数
+- `retries`
+
+### 9.2 公式（0–100，base 50）
+
+| 项 | 团队分与人设分共同 | 人设分额外（seat） |
+|----|-------------------|--------------------|
+| base | 50 | — |
+| evidence | pass +30 / fail −30 / 缺失 −20 | engineer：pass +5；sdet：命令全绿 +5 或 fail −5 |
+| status | dissolved +10 / failed −10 / cancelled −5 | squad-lead：dissolved +5 |
+| handoff | 每缺 1 文件 −5 | — |
+| ack | ≥1 个 +5 | — |
+| retries | 每 1 次 −5（上限 −10） | — |
+
+团队分 = 公共项之和（clamp 0–100）；人设分 = 公共项 + seat 项（clamp 0–100）。
+
+### 9.3 产物与沉淀
+
+- `tasks/<id>/staffing/scores.yaml`：本 task 评分档案（`scored_by` / `note` / `team_score` / `team_breakdown` / `persona_scores[]`）  
+- `docs/knowledge/hr/personas/<codename>.yaml`：按**人设名**聚合历史记录（records + summary：count/avg/min/max）——支持同一人设跨 task 优化  
+- `docs/knowledge/hr/teams/<team_name>.yaml`：按**团队名**聚合历史——支持团队组合优化  
+
+评分默认由 `people-qa` 执行（`--by people-qa`），`run-lead` / `people-lead` 可复核；重评同 task 幂等（按 task+seat 覆盖）。评分**不阻断**任务流程，仅沉淀。
+
+CLI：`staffing score --task <id> [--by people-qa] [--note "..."]`；`staffing scores --task <id>` 读取。
+
+## 10. 房间 `people`
 
 | 可 post | 用途 |
 |---------|------|
-| run-lead, people-lead, recruiter, people-qa | 用工单、人设稿、批准 |
+| run-lead, people-lead, recruiter, people-qa | 用工单、人设稿、批准、评分 |
 | tpm read/post 调度类 | 催办 |
 | 实现三角 | **默认不可**（招好再进 work 房） |
 
-## 9. 状态机衔接
+## 11. 状态机衔接
 
 ```text
 task: queued
@@ -134,6 +183,7 @@ task: queued
   → brief 已批（可并行于 staffing，但 spawn 前双齐）
   → assigned / prepare worktree
   → running ...
+  → dissolved → staffing score（§9，人事评分沉淀）
 ```
 
 编排器 `task prepare` / spawn MUST 检查：
@@ -142,11 +192,13 @@ task: queued
 2. work brief approved  
 3. staffing approved  
 
-## 10. 实现检查
+## 12. 实现检查
 
 - [ ] `cells.templates.hr`  
 - [ ] room `people` 默认启用  
 - [ ] CLI: `staffing request|propose|approve`  
 - [ ] 无 staffing 批准拒绝 prepare  
 - [ ] 人设文件注入 Pi 启动 prompt  
-- [ ] 测试 T18–T19  
+- [ ] 命名：`codename` / `team_name` 确定性生成 + request 覆盖（§8）  
+- [ ] 评分：`staffing score|scores` + knowledge 沉淀（§9）  
+- [ ] 测试 T18–T19（+ 命名/评分测试）  

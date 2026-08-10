@@ -184,3 +184,37 @@ test("persona files carry full 17 §6 dimensions after draft", async () => {
   ).frontmatter;
   assert.ok(sdet.check_rubric, "sdet must carry check_rubric");
 });
+
+test("naming: personas get a deterministic codename and triad a team name (16 §8)", async () => {
+  const { repo, dir, config, taskId } = setup();
+  await createStaffingRequest(dir, config, taskId, { skills: ["typescript", "testing"] });
+  draftPersonas(repo, dir, config, taskId);
+  const eng = parsePersonaFile(
+    path.join(dir, "tasks", taskId, "staffing", "personas", "engineer.md"),
+  ).frontmatter;
+  assert.ok(eng.codename && eng.codename.length > 0, "engineer persona needs a codename");
+  // deterministic across re-drafts (same instance id → same codename)
+  draftPersonas(repo, dir, config, taskId);
+  const eng2 = parsePersonaFile(
+    path.join(dir, "tasks", taskId, "staffing", "personas", "engineer.md"),
+  ).frontmatter;
+  assert.equal(eng.codename, eng2.codename);
+  const { staffing } = await approveStaffing(dir, config, taskId);
+  assert.ok(staffing.team_name && staffing.team_name.length > 0, "triad needs a team name");
+});
+
+test("naming: request overrides win over deterministic generation (16 §8)", async () => {
+  const { repo, dir, config, taskId } = setup();
+  await createStaffingRequest(dir, config, taskId, {
+    teamName: "北辰",
+    codenameOverrides: { engineer: "白泽" },
+    skills: ["typescript", "testing"],
+  });
+  draftPersonas(repo, dir, config, taskId);
+  const eng = parsePersonaFile(
+    path.join(dir, "tasks", taskId, "staffing", "personas", "engineer.md"),
+  ).frontmatter;
+  assert.equal(eng.codename, "白泽");
+  const { staffing } = await approveStaffing(dir, config, taskId);
+  assert.equal(staffing.team_name, "北辰");
+});

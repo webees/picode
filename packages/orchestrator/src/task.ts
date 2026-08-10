@@ -269,7 +269,7 @@ export function checkWritePathsInDiff(
   worktree: string,
   baseSha: string,
   writePaths: string[],
-): { ok: boolean; offenders: string[] } {
+): { ok: boolean; offenders: string[]; files: string[] } {
   let out = "";
   try {
     out = execFileSync("git", ["diff", "--name-only", `${baseSha}...HEAD`], {
@@ -277,6 +277,18 @@ export function checkWritePathsInDiff(
       encoding: "utf8",
     });
   } catch {
+    // base may be unresolvable (unborn branch etc.). A write-path gate must
+    // never silently relax to a weaker check: refuse unless the base is real.
+    try {
+      execFileSync("git", ["rev-parse", "--verify", baseSha], {
+        cwd: worktree,
+        stdio: "pipe",
+      });
+    } catch {
+      throw new Error(
+        `cannot resolve base ref "${baseSha}" for write-path gate; refusing weaker check`,
+      );
+    }
     out = execFileSync("git", ["diff", "--name-only", "HEAD"], {
       cwd: worktree,
       encoding: "utf8",
@@ -284,5 +296,5 @@ export function checkWritePathsInDiff(
   }
   const files = out.split("\n").map((s) => s.trim()).filter(Boolean);
   const offenders = files.filter((f) => !matchGlob(f, writePaths));
-  return { ok: offenders.length === 0, offenders };
+  return { ok: offenders.length === 0, offenders, files };
 }

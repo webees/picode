@@ -7,6 +7,8 @@ export interface Persona {
   schema_version: "1";
   seat: string;
   instance_id: string;
+  /** 人设名（代号）— deterministic codename, see naming.ts (16 §8). */
+  codename: string;
   display_name: string;
   /** 使命 — one-line mission for this task. */
   mission: string;
@@ -44,6 +46,7 @@ export const REQUIRED_PERSONA_DIMENSIONS: Array<keyof Persona> = [
   "scope_in",
   "scope_out",
   "skills",
+  "codename",
   "tool_profile",
   "write_paths",
   "forbidden",

@@ -106,8 +106,12 @@
 |------|------|
 | 工作简报 work brief | run-lead 签发；docs 组装；小队消费 |
 | 人设 persona | people 为 seat 定制的 prompt 约束 |
+| 人设名 codename | persona 实例的名字/代号（16 §8；确定性生成，可覆盖） |
+| 团队名 team_name | 三人小组（triad）的名字（16 §8；确定性生成，可覆盖） |
 | 用工单 staffing request | run-lead → people |
 | 编制锁定 staffing | 批准后的三人绑定 |
+| 人设分 persona score | task 结束后对单席人设的 0–100 评分（16 §9） |
+| 团队分 team score | task 结束后对三人组合的 0–100 评分（16 §9） |
 | 下发包 packet | 过滤后资料 |
 | 交接包 handoff package | `tasks/*/handoff/`（≠ 房 collab） |
 | 记忆简报 Memory Brief | docs → leadership |

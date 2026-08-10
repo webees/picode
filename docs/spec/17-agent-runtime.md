@@ -158,7 +158,7 @@ registered → sleeping ⇄ awake → terminated
 
 | 维 | 字段建议 | 说明 |
 |----|----------|------|
-| 身份 | `display_name`, `instance_id`, `seat` | 如 engineer@task-a |
+| 身份 | `display_name`, `instance_id`, `seat`, `codename` | 如 engineer@task-a；codename 人设名见 16 §8 |
 | 使命 | `mission` | 本 task 一句话目标 |
 | 边界 | `scope_in`, `scope_out` | 做什么/不做什么 |
 | 能力 | `skills[]`, `stack[]` | 技术栈与专长 |
@@ -179,7 +179,9 @@ registered → sleeping ⇄ awake → terminated
 | 路径 | 用途 |
 |------|------|
 | `.picode/agents/<role_id>.md` | **角色模板**（静态职责/禁止） |
-| `runs/.../personas/<instance_id>.md` | **实例人设**（招聘产出） |
+| `runs/.../personas/<instance_id>.md` | **实例人设**（招聘产出；含 codename 人设名） |
+| `runs/.../staffing/scores.yaml` | **评分档案**（16 §9；task 结束后沉淀） |
+| `docs/knowledge/hr/…` | **人设/团队评分聚合**（16 §9；跨 run 优化用） |
 | spawn 时 system | 模板 ⊕ 人设 ⊕ 当前 brief 切片 ⊕ 房间规则 |
 
 **MUST：** 每个默认 on 的 LLM 岗有对应 `agents/<id>.md`。  
