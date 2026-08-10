@@ -32,6 +32,8 @@
 |任务|task|可调度工作单元（实体）|房 `program`、小队|
 |交付小队|squad|单次招聘的实现三人组|勿与 task 实体、房 `program` 混称|
 |进化层|evolve.layers|knowledge/prompts/docs/tests/code/policy|自我进化写集边界|
+|窗口|window|一天按 `split_hour` 分成的上/下午两段（`<date>-am` / `<date>-pm`）|勿与 run/session 混称|
+|窗口压缩|window compression|旧窗口消息按 `ratio` 折叠为 `window_rollup` 摘要并归档|勿理解为删除记忆|
 
 ---
 

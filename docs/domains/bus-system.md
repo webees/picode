@@ -39,8 +39,16 @@ Agent ──► Bus API（唯一）──► AuthZ(token+members) ──► Room
 
 ## 5. 包
 
-`@picode/bus`：`RoomStore`、`issueToken`、`verifyToken`。  
+`@picode/bus`：`RoomStore`、`issueToken`、`verifyToken`、窗口判定（`windowIdOf` / `groupByWindow`）。  
 Pi 工具：`bus_post` / `bus_history`（`@picode/pi-extension`）。
+
+## 5.1 上/下午窗口压缩
+
+一天按 `windows.split_hour`（默认 12）分成上/下午两窗（`<date>-am` / `<date>-pm`）。  
+`RoomStore.compressWindow` 把每个房间 jsonl 中**旧窗口**的最老 `1 - ratio`（默认 20%）消息折叠为一条 `window_rollup`（`meta.window / folded / kept / archive`），折叠原文追加归档到 `bus/archive/<room>.<window>.jsonl`（可审计，不丢数据）；保留最近 `ratio`（默认 80%）原文，**当前窗口不折叠**。压缩在 `.lock` 内整体重写 jsonl。
+
+run 级入口：`picode window compress [--rooms a,b]` 汇总各房结果并写 `windows/<window>.yaml`（会话/记忆压缩产物）；`picode window status` 只读快照。  
+消息类型 `window_rollup` 见 [10-bus-messages](../spec/10-bus-messages.md)。
 
 ## 6. 与房间逻辑 ID
 

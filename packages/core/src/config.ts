@@ -78,6 +78,25 @@ export interface ProductConfig {
   require_acceptance_before_active: boolean;
 }
 
+/** Window compression (上/下午窗口上下文压缩). */
+export interface WindowCompressionConfig {
+  /**
+   * Keep ratio after compression (0–1). Default 0.8 = keep the newest 80% of a
+   * window's messages verbatim and fold the oldest 20% into a `window_rollup`
+   * summary message. Applied per room bus history + run-level window archive.
+   */
+  ratio: number;
+  /** Floor: a window with ≤ this many messages is never folded. */
+  min_keep: number;
+}
+
+/** 上/下午窗口:一天按 split_hour 分成上午/下午两个窗口。 */
+export interface WindowsConfig {
+  /** Hour (0–23) splitting the morning/afternoon windows. Default 12 (noon). */
+  split_hour: number;
+  compression: WindowCompressionConfig;
+}
+
 export interface StaffingConfig {
   /** v1 fixed: real_recruit (17 §10 / D009). */
   mode: "real_recruit" | "template";
@@ -176,6 +195,7 @@ export interface PicodeConfig {
   i18n: { locale: string; strings?: Record<string, string> };
   pi: PiConfig;
   product: ProductConfig;
+  windows: WindowsConfig;
   self_evolve: SelfEvolveConfig;
 }
 
@@ -313,6 +333,10 @@ const DEFAULTS: PicodeConfig = {
   i18n: { locale: "zh-CN" },
   pi: { enabled: false, command_template: "pi --print" },
   product: { require_acceptance_before_active: true },
+  windows: {
+    split_hour: 12,
+    compression: { ratio: 0.8, min_keep: 20 },
+  },
   self_evolve: {
     enabled: true,
     default_kind: "delivery",
@@ -426,6 +450,20 @@ export function validateConfig(config: PicodeConfig): void {
   }
   if (config.pi.enabled && !config.pi.command_template) {
     throw new Error("pi.command_template required when pi.enabled (18 phase C)");
+  }
+  if (
+    !Number.isInteger(config.windows.split_hour) ||
+    config.windows.split_hour < 0 ||
+    config.windows.split_hour > 23
+  ) {
+    throw new Error("windows.split_hour must be an integer in 0..23");
+  }
+  const { ratio, min_keep } = config.windows.compression;
+  if (!(ratio > 0 && ratio <= 1)) {
+    throw new Error("windows.compression.ratio must be in (0, 1] (keep ratio after compression)");
+  }
+  if (!Number.isInteger(min_keep) || min_keep < 1) {
+    throw new Error("windows.compression.min_keep must be a positive integer");
   }
   if (!Number.isInteger(config.sess_mgr.max_awake) || config.sess_mgr.max_awake < 1) {
     throw new Error("sess_mgr.max_awake must be a positive integer");

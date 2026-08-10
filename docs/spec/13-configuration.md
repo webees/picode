@@ -205,6 +205,20 @@ timeouts:
   failed_branch_ttl_sec: 604800
 ```
 
+## 8.1 上/下午窗口压缩（可配）
+
+一天按 `split_hour` 分成上/下午两个窗口；`picode window compress` 将每个房间 bus 中**旧窗口**的最老 `1 - ratio` 消息折叠为一条 `window_rollup` 摘要（原文归档到 `bus/archive/<room>.<window>.jsonl`），保留最近 `ratio` 原文，当前窗口不折叠。结果写 run 级 `windows/<window>.yaml`，供会话唤醒/文档小组作为压缩记忆引用。
+
+```yaml
+windows:
+  split_hour: 12            # 0–23，上/下午分界小时（默认 12）
+  compression:
+    ratio: 0.8              # (0,1] 保留比例：默认保留最近 80% 原文，折叠最老 20%
+    min_keep: 20            # 窗口消息 ≤ 此数则不折叠（防过度压缩）
+```
+
+CLI：`picode window compress [--rooms a,b]`、`picode window status`。
+
 ## 9. Git / 路径可配
 
 ```yaml

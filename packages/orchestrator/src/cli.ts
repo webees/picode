@@ -44,6 +44,7 @@ import { SessionStore } from "./session-store.js";
 import { applyEvent, drainSessionCommands, rosterSnapshot } from "./rules-engine.js";
 import { sleepWithPi, wakeWithPi } from "./pi-adapter.js";
 import { writeEvolveKnowledgeLog } from "./evolve-run.js";
+import { compressRunWindows, windowStatus } from "./window-store.js";
 import { evolveWritePaths, type EvolveGoalSpec } from "@picode/core";
 import {
   approveStaffing,
@@ -113,6 +114,8 @@ function usage(): never {
   picode merge process --repo <path> --run <id>
   picode evolve write-paths --repo <path> --run <id> [--task <task_id>]
   picode evolve log --repo <path> --run <id> --summary "..."
+  picode window compress --repo <path> --run <id> [--rooms a,b]
+  picode window status --repo <path> --run <id>
 `);
   process.exit(1);
 }
@@ -190,6 +193,23 @@ async function main(): Promise<void> {
     if (!summary) usage();
     const written = writeEvolveKnowledgeLog(repo, dir, config, { summary });
     console.log(JSON.stringify({ written }, null, 2));
+    return;
+  }
+  if (cmd === "window" && args[1] === "compress") {
+    const rooms = (arg("--rooms", args) ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const r of rooms) {
+      if (!/^[A-Za-z0-9_-]+$/.test(r)) {
+        throw new Error(`invalid room id: "${r}" (allowed: [A-Za-z0-9_-])`);
+      }
+    }
+    console.log(JSON.stringify(await compressRunWindows(dir, config, { rooms }), null, 2));
+    return;
+  }
+  if (cmd === "window" && args[1] === "status") {
+    console.log(JSON.stringify(windowStatus(dir, config), null, 2));
     return;
   }
   if (cmd === "progress" && args[1] === "check") {

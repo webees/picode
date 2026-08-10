@@ -50,6 +50,7 @@ body 宜短；大内容用 `refs[]`。
 |`cell_done`|cell lead|本房, task|cell_id|环节完成待 check|
 |`check_signoff`|check seat|本房|cell_id, result|监督签字|
 |`merge_ready`|squad-lead/tpm|task, release|branch, sha|进入 merge 队列|
+|`window_rollup`|orchestrator|任意|window, folded, kept, archive|上/下午窗口压缩摘要（替换被折叠的旧消息）|
 |`system`|orchestrator|任意||系统通知|
 
 ## 3. progress（实现三角 MUST）

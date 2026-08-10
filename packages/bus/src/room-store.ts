@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { ensureDir, withFileLock, writeAtomic } from "@picode/core";
+import { groupByWindow, windowIdOf } from "./window.js";
 
 export type Access = "post" | "read";
 
@@ -110,5 +111,129 @@ export class RoomStore {
     return lines
       .slice(-limit)
       .map((l) => JSON.parse(l) as BusMessage);
+  }
+
+  /** Read every message in the room (system operation, no ACL). */
+  private readAll(room: string): BusMessage[] {
+    const file = this.busPath(room);
+    if (!fs.existsSync(file)) return [];
+    return fs
+      .readFileSync(file, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as BusMessage);
+  }
+
+  private archivePath(room: string, windowId: string): string {
+    return path.join(this.runDir, "bus", "archive", `${room}.${windowId}.jsonl`);
+  }
+
+  /**
+   * 上/下午窗口压缩:keep the newest `ratio` of each *past* window's messages
+   * verbatim and fold the oldest `1 - ratio` into one `window_rollup` message
+   * (folded originals are archived to `bus/archive/<room>.<window>.jsonl`).
+   * The current window is never folded.
+   */
+  async compressWindow(
+    room: string,
+    opts: { splitHour: number; ratio: number; minKeep: number; now?: Date },
+  ): Promise<{
+    room: string;
+    current_window: string;
+    folded_windows: string[];
+    folded: number;
+    kept: number;
+    archived: string[];
+  }> {
+    const now = opts.now ?? new Date();
+    const current = windowIdOf(now, opts.splitHour).id;
+    return withFileLock(this.lockPath(room), () => {
+      const all = this.readAll(room);
+      if (all.length === 0) {
+        return { room, current_window: current, folded_windows: [], folded: 0, kept: 0, archived: [] };
+      }
+      const byWindow = groupByWindow(all, opts.splitHour);
+      const out: BusMessage[] = [];
+      const archived: string[] = [];
+      const foldedWindows: string[] = [];
+      let foldedTotal = 0;
+      let keptTotal = 0;
+
+      for (const [wid, msgs] of byWindow) {
+        if (wid === current || msgs.length <= opts.minKeep) {
+          out.push(...msgs);
+          keptTotal += msgs.length;
+          continue;
+        }
+        // Never re-compress a window that already produced a rollup: folding it
+        // again would shrink the bus below the promised `ratio` (D043) and
+        // would nest rollups. Skip the whole window when one exists.
+        const alreadyRolled = msgs.some(
+          (m) => m.type === "window_rollup" && m.meta?.window === wid,
+        );
+        if (alreadyRolled) {
+          out.push(...msgs);
+          keptTotal += msgs.length;
+          continue;
+        }
+        const keepCount = Math.max(opts.minKeep, Math.ceil(msgs.length * opts.ratio));
+        const foldCount = msgs.length - keepCount;
+        if (foldCount <= 0) {
+          out.push(...msgs);
+          keptTotal += msgs.length;
+          continue;
+        }
+        const foldedMsgs = msgs.slice(0, foldCount);
+        const keptMsgs = msgs.slice(foldCount);
+        // archive folded originals (audit trail), then replace with one rollup
+        const archiveFile = this.archivePath(room, wid);
+        ensureDir(path.dirname(archiveFile));
+        const body =
+          foldedMsgs.length > 0
+            ? foldedMsgs.map((m) => JSON.stringify(m)).join("\n") + "\n"
+            : "";
+        fs.appendFileSync(archiveFile, body, "utf8");
+        archived.push(archiveFile);
+
+        const froms = [...new Set(foldedMsgs.map((m) => m.from))];
+        const typeCounts: Record<string, number> = {};
+        for (const m of foldedMsgs) typeCounts[m.type] = (typeCounts[m.type] ?? 0) + 1;
+        const rollup: BusMessage = {
+          // ts must stay inside the folded window (last folded message's ts),
+          // otherwise the next pass would attribute the rollup to the current
+          // window and re-fold the kept messages (breaks idempotency).
+          ts: foldedMsgs[foldedMsgs.length - 1].ts,
+          id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          from: "orchestrator",
+          room,
+          type: "window_rollup",
+          body: `[窗口 ${wid}] 已折叠 ${foldedMsgs.length} 条消息(保留 ${keptMsgs.length} 条)。参与方: ${froms.join(", ") || "-"}。类型分布: ${Object.entries(typeCounts).map(([t, n]) => `${t}×${n}`).join(", ") || "-"}。原文归档: ${archiveFile}`,
+          refs: [archiveFile],
+          meta: {
+            window: wid,
+            folded: foldedMsgs.length,
+            kept: keptMsgs.length,
+            from_agents: froms,
+            type_counts: typeCounts,
+            archive: archiveFile,
+          },
+        };
+        out.push(rollup, ...keptMsgs);
+        foldedWindows.push(wid);
+        foldedTotal += foldedMsgs.length;
+        keptTotal += keptMsgs.length;
+      }
+
+      writeAtomic(this.busPath(room), out.map((m) => JSON.stringify(m)).join("\n") + "\n");
+      return {
+        room,
+        current_window: current,
+        folded_windows: foldedWindows,
+        folded: foldedTotal,
+        kept: keptTotal,
+        archived,
+      };
+    });
   }
 }
