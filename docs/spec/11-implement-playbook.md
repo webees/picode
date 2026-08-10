@@ -45,11 +45,12 @@
 
 ## 阶段 4 — 工具层
 
-- [ ] 按 09 挂 tool_profile  
-- [ ] repo_write 写集  
-- [ ] run_allowlisted  
-- [ ] web_* 仅 research doer  
-- [ ] request_info / request_cross_room 状态机  
+- [x] 按 09 挂 tool_profile  
+- [x] repo_write 写集  
+- [x] run_allowlisted  
+- [x] web_* 仅 research doer  
+- [x] request_info / request_cross_room 状态机  
+- [x] repo_glob/grep、git_status/diff/log/commit、state_read（09 矩阵 20 工具全量注册）
 
 **DoD**：engineer 不能 web；不能写越界路径。
 

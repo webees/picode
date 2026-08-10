@@ -7,6 +7,8 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
+import { isIP } from "node:net";
 import YAML from "yaml";
 import {
   matchGlob,
@@ -303,7 +305,7 @@ export default function picodeExtension(pi: PiApi): void {
       if (!runDir) return err("NO_RUN", "no run");
       const reqDir = path.join(runDir, "requests");
       fs.mkdirSync(reqDir, { recursive: true });
-      const id = `req-${Date.now()}`;
+      const id = `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const body = {
         id,
         from_agent: agentId,
@@ -316,6 +318,53 @@ export default function picodeExtension(pi: PiApi): void {
       return jsonResult({ ok: true, request: body });
     },
   });
+
+  const runAllowlist: string[] = JSON.parse(env("PICODE_RUN_ALLOWLIST", "[]"));
+
+  /** Is `rel` inside the union of write/read paths (or a passthrough when both empty)? */
+  function pathAllowed(rel: string, extra: string[] = []): boolean {
+    if (writePaths.length === 0 && readPaths.length === 0 && extra.length === 0) return true;
+    return matchGlob(rel, [...writePaths, ...readPaths, ...extra]);
+  }
+
+  /** Resolve `rel` inside cwd, refusing escapes. */
+  function resolveInCwd(rel: string): string {
+    const root = path.resolve(cwd);
+    const abs = path.resolve(root, rel.replace(/^\/+/, ""));
+    // boundary check: abs must equal root or start with root + sep
+    if (abs !== root && !abs.startsWith(root + path.sep)) {
+      throw Object.assign(new Error("path escapes cwd"), { code: "PATH_ESCAPE" });
+    }
+    return abs;
+  }
+
+  /** Run a read-only git command in the worktree; returns trimmed stdout. */
+  function git(args: string[]): string {
+    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
+  }
+
+  function walk(dir: string, relBase: string, out: string[]): void {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (ent.name.startsWith(".git") || ent.name === "node_modules") continue;
+      const rel = relBase ? `${relBase}/${ent.name}` : ent.name;
+      const abs = path.join(dir, ent.name);
+      if (ent.isDirectory()) walk(abs, rel, out);
+      else out.push(rel);
+    }
+  }
+
+  function fileList(): string[] {
+    if (!fs.existsSync(cwd)) return [];
+    const all: string[] = [];
+    walk(cwd, "", all);
+    return all.filter((f) => pathAllowed(f, ["**/*.md"]));
+  }
+
+  function readText(rel: string): string {
+    const abs = resolveInCwd(rel);
+    if (!fs.existsSync(abs)) throw Object.assign(new Error("NOT_FOUND"), { code: "NOT_FOUND" });
+    return fs.readFileSync(abs, "utf8");
+  }
 
   const sessionTargets = (params: Record<string, unknown>) => ({
     action: params.action as "wake" | "sleep" | "terminate",
@@ -401,6 +450,357 @@ export default function picodeExtension(pi: PiApi): void {
       const sessions = listSessions(runDir);
       const awake = sessions.filter((s) => s.state === "awake").length;
       return jsonResult({ ok: true, awake_count: awake, sessions });
+    },
+  });
+
+  pi.registerTool({
+    name: "repo_glob",
+    label: "Picode Repo Glob",
+    description: "List files in the worktree inside read/write paths matching a glob",
+    parameters: {
+      type: "object",
+      properties: { pattern: { type: "string" } },
+      required: ["pattern"],
+    },
+    async execute(_id, params) {
+      if (!allow("repo_glob")) return err("TOOL_DENIED", "repo_glob not in profile");
+      const a = auth();
+      if (a) return err("TOKEN_INVALID", a);
+      const pattern = String(params.pattern);
+      const matches = fileList().filter((f) => matchGlob(f, [pattern]));
+      return jsonResult({ ok: true, pattern, matches });
+    },
+  });
+
+  pi.registerTool({
+    name: "repo_grep",
+    label: "Picode Repo Grep",
+    description: "Search file contents inside read/write paths for a regex",
+    parameters: {
+      type: "object",
+      properties: {
+        pattern: { type: "string" },
+        glob: { type: "string" },
+        max: { type: "number" },
+      },
+      required: ["pattern"],
+    },
+    async execute(_id, params) {
+      if (!allow("repo_grep")) return err("TOOL_DENIED", "repo_grep not in profile");
+      const a = auth();
+      if (a) return err("TOKEN_INVALID", a);
+      const raw = String(params.pattern);
+      if (raw.length > 200) return err("BAD_REGEX", "pattern too long (max 200)");
+      let re: RegExp;
+      try {
+        re = new RegExp(raw);
+      } catch {
+        return err("BAD_REGEX", raw);
+      }
+      const glob = params.glob ? String(params.glob) : null;
+      const max = Number(params.max ?? 50);
+      const hits: Array<{ file: string; line: number; text: string }> = [];
+      for (const f of fileList()) {
+        if (glob && !matchGlob(f, [glob])) continue;
+        let content = "";
+        try {
+          content = readText(f);
+        } catch {
+          continue;
+        }
+        for (const [i, line] of content.split("\n").entries()) {
+          if (re.test(line)) {
+            hits.push({ file: f, line: i + 1, text: line.slice(0, 300) });
+            if (hits.length >= max) return jsonResult({ ok: true, hits, truncated: true });
+          }
+        }
+      }
+      return jsonResult({ ok: true, hits, truncated: false });
+    },
+  });
+
+  const gitTool = (name: string, args: (p: Record<string, unknown>) => string[]) => {
+    pi.registerTool({
+      name,
+      label: `Picode ${name}`,
+      description: `Read-only git: ${name} in the worktree`,
+      parameters: { type: "object", properties: {} },
+      async execute() {
+        if (!allow(name as never)) return err("TOOL_DENIED", `${name} not in profile`);
+        const a = auth();
+        if (a) return err("TOKEN_INVALID", a);
+        try {
+          return jsonResult({ ok: true, output: git(args({})) });
+        } catch (e) {
+          return err("GIT_ERROR", e instanceof Error ? e.message : String(e));
+        }
+      },
+    });
+  };
+  gitTool("git_status", () => ["status", "--short", "--branch"]);
+  gitTool("git_diff", () => ["diff", "--stat", "HEAD"]);
+  gitTool("git_log", () => ["log", "--oneline", "-15"]);
+
+  pi.registerTool({
+    name: "git_commit",
+    label: "Picode Git Commit",
+    description: "Stage all changes in the worktree and commit (engineer/squad-lead)",
+    parameters: {
+      type: "object",
+      properties: { message: { type: "string" } },
+      required: ["message"],
+    },
+    async execute(_id, params) {
+      if (!allow("git_commit")) return err("TOOL_DENIED", "git_commit not in profile");
+      const a = auth();
+      if (a) return err("TOKEN_INVALID", a);
+      const msg = String(params.message);
+      if (!msg.trim()) return err("BAD_ARGS", "message required");
+      try {
+        git(["add", "-A"]);
+        git(["commit", "-qm", msg]);
+        const sha = git(["rev-parse", "HEAD"]);
+        return jsonResult({ ok: true, sha });
+      } catch (e) {
+        return err("GIT_ERROR", e instanceof Error ? e.message : String(e));
+      }
+    },
+  });
+
+  pi.registerTool({
+    name: "run_allowlisted",
+    label: "Picode Run Allowlisted",
+    description: "Run a command from the run allowlist (test scripts etc.)",
+    parameters: {
+      type: "object",
+      properties: { cmd: { type: "string" } },
+      required: ["cmd"],
+    },
+    async execute(_id, params) {
+      if (!allow("run_allowlisted")) return err("TOOL_DENIED", "run_allowlisted not in profile");
+      const a = auth();
+      if (a) return err("TOKEN_INVALID", a);
+      const cmd = String(params.cmd);
+      // token-boundary match: entry must equal the command or be followed by
+      // whitespace — `npm test` must not allow `npm test-ci` or `npm test --x`
+      const allowed = runAllowlist.some(
+        (entry) => cmd === entry || cmd.startsWith(`${entry} `) || cmd.startsWith(`${entry}\t`),
+      );
+      if (!allowed) {
+        return err("COMMAND_NOT_ALLOWLISTED", `command not in run_allowlist: ${cmd}`);
+      }
+      try {
+        const [bin, ...rest] = cmd.split(/\s+/);
+        const out = execFileSync(bin, rest, { cwd, encoding: "utf8", stdio: "pipe" });
+        return jsonResult({ ok: true, exit_code: 0, output: out.slice(-4000) });
+      } catch (e) {
+        const stderr = (e as { stderr?: Buffer }).stderr?.toString?.() ?? "";
+        const stdout = (e as { stdout?: Buffer }).stdout?.toString?.() ?? "";
+        return jsonResult({
+          ok: false,
+          code: "COMMAND_FAILED",
+          exit_code: (e as { status?: number }).status ?? 1,
+          output: (stdout + stderr).slice(-4000),
+        });
+      }
+    },
+  });
+
+  pi.registerTool({
+    name: "web_search",
+    label: "Picode Web Search",
+    description: "Search the web (research/ind-res only). Returns result snippets.",
+    parameters: {
+      type: "object",
+      properties: { query: { type: "string" }, max: { type: "number" } },
+      required: ["query"],
+    },
+    async execute(_id, params) {
+      if (!allow("web_search")) return err("TOOL_DENIED", "web_search not in profile");
+      const a = auth();
+      if (a) return err("TOKEN_INVALID", a);
+      const query = String(params.query);
+      const max = Number(params.max ?? 5);
+      try {
+        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+        const res = await fetch(url, {
+          headers: { "User-Agent": "picode-research/0.1" },
+        });
+        const html = await res.text();
+        const results: Array<{ title: string; url: string; snippet: string }> = [];
+        const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>(.*?)<\/a>/g;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(html)) !== null && results.length < max) {
+          const href = m[1];
+          const clean = href.replace(/^\/\/duckduckgo\.com\/l\/\?uddg=/, "").replace(/&rut=.*$/, "");
+          results.push({
+            title: m[2].replace(/<[^>]+>/g, ""),
+            url: decodeURIComponent(clean),
+            snippet: m[3].replace(/<[^>]+>/g, ""),
+          });
+        }
+        return jsonResult({ ok: true, query, results });
+      } catch (e) {
+        return err("WEB_ERROR", e instanceof Error ? e.message : String(e));
+      }
+    },
+  });
+
+  /** Refuse private/loopback/link-local hosts (SSRF guard). */
+  function isBlockedHost(host: string): boolean {
+    let h = host.replace(/^\[|\]$/g, "").toLowerCase();
+    // strip a single trailing dot (FQDN form: localhost. → localhost)
+    if (h.endsWith(".")) h = h.slice(0, -1);
+    if (h === "localhost") return true;
+
+    // IPv4: use node:net to normalize dotted-quad, shorthand (127.1) and
+    // integer (2130706433) forms; v4-mapped IPv6 (::ffff:127.0.0.1) too.
+    const ip = isIP(h);
+    if (ip === 4) {
+      const parts = h.split(".").map(Number);
+      const [a, b, c, d] = [
+        parts[0] ?? 0,
+        parts[1] ?? 0,
+        parts[2] ?? 0,
+        parts[3] ?? 0,
+      ];
+      // 10/8, 127/8, 169.254/16, 172.16-31/12, 192.168/16, 0/8, 100.64/10
+      if (a === 10 || a === 127 || a === 0) return true;
+      if (a === 169 && b === 254) return true;
+      if (a === 172 && b >= 16 && b <= 31) return true;
+      if (a === 192 && b === 168) return true;
+      if (a === 100 && b >= 64 && b <= 127) return true;
+      return false;
+    }
+    if (ip === 6) {
+      const lo = h.toLowerCase();
+      // loopback / unspecified
+      if (lo === "::1" || lo === "::") return true;
+      // ULA fc00::/7 and link-local fe80::/10
+      if (lo.startsWith("fc") || lo.startsWith("fd") || /^fe[89ab]/.test(lo)) return true;
+      // v4-mapped ::ffff:a.b.c.d / ::ffff:xxxx:xxxx (hex) → re-check embedded IPv4
+      if (lo.startsWith("::ffff:")) {
+        const tail = lo.slice(7);
+        const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(tail);
+        if (m) return isBlockedHost(`${m[1]}.${m[2]}.${m[3]}.${m[4]}`);
+        const hex = /^[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.exec(tail);
+        if (hex) {
+          const [hi, lo16] = tail.split(":").map((s) => parseInt(s, 16));
+          return isBlockedHost(`${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo16 >> 8) & 0xff}.${lo16 & 0xff}`);
+        }
+      }
+      return false;
+    }
+    // hostnames ending in .local / .internal / .localhost / .localdomain
+    return /\.(local|internal|localhost|localdomain)$/.test(h);
+  }
+
+  pi.registerTool({
+    name: "web_fetch",
+    label: "Picode Web Fetch",
+    description: "Fetch a URL and return its text (research/ind-res only)",
+    parameters: {
+      type: "object",
+      properties: { url: { type: "string" } },
+      required: ["url"],
+    },
+    async execute(_id, params) {
+      if (!allow("web_fetch")) return err("TOOL_DENIED", "web_fetch not in profile");
+      const a = auth();
+      if (a) return err("TOKEN_INVALID", a);
+      const raw = String(params.url);
+      if (!/^https?:\/\//.test(raw)) return err("BAD_URL", "http(s) only");
+      let u: URL;
+      try {
+        u = new URL(raw);
+      } catch {
+        return err("BAD_URL", raw);
+      }
+      if (isBlockedHost(u.hostname)) return err("URL_BLOCKED", "private/loopback host refused");
+      try {
+        const res = await fetch(raw, {
+          headers: { "User-Agent": "picode-research/0.1" },
+          redirect: "manual",
+          signal: AbortSignal.timeout(15000),
+        });
+        if (res.status >= 300 && res.status < 400) {
+          const loc = res.headers.get("location");
+          if (loc) {
+            const next = new URL(loc, raw);
+            if (isBlockedHost(next.hostname)) return err("URL_BLOCKED", "redirect to private host refused");
+          }
+        }
+        const buf = Buffer.from(await res.arrayBuffer());
+        const text = buf.subarray(0, 20000).toString("utf8");
+        return jsonResult({ ok: true, status: res.status, url: raw, text, truncated: buf.length > 20000 });
+      } catch (e) {
+        return err("WEB_ERROR", e instanceof Error ? e.message : String(e));
+      }
+    },
+  });
+
+  pi.registerTool({
+    name: "request_cross_room",
+    label: "Picode Cross-Room Request",
+    description: "Request a temporary cross-room bridge (run-lead approves)",
+    parameters: {
+      type: "object",
+      properties: {
+        target_room: { type: "string" },
+        need: { type: "string" },
+      },
+      required: ["target_room", "need"],
+    },
+    async execute(_id, params) {
+      if (!allow("request_cross_room")) return err("TOOL_DENIED", "request_cross_room not in profile");
+      const a = auth();
+      if (a) return err("TOKEN_INVALID", a);
+      if (!runDir) return err("NO_RUN", "no run");
+      const reqDir = path.join(runDir, "requests");
+      fs.mkdirSync(reqDir, { recursive: true });
+      const id = `xreq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const body = {
+        id,
+        from_agent: agentId,
+        task_id: env("PICODE_TASK_ID"),
+        type: "cross_room",
+        target_room: String(params.target_room),
+        need: String(params.need),
+        status: "pending",
+      };
+      fs.writeFileSync(path.join(reqDir, `${id}.json`), JSON.stringify(body, null, 2));
+      return jsonResult({ ok: true, request: body });
+    },
+  });
+
+  pi.registerTool({
+    name: "state_read",
+    label: "Picode State Read",
+    description: "Read run state files (goal, chunks, sessions, tasks) — read-only",
+    parameters: {
+      type: "object",
+      properties: { rel: { type: "string", description: "path under run dir, e.g. goal.yaml, chunks.yaml, tasks/<id>/task.yaml" } },
+      required: ["rel"],
+    },
+    async execute(_id, params) {
+      if (!allow("state_read")) return err("TOOL_DENIED", "state_read not in profile");
+      const a = auth();
+      if (a) return err("TOKEN_INVALID", a);
+      if (!runDir) return err("NO_RUN", "no run");
+      const rel = String(params.rel).replace(/^\/+/, "");
+      // whitelist state files only — never arbitrary run files
+      const allowed =
+        /^goal\.yaml$/.test(rel) ||
+        /^chunks\.yaml$/.test(rel) ||
+        /^sessions\/[A-Za-z0-9@_.-]+\.yaml$/.test(rel) ||
+        /^tasks\/[A-Za-z0-9_-]+\/(task|progress)\.(yaml|json)$/.test(rel) ||
+        /^tasks\/[A-Za-z0-9_-]+\/brief\/[A-Za-z0-9_.-]+\.(md|yaml|json)$/.test(rel) ||
+        /^windows\/[A-Za-z0-9_-]+\.yaml$/.test(rel);
+      if (!allowed) return err("STATE_DENIED", rel);
+      const abs = path.join(runDir, rel);
+      if (!abs.startsWith(path.join(runDir))) return err("STATE_DENIED", "escape");
+      if (!fs.existsSync(abs)) return err("NOT_FOUND", rel);
+      return jsonResult({ ok: true, rel, content: fs.readFileSync(abs, "utf8") });
     },
   });
 }

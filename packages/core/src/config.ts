@@ -196,6 +196,7 @@ export interface PicodeConfig {
   pi: PiConfig;
   product: ProductConfig;
   windows: WindowsConfig;
+  run_allowlist: string[];
   self_evolve: SelfEvolveConfig;
 }
 
@@ -337,6 +338,9 @@ const DEFAULTS: PicodeConfig = {
     split_hour: 12,
     compression: { ratio: 0.8, min_keep: 20 },
   },
+  // run_allowlisted (spec 09): commands sdet/release-eng MAY run via the
+  // pi-extension tool. Default empty = tool returns COMMAND_NOT_ALLOWLISTED.
+  run_allowlist: [],
   self_evolve: {
     enabled: true,
     default_kind: "delivery",

@@ -164,6 +164,16 @@ tool_profiles:
     deny: [repo_write, web_search, web_fetch]
 ```
 
+## 6.1 `run_allowlisted` 白名单
+
+`run_allowlisted`（sdet/release-eng/sec-eng MAY）执行的命令须命中本白名单（**token 边界匹配**：命令须等于条目，或以条目 + 空白开头；`npm test` 不会放行 `npm test-ci`），默认空 = 全部拒绝（`COMMAND_NOT_ALLOWLISTED`）。spawn 时经 `PICODE_RUN_ALLOWLIST` 注入扩展。
+
+```yaml
+run_allowlist:
+  - "npm test"
+  - "npm run build"
+```
+
 ## 7. 文案与 Prompt 可配
 
 ```yaml

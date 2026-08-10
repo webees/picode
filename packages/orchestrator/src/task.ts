@@ -256,6 +256,7 @@ export function printSpawnEnv(
     PICODE_SQUAD_ROOM: task.work_room,
     PICODE_WORK_ROOM: task.work_room, // alias
     PICODE_BRIEF: path.join(dir, "tasks", taskId, "brief", "WORK_BRIEF.md"),
+    PICODE_RUN_ALLOWLIST: JSON.stringify(config.run_allowlist ?? []),
   };
 
   const exportLines = Object.entries(env)

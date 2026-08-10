@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build": "npm run build -w @picode/core && npm run build -w @picode/bus && npm run build -w @picode/orchestrator && npm run build -w @picode/pi-extension",
-    "test": "npm run test -w @picode/core && npm run test -w @picode/bus && npm run test -w @picode/orchestrator",
+    "test": "npm run test -w @picode/core && npm run test -w @picode/bus && npm run test -w @picode/orchestrator && npm run test -w @picode/pi-extension",
     "picode": "node packages/orchestrator/dist/cli.js",
     "typecheck": "tsc -b --pretty false"
   },

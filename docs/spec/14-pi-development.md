@@ -145,9 +145,15 @@ node .../cli.js task check-handoff --run <run_id> --task <task_id>
 |------|--------|
 |`bus_post` / `bus_history`|`@picode/bus` + pi-extension|
 |`repo_read` / `repo_write`|pi-extension（读 write_paths / read_paths）|
+|`repo_glob` / `repo_grep`|pi-extension（仅 read/write 集内搜索）|
+|`git_status` / `git_diff` / `git_log` / `git_commit`|pi-extension（worktree 内只读/提交）|
 |`request_info` / `request_cross_room`|pi-extension → 写 runs 申请队列|
 |`progress_report`|pi-extension → bus type progress|
-|`run_allowlisted`|pi-extension|
+|`run_allowlisted`|pi-extension（前缀匹配 `run_allowlist`，默认空）|
+|`web_search` / `web_fetch`|pi-extension（仅 research.ind-res）|
+|`state_read`|pi-extension（run 状态白名单只读）|
+
+09 矩阵 20 种工具已全量注册（pi-extension `index.ts`）。
 
 **MUST NOT** 在实现三角会话中依赖未包装的通用 write 作为唯一写入口（可在扩展里 `tool_call` 拦截或覆盖）。
 
