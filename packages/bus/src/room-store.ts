@@ -5,6 +5,43 @@ import { groupByWindow, windowIdOf } from "./window.js";
 
 export type Access = "post" | "read";
 
+/**
+ * Message types catalog (spec 10 §2). Every bus message MUST use one of these;
+ * extensions must register new types in spec 10 before posting them.
+ */
+export const BUS_MESSAGE_TYPES: readonly string[] = [
+  "chat",
+  "progress",
+  "status",
+  "blocked",
+  "ready",
+  "objection",
+  "handoff_notice",
+  "handoff_ack",
+  "request_info",
+  "info_delivered",
+  "request_cross_room",
+  "cross_room_granted",
+  "cross_room_revoked",
+  "research_brief",
+  "drift",
+  "alert",
+  "ingest",
+  "doc_issue",
+  "change_order",
+  "work_brief_ready",
+  "work_brief_revised",
+  "memory_brief",
+  "staffing_request",
+  "staffing_propose",
+  "staffing_approved",
+  "cell_done",
+  "check_signoff",
+  "merge_ready",
+  "window_rollup",
+  "system",
+] as const;
+
 export interface Member {
   id: string;
   access: Access;
@@ -75,6 +112,12 @@ export class RoomStore {
     agentId: string,
     msg: Omit<BusMessage, "ts" | "id" | "from" | "room">,
   ): Promise<BusMessage> {
+    // spec 10 §1: every message MUST use a cataloged type
+    if (!BUS_MESSAGE_TYPES.includes(msg.type)) {
+      throw Object.assign(new Error(`unknown bus message type: ${msg.type}`), {
+        code: "BUS_TYPE_DENIED",
+      });
+    }
     if (!this.canPost(room, agentId, msg.type)) {
       throw Object.assign(new Error("ROOM_POST_DENIED"), {
         code: "ROOM_POST_DENIED",

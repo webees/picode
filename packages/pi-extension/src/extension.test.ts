@@ -193,3 +193,55 @@ test("web_fetch refuses non-http(s) and private hosts", async () => {
   const linkLocal = await call(tools, "web_fetch", { url: "http://[fe80::1]/x" });
   assert.equal(linkLocal.code, "URL_BLOCKED");
 });
+
+test("T03: bus post without a valid token is rejected", async () => {
+  const { runsRoot, runId } = makeRun("engineer@task-a");
+  // token missing entirely → TOKEN_INVALID (not silently accepted)
+  const tools = loadExtension({
+    ...baseEnv,
+    PICODE_RUNS_ROOT: runsRoot,
+    PICODE_RUN_ID: runId,
+    PICODE_AGENT_TOKEN: "",
+  });
+  const r = await call(tools, "bus_post", {
+    room: "leadership",
+    type: "chat",
+    body: "hi",
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "TOKEN_INVALID");
+});
+
+test("T05: repo_write outside write_paths is rejected", async () => {
+  const repo = tmpRepo();
+  const { runsRoot, runId, token } = makeRun("engineer@task-a");
+  const tools = loadExtension({
+    ...baseEnv,
+    PICODE_CWD: repo,
+    PICODE_RUNS_ROOT: runsRoot,
+    PICODE_RUN_ID: runId,
+    PICODE_AGENT_TOKEN: token,
+  });
+  // write_paths is ["src/**"] → writing outside is denied, no file created
+  const out = await call(tools, "repo_write", { path: "out.txt", content: "x" });
+  assert.equal(out.ok, false);
+  assert.equal(out.code, "WRITE_PATH_DENIED");
+  assert.ok(!fs.existsSync(path.join(repo, "out.txt")));
+  // traversal attempt is denied too
+  const escape = await call(tools, "repo_write", { path: "../escape.txt", content: "x" });
+  assert.equal(escape.code, "WRITE_PATH_DENIED");
+});
+
+test("T09: web_fetch is denied to non-research profiles", async () => {
+  const { runsRoot, runId, token } = makeRun("engineer@task-a");
+  const tools = loadExtension({
+    ...baseEnv,
+    PICODE_TOOL_PROFILE: "implement.engineer", // no web in 09 matrix
+    PICODE_RUNS_ROOT: runsRoot,
+    PICODE_RUN_ID: runId,
+    PICODE_AGENT_TOKEN: token,
+  });
+  const r = await call(tools, "web_fetch", { url: "https://example.com/x" });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "TOOL_DENIED");
+});

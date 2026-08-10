@@ -122,7 +122,11 @@ export function createRun(
       halt: false,
     }),
   );
-  writeAtomic(path.join(dir, "chunks.yaml"), YAML.stringify({ chunks: [] }));
+  // 11 stage 0: schema_version on every run state root file
+  writeAtomic(
+    path.join(dir, "chunks.yaml"),
+    YAML.stringify({ schema_version: "1", chunks: [] }),
+  );
   writeAtomic(path.join(dir, "secret.txt"), crypto.randomBytes(32).toString("hex"));
 
   const bus = new RoomStore(dir);
@@ -166,6 +170,36 @@ export function createRun(
     { id: "people-qa", access: "post" },
     { id: "run-lead", access: "post" },
     { id: "tpm", access: "read" },
+  ]);
+  // Remaining default-on rooms (terminology §3) with a fixed owner cell
+  // (02 §2): knowledge is operated by the docs trio (15), the gate rooms by
+  // their gate seats, architecture by the planning seats. `announce` / `collab`
+  // are dynamic (broadcast on goal completion, handoff notices) — their
+  // members are added when used, like squad-*/meeting-*.
+  bus.saveMembers("architecture", [
+    { id: "scout", access: "post" },
+    { id: "sys-arch", access: "post" },
+    { id: "run-lead", access: "read" },
+    { id: "tpm", access: "read" },
+  ]);
+  bus.saveMembers("knowledge", [
+    { id: "docs-lead", access: "post" },
+    { id: "tech-writer", access: "post" },
+    { id: "docs-qa", access: "post" },
+    { id: "run-lead", access: "read" },
+  ]);
+  bus.saveMembers("release", [
+    { id: "release-eng", access: "post" },
+    { id: "run-lead", access: "read" },
+  ]);
+  bus.saveMembers("quality", [
+    { id: "code-review", access: "post" },
+    { id: "run-lead", access: "read" },
+    { id: "tpm", access: "read" },
+  ]);
+  bus.saveMembers("security", [
+    { id: "sec-eng", access: "post" },
+    { id: "run-lead", access: "read" },
   ]);
 
   // Stage A (18 §4): register every on platform role as sleeping (sponsor is

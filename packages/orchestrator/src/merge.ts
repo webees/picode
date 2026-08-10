@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import YAML from "yaml";
 import {
   ensureDir,
   withFileLock,
@@ -29,6 +30,61 @@ function queuePath(dir: string): string {
 
 function lockPath(dir: string): string {
   return path.join(dir, "merge.lock");
+}
+
+/**
+ * Chunk-level topological dependencies for a task (11 stage 7): chunks.yaml
+ * records `depends_on: [chunkId, ...]`; a merge must wait until every
+ * dependency's own merge has landed on main before it is picked.
+ */
+export function taskDependencies(dir: string, taskId: string): string[] {
+  const chunksPath = path.join(dir, "chunks.yaml");
+  if (!fs.existsSync(chunksPath)) return [];
+  const data = YAML.parse(fs.readFileSync(chunksPath, "utf8")) as {
+    chunks?: Array<{ id: string; task_id?: string; depends_on?: string[] }>;
+  };
+  const chunk = (data.chunks ?? []).find(
+    (c) => c.task_id === taskId || `task-${c.id}` === taskId,
+  );
+  return chunk?.depends_on ?? [];
+}
+
+/**
+ * Whether the merge for a dependency task no longer blocks a downstream merge.
+ * A dependency counts as satisfied once it landed (`merged`) or was attempted
+ * and failed (`failed`) — a failed upstream is release-eng's to resolve, but
+ * must not wedge the queue forever (D045). Absent entry → not ready yet.
+ */
+function depSatisfied(dir: string, depTaskId: string): boolean {
+  const req = readMergeQueue(dir).find((q) => q.task_id === depTaskId);
+  if (!req) return false;
+  return req.status === "merged" || req.status === "failed";
+}
+
+/**
+ * Detect a dependency cycle among the queued merge requests (A→B→A would
+ * otherwise wait on itself forever). Only queued tasks participate.
+ */
+function hasDependencyCycle(dir: string, queued: MergeRequest[]): boolean {
+  const byTask = new Map(queued.map((q) => [q.task_id, q]));
+  const visiting = new Set<string>();
+  const done = new Set<string>();
+  const visit = (taskId: string): boolean => {
+    if (done.has(taskId)) return false;
+    if (visiting.has(taskId)) return true;
+    const req = byTask.get(taskId);
+    if (!req) return false;
+    visiting.add(taskId);
+    for (const dep of taskDependencies(dir, taskId)
+      .map((c) => (c.startsWith("task-") ? c : `task-${c}`))
+      .filter((t) => t !== taskId && byTask.has(t))) {
+      if (visit(dep)) return true;
+    }
+    visiting.delete(taskId);
+    done.add(taskId);
+    return false;
+  };
+  return queued.some((q) => visit(q.task_id));
 }
 
 export function readMergeQueue(dir: string): MergeRequest[] {
@@ -67,12 +123,17 @@ export interface MergeOutcome {
   merged: MergeRequest | null;
   remaining: number;
   skipped_due_to_active: boolean;
+  /** 11 stage 7: head of queue has unmerged dependencies (topological order). */
+  skipped_due_to_deps: boolean;
 }
 
 /**
- * Merge the head of the queue onto main. Holds merge.lock for the whole
+ * Merge the next ready entry onto main. Holds merge.lock for the whole
  * operation so concurrent merges serialize. A task whose squad sessions are
- * still awake is skipped (nothing mid-flight lands on main).
+ * still awake is skipped (nothing mid-flight lands on main); a task whose
+ * chunk-level dependencies have not merged yet is skipped as well (11 stage 7
+ * topological ordering). On failure the working tree is restored via
+ * `git merge --abort` so the repo never stays in a conflicted state.
  */
 export async function mergeNext(
   repoRoot: string,
@@ -86,26 +147,45 @@ export async function mergeNext(
 
   return withFileLock(lockPath(dir), async () => {
     const queue = readMergeQueue(dir);
-    const idx = queue.findIndex((q) => q.status === "queued");
-    if (idx === -1) return { merged: null, remaining: queue.filter((q) => q.status === "queued").length, skipped_due_to_active: false };
+    const queued = (q: MergeRequest) => q.status === "queued";
+    const remaining = () => queue.filter(queued).length;
+    const idx = queue.findIndex(queued);
+    if (idx === -1) return { merged: null, remaining: remaining(), skipped_due_to_active: false, skipped_due_to_deps: false };
 
     const req = queue[idx];
     const branch = branchFor(req.task_id);
+    // never merge while the squad is still awake on that task
+    const squadDir = path.join(dir, "sessions");
+    const agents = [`squad-lead@${req.task_id}`, `engineer@${req.task_id}`, `sdet@${req.task_id}`];
+    const awake = agents.some((a) => {
+      const p = path.join(squadDir, `${a}.yaml`);
+      if (!fs.existsSync(p)) return false;
+      const y = fs.readFileSync(p, "utf8");
+      return /^state: awake$/m.test(y);
+    });
+    if (awake) {
+      return { merged: null, remaining: remaining(), skipped_due_to_active: true, skipped_due_to_deps: false };
+    }
+    // 11 stage 7: topological order — dependencies must merge first
+    const deps = taskDependencies(dir, req.task_id)
+      .map((c) => (c.startsWith("task-") ? c : `task-${c}`))
+      .filter((t) => t !== req.task_id);
+    if (deps.some((d) => !depSatisfied(dir, d))) {
+      // a cycle among queued merges can never advance — surface it instead of
+      // wedging the queue silently
+      if (hasDependencyCycle(dir, queue.filter(queued))) {
+        throw new Error(
+          `merge queue dependency cycle detected among queued tasks: ${queue
+            .filter(queued)
+            .map((q) => q.task_id)
+            .join(", ")}`,
+        );
+      }
+      return { merged: null, remaining: remaining(), skipped_due_to_active: false, skipped_due_to_deps: true };
+    }
     let status: MergeRequest["status"] = "merged";
     let error: string | null = null;
     try {
-      // never merge while the squad is still awake on that task
-      const squadDir = path.join(dir, "sessions");
-      const agents = [`squad-lead@${req.task_id}`, `engineer@${req.task_id}`, `sdet@${req.task_id}`];
-      const awake = agents.some((a) => {
-        const p = path.join(squadDir, `${a}.yaml`);
-        if (!fs.existsSync(p)) return false;
-        const y = fs.readFileSync(p, "utf8");
-        return /^state: awake$/m.test(y);
-      });
-      if (awake) {
-        return { merged: null, remaining: queue.filter((q) => q.status === "queued").length, skipped_due_to_active: true };
-      }
       // E4 (19 §5): self_evolve merges must pass verify_commands first.
       if (isEvolveRun(dir)) {
         const v = runVerifyCommands(repoRoot, config);
@@ -120,7 +200,29 @@ export async function mergeNext(
       });
     } catch (e) {
       status = "failed";
-      error = e instanceof Error ? e.message.split("\n")[0] : String(e);
+      const head = e instanceof Error ? e.message.split("\n")[0] : String(e);
+      const out = (e as { stdout?: Buffer; stderr?: Buffer }).stderr?.toString().trim();
+      error = out ? `${head}\n${out.slice(0, 400)}` : head;
+      // 11 stage 7: restore the working tree so a conflicted merge never
+      // leaves main dirty. Only abort when a merge is actually in progress;
+      // an abort failure is surfaced on the failed entry, not swallowed.
+      let mergeInProgress = false;
+      try {
+        execFileSync("git", ["rev-parse", "-q", "--verify", "MERGE_HEAD"], {
+          cwd: repoRoot,
+          stdio: "pipe",
+        });
+        mergeInProgress = true;
+      } catch {
+        /* no merge in progress (checkout failure etc.) */
+      }
+      if (mergeInProgress) {
+        try {
+          execFileSync("git", ["merge", "--abort"], { cwd: repoRoot, stdio: "pipe" });
+        } catch (ae) {
+          error = `${error}\n(abort failed: ${ae instanceof Error ? ae.message.split("\n")[0] : String(ae)})`;
+        }
+      }
     }
     const updated: MergeRequest = {
       ...req,
@@ -132,8 +234,9 @@ export async function mergeNext(
     writeAtomic(queuePath(dir), queue.map((q) => JSON.stringify(q)).join("\n") + "\n");
     return {
       merged: updated,
-      remaining: queue.filter((q) => q.status === "queued").length,
+      remaining: remaining(),
       skipped_due_to_active: false,
+      skipped_due_to_deps: false,
     };
   });
 }

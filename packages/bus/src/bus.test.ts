@@ -5,7 +5,6 @@ import os from "node:os";
 import path from "node:path";
 import { RoomStore } from "./room-store.js";
 import { issueToken, verifyToken } from "./token.js";
-
 test("token roundtrip", () => {
   const t = issueToken("engineer@task-a", "secret");
   assert.equal(verifyToken(t, "engineer@task-a", "secret"), true);
@@ -26,4 +25,16 @@ test("bus post ACL", async () => {
   );
   const hist = store.history("squad-1", "proc-audit", 10);
   assert.equal(hist.length, 1);
+});
+
+test("bus post rejects uncataloged message types (10 §1)", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-bus-"));
+  const store = new RoomStore(dir);
+  store.saveMembers("leadership", [{ id: "run-lead", access: "post" }]);
+  await assert.rejects(
+    () => store.post("leadership", "run-lead", { type: "made_up_type", body: "x", refs: [] }),
+    (e: unknown) => (e as { code?: string }).code === "BUS_TYPE_DENIED",
+  );
+  // cataloged type passes
+  await store.post("leadership", "run-lead", { type: "chat", body: "hi", refs: [] });
 });
