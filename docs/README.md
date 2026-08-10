@@ -82,7 +82,7 @@
 
 |文档|职责|
 |------|------|
-|[GETTING_STARTED.md](./GETTING_STARTED.md)|安装 + CLI 命令流|
+|[GETTING_STARTED.md](./GETTING_STARTED.md)|安装 + CLI 命令流（init → 双门闩 → spawn → 运维；全命令见 `picode --help`）|
 |[ARCHITECTURE.md](./ARCHITECTURE.md)|一页图 + 包职责|
 |[guides/](./guides/)|最短路径（不重复安装长文）|
 
@@ -98,15 +98,19 @@
 
 |任务|读|
 |------|-----|
-|跑通 CLI|GETTING_STARTED|
+|跑通 CLI|GETTING_STARTED（全命令 `picode --help`）|
 |懂全局|ARCHITECTURE + PROCESSES §1|
 |写编排器|01 · 08 · 11 · domains/git-worktree|
 |写 Bus|domains/bus-system · 04 · 10|
 |写工具|domains/tool-system · 09 · 12|
 |状态机 / 流程|PROCESSES 全文|
+|会话 / 唤醒|**17** + `session`/`staffing` 命令（GETTING_STARTED §5.1）|
+|合并列车|**11 阶段 7 / 18 阶段 F** + `merge` 命令|
+|窗口压缩|13 §8.1 / D043 + `window` 命令|
+|自我进化|**19** + `evolve` 命令|
 |文档小组|**15** + P03/P08/P11|
 |人事招聘|**16** + P04/P05|
-|可配置|13 + terminology|
+|可配置|13 + terminology + default-config.snippet.yaml|
 |岗位目录 / 命名律|**glossary**|
 |选项与默认|**decision-catalog**|
 |agent 唤醒/人设|**17-agent-runtime**|

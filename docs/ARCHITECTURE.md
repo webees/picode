@@ -55,10 +55,10 @@
 
 |包|职责|
 |----|------|
-|`@picode/core`|配置、路径、工具画像、命名校验|
-|`@picode/bus`|token、房间 ACL、jsonl|
-|`@picode/orchestrator`|run/task/brief/staffing/session/merge CLI|
-|`@picode/pi-extension`|bus_\* · repo_\* · request_\* · session_\*（规划中）|
+|`@picode/core`|配置（schema/默认/校验/加载）、路径、工具画像、命名校验、错误码注册表|
+|`@picode/bus`|token、房间 ACL、消息 type 注册表、jsonl、窗口压缩|
+|`@picode/orchestrator`|run/task/brief/staffing/session/merge/evolve/window CLI（命令注册表按域分组）|
+|`@picode/pi-extension`|bus_* · repo_* · git_* · request_* · session_* · state_read · web_* · run_allowlisted（09 矩阵 20 工具）|
 
 ## 4. 往哪读
 
