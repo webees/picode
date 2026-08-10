@@ -19,6 +19,8 @@ function tmpGitRepo(): string {
   execFileSync("git", ["config", "user.email", "t@p"], { cwd: dir });
   execFileSync("git", ["config", "user.name", "t"], { cwd: dir });
   fs.writeFileSync(path.join(dir, "README.md"), "# t\n");
+  // keep runs/ state out of git so checkout during merge tests can't clobber it
+  fs.writeFileSync(path.join(dir, ".gitignore"), ".picode/\n");
   execFileSync("git", ["add", "."], { cwd: dir });
   execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
   return dir;

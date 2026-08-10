@@ -10,6 +10,7 @@ import {
 } from "@picode/core";
 import { SessionStore } from "./session-store.js";
 import { sleepWithPi, wakeWithPi } from "./pi-adapter.js";
+import { hasEvolveLayer, isEvolveRun } from "./evolve-run.js";
 
 /**
  * Deterministic rules engine (18 phase B / 17 §5.3).
@@ -101,6 +102,11 @@ export async function applyEvent(
       push("sec-eng", "wake"); // MUST at L
     }
     // M/S: sec-eng is risk-triggered — left to LLM arbitration, not mechanical
+    // E5 (19 §5): self_evolve code-layer merges MUST wake code-review (high risk).
+    if (isEvolveRun(dir) && hasEvolveLayer(dir, "code")) {
+      push("code-review", "wake");
+      push("sec-eng", "wake");
+    }
   }
 
   // Execute sequentially

@@ -4,3 +4,4 @@ export * from "./atomic.js";
 export * from "./tool-profiles.js";
 export * from "./session.js";
 export * from "./persona.js";
+export * from "./evolve.js";

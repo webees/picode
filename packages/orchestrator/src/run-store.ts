@@ -7,6 +7,9 @@ import {
   loadConfig,
   runDir,
   writeAtomic,
+  assertEvolveTargetRoot,
+  type EvolveGoalSpec,
+  type GoalKind,
   type PicodeConfig,
 } from "@picode/core";
 import { RoomStore } from "@picode/bus";
@@ -19,6 +22,12 @@ export interface GoalState {
   intent: string;
   status: "intake" | "draft" | "active" | "blocked" | "completed" | "cancelled";
   scale: "S" | "M" | "L";
+  /** 19 §4: delivery | self_evolve. */
+  kind: GoalKind;
+  /** 19 §4: MUST be picode monorepo for self_evolve. */
+  target_repo: string | null;
+  /** 19 §4: evolve spec (self_evolve only). */
+  evolve: EvolveGoalSpec | null;
   open_questions: string[];
   acceptance: Array<{ id: string; type: string; spec: string }>;
   /** Product acceptance criteria from pm (18 phase E / P01). */
@@ -40,10 +49,26 @@ export function assertGitRepo(repoRoot: string): void {
 
 export function createRun(
   repoRoot: string,
-  opts: { title: string; scale?: "S" | "M" | "L"; intent?: string },
+  opts: {
+    title: string;
+    scale?: "S" | "M" | "L";
+    intent?: string;
+    kind?: GoalKind;
+    targetRepo?: string;
+    evolveLayers?: EvolveGoalSpec["layers"];
+    evolveRisk?: EvolveGoalSpec["risk"];
+  },
 ): { runId: string; config: PicodeConfig; dir: string } {
   assertGitRepo(repoRoot);
   const config = loadConfig(repoRoot);
+  const kind = opts.kind ?? config.self_evolve.default_kind;
+  const targetRepo = kind === "self_evolve"
+    ? path.resolve(opts.targetRepo ?? repoRoot)
+    : null;
+  // 19 §4 MUST: self_evolve target must be the picode monorepo.
+  if (kind === "self_evolve") {
+    assertEvolveTargetRoot(targetRepo as string, config);
+  }
   const runId = `run-${new Date().toISOString().replace(/[:.]/g, "-")}`;
   const dir = runDir(repoRoot, config, runId);
   ensureDir(dir);
@@ -63,6 +88,18 @@ export function createRun(
     intent: opts.intent ?? opts.title,
     status: "intake",
     scale: opts.scale ?? "S",
+    kind,
+    target_repo: targetRepo,
+    evolve: kind === "self_evolve"
+      ? {
+          layers: opts.evolveLayers ?? [],
+          risk: opts.evolveRisk ?? "medium",
+          baseline_ref: "main",
+          success_metrics: ["npm test 全绿"],
+          rollback: "git revert 合并提交 / 回退 tag",
+          forbidden_paths: [...config.self_evolve.forbidden_path_globs],
+        }
+      : null,
     open_questions: [],
     acceptance: [],
     product_acceptance: [],
@@ -144,7 +181,9 @@ export function createRun(
 }
 
 export function readGoal(dir: string): GoalState {
-  return YAML.parse(fs.readFileSync(path.join(dir, "goal.yaml"), "utf8")) as GoalState;
+  const raw = YAML.parse(fs.readFileSync(path.join(dir, "goal.yaml"), "utf8")) as Partial<GoalState>;
+  // Backward-compat: older goals have no kind — treat as delivery.
+  return Object.assign({ kind: "delivery", target_repo: null, evolve: null }, raw) as GoalState;
 }
 
 export function writeGoal(dir: string, goal: GoalState): void {

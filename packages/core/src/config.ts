@@ -84,6 +84,47 @@ export interface StaffingConfig {
   persona_dimensions: "full";
 }
 
+/** Self-evolution layers (19 §2, easy → hard). */
+export type EvolveLayer =
+  | "knowledge"
+  | "prompts"
+  | "docs"
+  | "tests"
+  | "code"
+  | "policy";
+
+export type GoalKind = "delivery" | "self_evolve";
+
+/** goal.evolve spec (19 §4 design). */
+export interface EvolveGoalSpec {
+  layers: EvolveLayer[];
+  risk: "low" | "medium" | "high";
+  baseline_ref: string;
+  success_metrics: string[];
+  rollback: string;
+  forbidden_paths: string[];
+}
+
+/** self_evolve config (19 §10 draft). */
+export interface SelfEvolveConfig {
+  enabled: boolean;
+  /** Ordinary runs default to delivery; evolution must be declared. */
+  default_kind: GoalKind;
+  /** ★ default: knowledge, prompts, docs, tests; code/policy explicit. */
+  allowed_layers: EvolveLayer[];
+  /** Merge gate commands (E4); default npm test. */
+  verify_commands: string[];
+  /** Human sponsor must approve merges of evolve runs (E3/E6 gate). */
+  require_sponsor_merge: boolean;
+  /** code layer ⇒ code-review MUST be woken (E5). */
+  require_code_review_on_code_layer: boolean;
+  /** E6 knowledge log directory (relative to repo knowledge_root). */
+  knowledge_log_glob: string;
+  /** §4 MUST: target_repo must contain one of these markers. */
+  platform_root_markers: string[];
+  forbidden_path_globs: string[];
+}
+
 export interface PicodeConfig {
   config_schema_version: string;
   active_profile?: string;
@@ -135,6 +176,7 @@ export interface PicodeConfig {
   i18n: { locale: string; strings?: Record<string, string> };
   pi: PiConfig;
   product: ProductConfig;
+  self_evolve: SelfEvolveConfig;
 }
 
 const DEFAULTS: PicodeConfig = {
@@ -271,6 +313,17 @@ const DEFAULTS: PicodeConfig = {
   i18n: { locale: "zh-CN" },
   pi: { enabled: false, command_template: "pi --print" },
   product: { require_acceptance_before_active: true },
+  self_evolve: {
+    enabled: true,
+    default_kind: "delivery",
+    allowed_layers: ["knowledge", "prompts", "docs", "tests"],
+    verify_commands: ["npm test"],
+    require_sponsor_merge: true,
+    require_code_review_on_code_layer: true,
+    knowledge_log_glob: "docs/knowledge/evolve/",
+    platform_root_markers: ["package.json"],
+    forbidden_path_globs: ["**/.env", "**/.env.*", "**/secrets/**", "**/*.pem"],
+  },
 };
 
 // Note: sess_mgr / sponsor / staffing / cells.lifetime are typed per 17 §10.
@@ -379,6 +432,28 @@ export function validateConfig(config: PicodeConfig): void {
   }
   if (config.features.allow_implement_before_active) {
     console.warn("[picode] WARNING: allow_implement_before_active=true");
+  }
+  const EVOLVE_LAYERS = new Set<EvolveLayer>([
+    "knowledge",
+    "prompts",
+    "docs",
+    "tests",
+    "code",
+    "policy",
+  ]);
+  for (const layer of config.self_evolve.allowed_layers) {
+    if (!EVOLVE_LAYERS.has(layer)) {
+      throw new Error(`self_evolve.allowed_layers contains unknown layer: ${layer}`);
+    }
+  }
+  if (config.self_evolve.allowed_layers.includes("code") &&
+      !config.self_evolve.require_code_review_on_code_layer) {
+    throw new Error(
+      "self_evolve.require_code_review_on_code_layer must be true when code layer is allowed (E5)",
+    );
+  }
+  if (config.self_evolve.allowed_layers.includes("policy")) {
+    console.warn("[picode] WARNING: self_evolve policy layer is high-risk (19 §5 E3/E5)");
   }
 }
 

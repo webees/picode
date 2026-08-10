@@ -253,9 +253,9 @@ self_evolve:
 ## 13. 检查清单（文档/产品）
 
 - [ ] sponsor 同意进化队列与合入规程（§6.4）  
-- [ ] `npm test` 稳定（§6.1）  
-- [ ] 18 A–G 达到可 dogfood  
-- [ ] 配置 `self_evolve` 落地  
+- [x] `npm test` 稳定（§6.1）  
+- [x] 18 A–G 达到可 dogfood  
+- [x] 配置 `self_evolve` 落地  
 - [ ] 至少一次 **E1** 人工发起：delivery 成功摘要写入 knowledge  
 - [ ] 至少一次 **E2**：self_evolve 只改 docs/agents 并 merge  
 - [ ] 再评估 **E3**  

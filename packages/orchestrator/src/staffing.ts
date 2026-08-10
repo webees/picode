@@ -3,11 +3,14 @@ import path from "node:path";
 import YAML from "yaml";
 import {
   ensureDir,
+  evolveWritePaths,
   missingPersonaDimensions,
+  simpleGlobMatch,
   writeAtomic,
   type Persona,
   type PicodeConfig,
 } from "@picode/core";
+import { readGoal } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
 import { applyEvent } from "./rules-engine.js";
 
@@ -196,6 +199,11 @@ export interface QaIssue {
 export function checkPersonas(dir: string, config: PicodeConfig, taskId: string): QaIssue[] {
   const base = staffingDir(dir, taskId);
   const task = readTaskYaml(dir, taskId);
+  const goal = readGoal(dir);
+  const evolve = goal.kind === "self_evolve" ? goal.evolve : null;
+  const evolveAllowed = evolve
+    ? evolveWritePaths(config, evolve)
+    : null;
   const expectedProfiles = new Map(
     config.roles.filter((r) => r.enabled !== false).map((r) => [r.id, r.tool_profile]),
   );
@@ -225,6 +233,25 @@ export function checkPersonas(dir: string, config: PicodeConfig, taskId: string)
       (w) => !task.write_paths.includes(w),
     );
     if (outOfWrite.length) problems.push(`write_paths outside task: ${outOfWrite.join(", ")}`);
+    // E7 (19 §5): self_evolve personas must declare forbidden paths and stay
+    // inside the allowed-layer write paths.
+    if (evolve && evolveAllowed) {
+      const forbidden = Array.isArray(frontmatter.forbidden)
+        ? (frontmatter.forbidden as string[])
+        : [];
+      if (forbidden.length === 0) {
+        problems.push("E7: self_evolve persona must declare forbidden[]");
+      }
+      const wp = Array.isArray(frontmatter.write_paths)
+        ? (frontmatter.write_paths as string[])
+        : [];
+      const outsideLayer = wp.filter(
+        (w) => !evolveAllowed.some((glob) => simpleGlobMatch(glob, w.replace(/\\/g, "/"))),
+      );
+      if (outsideLayer.length) {
+        problems.push(`E7: write_paths outside evolve layers: ${outsideLayer.join(", ")}`);
+      }
+    }
     if (problems.length) issues.push({ seat, problems });
   }
   return issues;

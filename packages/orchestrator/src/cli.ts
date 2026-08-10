@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createRun,
+  readGoal,
   resolveRunDir,
   setGoalStatus,
   setProductAcceptance,
@@ -35,6 +36,8 @@ import {
 import { SessionStore } from "./session-store.js";
 import { applyEvent, drainSessionCommands, rosterSnapshot } from "./rules-engine.js";
 import { sleepWithPi, wakeWithPi } from "./pi-adapter.js";
+import { writeEvolveKnowledgeLog } from "./evolve-run.js";
+import { evolveWritePaths, type EvolveGoalSpec } from "@picode/core";
 import {
   approveStaffing,
   checkPersonas,
@@ -88,8 +91,10 @@ function usage(): never {
   picode staffing check --repo <path> --run <id> --task <task_id>
   picode staffing approve --repo <path> --run <id> --task <task_id> [--by run-lead]
   picode progress sweep --repo <path> --run <id>
-  picode merge request --repo <path> --run <id> --task <task_id>
-  picode merge next --repo <path> --run <id>
+  picode merge enqueue --repo <path> --run <id> --task <task_id> [--by release-eng]
+  picode merge process --repo <path> --run <id>
+  picode evolve write-paths --repo <path> --run <id> [--task <task_id>]
+  picode evolve log --repo <path> --run <id> --summary "..."
 `);
   process.exit(1);
 }
@@ -105,7 +110,19 @@ async function main(): Promise<void> {
     const title = arg("--goal-title", args);
     if (!title) usage();
     const scale = (arg("--scale", args) as "S" | "M" | "L") ?? "S";
-    const { runId, dir } = createRun(repo, { title, scale });
+    const kind = arg("--kind", args) as "delivery" | "self_evolve" | undefined;
+    const layers = (arg("--evolve-layers", args) ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean) as EvolveGoalSpec["layers"];
+    const { runId, dir } = createRun(repo, {
+      title,
+      scale,
+      kind,
+      targetRepo: arg("--target-repo", args),
+      evolveLayers: layers.length ? layers : undefined,
+      evolveRisk: arg("--evolve-risk", args) as EvolveGoalSpec["risk"] | undefined,
+    });
     console.log(JSON.stringify({ runId, dir }, null, 2));
     return;
   }
@@ -139,6 +156,22 @@ async function main(): Promise<void> {
   }
   if (cmd === "merge" && args[1] === "process") {
     console.log(JSON.stringify(await mergeNext(repo, dir, config), null, 2));
+    return;
+  }
+  if (cmd === "evolve" && args[1] === "write-paths") {
+    const goal = readGoal(dir);
+    if (goal.kind !== "self_evolve" || !goal.evolve) {
+      console.log(JSON.stringify({ write_paths: [] }, null, 2));
+      return;
+    }
+    console.log(JSON.stringify({ write_paths: evolveWritePaths(config, goal.evolve) }, null, 2));
+    return;
+  }
+  if (cmd === "evolve" && args[1] === "log") {
+    const summary = arg("--summary", args);
+    if (!summary) usage();
+    const written = writeEvolveKnowledgeLog(repo, dir, config, { summary });
+    console.log(JSON.stringify({ written }, null, 2));
     return;
   }
   if (cmd === "progress" && args[1] === "check") {

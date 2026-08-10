@@ -7,6 +7,7 @@ import {
   writeAtomic,
   type PicodeConfig,
 } from "@picode/core";
+import { isEvolveRun, runVerifyCommands } from "./evolve-run.js";
 
 /**
  * Serial merge queue (18 phase F): runs/<id>/merge_queue.jsonl + merge.lock.
@@ -104,6 +105,13 @@ export async function mergeNext(
       });
       if (awake) {
         return { merged: null, remaining: queue.filter((q) => q.status === "queued").length, skipped_due_to_active: true };
+      }
+      // E4 (19 §5): self_evolve merges must pass verify_commands first.
+      if (isEvolveRun(dir)) {
+        const v = runVerifyCommands(repoRoot, config);
+        if (!v.ok) {
+          throw new Error(`E4 verify_commands failed:\n${v.output.slice(0, 400)}`);
+        }
       }
       execFileSync("git", ["checkout", config.git.base_branch], { cwd: repoRoot, stdio: "pipe" });
       execFileSync("git", ["merge", "--no-ff", "-m", `merge ${req.task_id}`, branch], {
