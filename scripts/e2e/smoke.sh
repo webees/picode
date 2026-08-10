@@ -71,7 +71,8 @@ git add -A && git commit -qm init
 # SERVE_URL 非默认（独立 serve 实例）时，用临时 HOME + 生成全局配置，
 # 让 CLI 的 opencode.base_url 也指向同一实例（用户全局 ~/.picode/config.yaml 不受影响）
 if [ "$SERVE_URL" != "http://127.0.0.1:7788" ]; then
-  export HOME="$(mktemp -d /tmp/picode-e2e-home.XXXXXX)"
+  HOME="$(mktemp -d /tmp/picode-e2e-home.XXXXXX)"
+  export HOME
   mkdir -p "$HOME/.picode"
   cat > "$HOME/.picode/config.yaml" <<EOF
 opencode:
