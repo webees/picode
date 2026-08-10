@@ -585,8 +585,9 @@ export default function picodeExtension(pi: PiApi): void {
       const a = auth();
       if (a) return err(ErrorCode.TOKEN_INVALID, a);
       const cmd = String(params.cmd);
-      // token-boundary match: entry must equal the command or be followed by
-      // whitespace — `npm test` must not allow `npm test-ci` or `npm test --x`
+      // token-boundary match (13 §6.1): entry must equal the command or be
+      // followed by whitespace — `npm test` does not allow `npm test-ci`
+      // (no boundary), but does allow `npm test --x` (entry + whitespace args)
       const allowed = runAllowlist.some(
         (entry) => cmd === entry || cmd.startsWith(`${entry} `) || cmd.startsWith(`${entry}\t`),
       );
