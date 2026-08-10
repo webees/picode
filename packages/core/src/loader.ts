@@ -4,9 +4,8 @@
  * Kept separate from `config.js` so the schema/types/defaults/validation core
  * stays pure (no node:fs / yaml side effects) — testable in isolation and
  * reusable in non-filesystem environments. `loadConfig` performs the layered
- * merge (13 §2: DEFAULTS → project → profile → run override) and validates
- * the *final* merged result, so a run-level override can never downgrade a
- * v1-fixed value (D3).
+ * merge (13 §2) and validates the *final* merged result, so a run-level
+ * override can never downgrade a v1-fixed value (D3).
  * Layers (13 §2): DEFAULTS → user-global → project → profile → run override.
  */
 import fs from "node:fs";
