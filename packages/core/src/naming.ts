@@ -100,7 +100,10 @@ export function generateTeamName(
 export const SAFE_NAME_RE = /^[\w\u4e00-\u9fa5-]{1,32}$/;
 
 /** Throw unless `name` is safe to use as a codename / team_name file segment. */
-export function assertSafeName(name: string, kind: "codename" | "team_name"): void {
+export function assertSafeName(name: unknown, kind: "codename" | "team_name"): void {
+  if (typeof name !== "string") {
+    throw new Error(`${kind} must be a string, got ${typeof name}`);
+  }
   if (!SAFE_NAME_RE.test(name)) {
     throw new Error(
       `${kind} "${name}" is not a safe name (letters/digits/_/CJK/hyphen only, 1–32 chars)`,

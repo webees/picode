@@ -54,6 +54,7 @@ import {
   type Seat,
 } from "./staffing.js";
 import { readScores, scoreTask } from "./hr-score.js";
+import { assertSafeName } from "@picode/core";
 
 function arg(name: string, args: string[]): string | undefined {
   const i = args.indexOf(name);
@@ -396,6 +397,7 @@ async function main(): Promise<void> {
               `unknown seat "${m[1]}" in --codename; expect ${SEATS.join("|")}`,
             );
           }
+          assertSafeName(m[2], "codename");
           codenameOverrides[m[1]] = m[2];
           i++;
         }

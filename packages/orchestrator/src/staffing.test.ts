@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import YAML from "yaml";
 import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
 import { addChunkAndTask, approveBrief, draftBrief, prepareTask } from "./task.js";
 import { SessionStore } from "./session-store.js";
@@ -241,4 +242,19 @@ test("naming: unsafe codename/team_name overrides are rejected (16 §8 file-name
   const eng = issues.find((i) => i.seat === "engineer");
   assert.ok(eng, "engineer should have an issue");
   assert.match(eng.problems.join("; "), /not a safe name/);
+});
+
+test("naming: non-string codename (YAML number) is rejected, not coerced", async () => {
+  const { repo, dir, config, taskId } = setup();
+  await createStaffingRequest(dir, config, taskId, { skills: ["typescript", "testing"] });
+  draftPersonas(repo, dir, config, taskId);
+  const p = path.join(dir, "tasks", taskId, "staffing", "personas", "engineer.md");
+  const { frontmatter, body } = parsePersonaFile(p);
+  const mutable = frontmatter as unknown as Record<string, unknown>;
+  mutable.codename = 12345; // YAML number — must be rejected, not stringified
+  fs.writeFileSync(p, `---\n${YAML.stringify(mutable).trimEnd()}\n---\n${body}\n`);
+  const issues = checkPersonas(dir, config, taskId);
+  const eng = issues.find((i) => i.seat === "engineer");
+  assert.ok(eng, "engineer should have an issue");
+  assert.match(eng.problems.join("; "), /must be a string/);
 });
