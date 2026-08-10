@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
 import {
+  assertSafeName,
   ensureDir,
   evolveWritePaths,
   generateCodename,
@@ -52,9 +53,8 @@ export interface StaffingState {
   triad: Record<string, StaffingSeat>;
 }
 
-const SEATS = ["squad-lead", "engineer", "sdet"] as const;
+export const SEATS = ["squad-lead", "engineer", "sdet"] as const;
 export type Seat = (typeof SEATS)[number];
-
 function staffingDir(dir: string, taskId: string): string {
   return path.join(dir, "tasks", taskId, "staffing");
 }
@@ -240,6 +240,12 @@ export function checkPersonas(dir: string, config: PicodeConfig, taskId: string)
     const { frontmatter } = parsePersonaFile(file);
     const missing = missingPersonaDimensions(frontmatter);
     if (missing.length) problems.push(`missing dimensions: ${missing.join(", ")}`);
+    // 16 §8: codename doubles as an archive file name — unsafe names must fail
+    try {
+      assertSafeName(frontmatter.codename, "codename");
+    } catch (e) {
+      problems.push((e as Error).message);
+    }
     if (frontmatter.seat !== seat) problems.push(`seat mismatch: ${frontmatter.seat}`);
     const expectedId = `${seat}@${taskId}`;
     if (frontmatter.instance_id !== expectedId) {
@@ -321,6 +327,9 @@ export async function approveStaffing(
   if (!request) throw new Error(`no staffing request for ${taskId}`);
 
   const task = readTaskYaml(dir, taskId);
+  const teamName = request.team_name ?? generateTeamName(taskId);
+  // 16 §8: team_name doubles as an archive file name — unsafe overrides must fail
+  assertSafeName(teamName, "team_name");
   const triad: Record<string, StaffingSeat> = {};
   for (const seat of SEATS) {
     const persona = parsePersonaFile(
@@ -341,7 +350,7 @@ export async function approveStaffing(
     status: "approved",
     approved_by: by,
     approved_at: new Date().toISOString(),
-    team_name: request.team_name ?? generateTeamName(taskId),
+    team_name: teamName,
     triad,
   };
   writeAtomic(path.join(staffingDir(dir, taskId), "staffing.yaml"), YAML.stringify(staffing));

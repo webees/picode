@@ -218,3 +218,27 @@ test("naming: request overrides win over deterministic generation (16 §8)", asy
   const { staffing } = await approveStaffing(dir, config, taskId);
   assert.equal(staffing.team_name, "北辰");
 });
+
+test("naming: unsafe codename/team_name overrides are rejected (16 §8 file-name guard)", async () => {
+  const { repo, dir, config, taskId } = setup();
+  // unsafe team name → approve must fail
+  await createStaffingRequest(dir, config, taskId, {
+    teamName: "../../escape",
+    codenameOverrides: { engineer: "白泽" },
+    skills: ["typescript", "testing"],
+  });
+  draftPersonas(repo, dir, config, taskId);
+  await assert.rejects(() => approveStaffing(dir, config, taskId), /not a safe name/);
+  // unsafe codename → people-qa check must flag it
+  const { dir: dir2, config: config2, taskId: taskId2, repo: repo2 } = setup();
+  await createStaffingRequest(dir2, config2, taskId2, {
+    teamName: "北辰",
+    codenameOverrides: { engineer: "../evil" },
+    skills: ["typescript", "testing"],
+  });
+  draftPersonas(repo2, dir2, config2, taskId2);
+  const issues = checkPersonas(dir2, config2, taskId2);
+  const eng = issues.find((i) => i.seat === "engineer");
+  assert.ok(eng, "engineer should have an issue");
+  assert.match(eng.problems.join("; "), /not a safe name/);
+});

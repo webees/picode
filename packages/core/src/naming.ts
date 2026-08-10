@@ -91,3 +91,19 @@ export function generateTeamName(
   if (pool.length === 0) throw new Error("team name pool is empty");
   return pool[hashId(taskId) % pool.length];
 }
+
+/**
+ * Safe name pattern for codename / team_name: used as knowledge-archive file
+ * names (docs/knowledge/hr/…), so path-unsafe characters (/, .., spaces, …)
+ * are rejected — a user-supplied override must never escape the archive dir.
+ */
+export const SAFE_NAME_RE = /^[\w\u4e00-\u9fa5-]{1,32}$/;
+
+/** Throw unless `name` is safe to use as a codename / team_name file segment. */
+export function assertSafeName(name: string, kind: "codename" | "team_name"): void {
+  if (!SAFE_NAME_RE.test(name)) {
+    throw new Error(
+      `${kind} "${name}" is not a safe name (letters/digits/_/CJK/hyphen only, 1–32 chars)`,
+    );
+  }
+}

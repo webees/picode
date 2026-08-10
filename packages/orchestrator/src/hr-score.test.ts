@@ -134,3 +134,10 @@ test("score: refuses without approved staffing", () => {
   const { repo, dir, config, taskId } = setup();
   assert.throws(() => scoreTask(repo, dir, config, taskId), /staffing not approved/);
 });
+
+test("score: refuses a task that has not finished (16 §9 P07 gate)", async () => {
+  const { repo, dir, config, taskId } = setup();
+  await hire(repo, dir, config, taskId);
+  // task.status is still "queued" (never dissolved) → must refuse
+  assert.throws(() => scoreTask(repo, dir, config, taskId), /not finished/);
+});

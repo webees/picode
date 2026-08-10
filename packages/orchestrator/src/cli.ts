@@ -50,6 +50,8 @@ import {
   checkPersonas,
   createStaffingRequest,
   draftPersonas,
+  SEATS,
+  type Seat,
 } from "./staffing.js";
 import { readScores, scoreTask } from "./hr-score.js";
 
@@ -386,7 +388,15 @@ async function main(): Promise<void> {
       for (let i = 0; i < args.length - 1; i++) {
         if (args[i] === "--codename") {
           const m = args[i + 1].match(/^([a-z-]+):(.+)$/);
-          if (m) codenameOverrides[m[1]] = m[2];
+          if (!m) {
+            throw new Error(`invalid --codename "${args[i + 1]}"; expected seat:name`);
+          }
+          if (!SEATS.includes(m[1] as Seat)) {
+            throw new Error(
+              `unknown seat "${m[1]}" in --codename; expect ${SEATS.join("|")}`,
+            );
+          }
+          codenameOverrides[m[1]] = m[2];
           i++;
         }
       }

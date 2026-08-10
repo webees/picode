@@ -127,7 +127,8 @@ v1 公司仿真以 `hire_fresh` 为准；开启 `pool_reuse` 不得跳过 people
 1. 每个 persona 实例 **MUST** 有 `codename`（人设名/代号，身份维，见 [17 §6](./17-agent-runtime.md)）：`recruiter` 起草时确定性生成（`generateCodename(instance_id)`；池见 `@picode/core/src/naming.ts`），同一 instance_id 跨重写稳定。  
 2. 每个已批准三角 **MUST** 有 `team_name`（团队名）：`approve` 时确定性生成（`generateTeamName(task_id)`）并锁定进 `staffing.yaml`。  
 3. 工程主责可在 `staffing request` 中覆盖：`team_name`、`codename_overrides`（seat → 名）。覆盖项仍需 people-qa 维度校验通过后随 staffing 批准落盘。  
-4. 命名用于跨 run 对话与评分档案聚合（`docs/knowledge/hr/…`，见 §9），**不改变逻辑 seat**（仍为 squad-lead / engineer / sdet），也不替代角色模板。
+4. 命名用于跨 run 对话与评分档案聚合（`docs/knowledge/hr/…`，见 §9），**不改变逻辑 seat**（仍为 squad-lead / engineer / sdet），也不替代角色模板。  
+5. 命名池（`@picode/core/src/naming.ts`）**只允许尾部追加**：池内插入/重排会改变历史代号，破坏既有评分档案聚合，属破坏性变更。
 
 CLI：`staffing request --team-name <n> --codename seat:name`（`--codename` 可重复）。
 

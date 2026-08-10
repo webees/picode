@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { ensureDir, writeAtomic, type PicodeConfig } from "@picode/core";
+import { assertSafeName, ensureDir, writeAtomic, type PicodeConfig } from "@picode/core";
 import {
   HANDOFF_FILES,
   handoffDir,
@@ -157,6 +157,14 @@ export function scoreTask(
   const task = YAML.parse(
     fs.readFileSync(path.join(dir, "tasks", taskId, "task.yaml"), "utf8"),
   ) as { status: string; retries?: number };
+  // 16 §9: score after the task is over (P07 dissolve / P14 force dissolve) —
+  // scoring a running task would pollute pool_reuse / self-evolution reference data.
+  if (!["dissolved", "failed", "cancelled"].includes(task.status)) {
+    throw new Error(`task ${taskId} not finished (status=${task.status}); score after dissolve (P07)`);
+  }
+  // 16 §8: codename/team_name double as archive file names — never let an
+  // override escape the knowledge dir (defense-in-depth beside people-qa).
+  assertSafeName(staffing.team_name, "team_name");
   const evidence = readEvidence(dir, taskId);
   const acceptance: AcceptanceState | null = readAcceptance(dir, taskId);
   const hd = handoffDir(dir, taskId);
@@ -166,7 +174,7 @@ export function scoreTask(
     taskStatus: task.status,
     retries: task.retries ?? 0,
     missingHandoff,
-    ackCount: acceptance?.accepted_by.length ?? 0,
+    ackCount: acceptance?.accepted_by?.length ?? 0,
   };
 
   const shared = computeSharedBreakdown(ctx);
@@ -217,6 +225,7 @@ export function scoreTask(
     note: opts.note,
   };
   for (const ps of personaScores) {
+    assertSafeName(ps.codename, "codename");
     upsertArchive(
       path.join(repoRoot, config.paths.knowledge_root, "hr", "personas", `${ps.codename}.yaml`),
       {
