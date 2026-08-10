@@ -2,11 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
 import {
+  ErrorCode,
+  PicodeError,
   ensureDir,
   withFileLock,
-  writeAtomic,
   type PicodeConfig,
-  type SessMgrRule,
 } from "@picode/core";
 import { SessionStore } from "./session-store.js";
 import { sleepWithPi, wakeWithPi } from "./pi-adapter.js";
@@ -201,9 +201,10 @@ export async function appendSessionCommand(
   cmd: Omit<SessionCommand, "id" | "ts" | "from">,
 ): Promise<SessionCommand> {
   if (!ALLOWED_COMMANDERS.has(from)) {
-    throw Object.assign(new Error(`command from non-sess-mgr rejected: ${from}`), {
-      code: "COMMAND_FROM_DENIED",
-    });
+    throw new PicodeError(
+      ErrorCode.COMMAND_FROM_DENIED,
+      `command from non-sess-mgr rejected: ${from}`,
+    );
   }
   const file = path.join(dir, "session_commands.jsonl");
   const full: SessionCommand = {

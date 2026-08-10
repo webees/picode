@@ -13,10 +13,8 @@ import {
   evolveRisk,
   evolveWritePaths,
   getDefaultConfig,
-  loadConfig,
   simpleGlobMatch,
   type EvolveGoalSpec,
-  type PicodeConfig,
 } from "@picode/core";
 import { createRun, resolveRunDir, readGoal } from "./run-store.js";
 import { writeEvolveKnowledgeLog } from "./evolve-run.js";

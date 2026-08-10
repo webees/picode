@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { openSync, closeSync, writeFileSync, renameSync, mkdirSync, existsSync } from "node:fs";
+import { ErrorCode, PicodeError } from "./errors.js";
 
 /** Write file via temp + rename (best-effort atomic on same volume). */
 export function writeAtomic(filePath: string, content: string): void {
@@ -40,7 +41,7 @@ export async function withFileLock<T>(
       }
     }
   }
-  throw new Error(`Failed to acquire lock: ${lockPath}`);
+  throw new PicodeError(ErrorCode.LOCK_TIMEOUT, `failed to acquire lock: ${lockPath}`);
 }
 
 export function ensureDir(dir: string): void {

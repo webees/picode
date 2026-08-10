@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { fileURLToPath } from "node:url";
+import { ErrorCode, PicodeError } from "./errors.js";
 
 export type Access = "post" | "read";
 
@@ -438,63 +438,68 @@ export function loadConfig(repoRoot: string, runId?: string): PicodeConfig {
   return merged;
 }
 
+/** Throw a coded config-validation error (方向 A2: uniform ErrorCode registry). */
+function configError(message: string): never {
+  throw new PicodeError(ErrorCode.CONFIG_INVALID, message);
+}
+
 export function validateConfig(config: PicodeConfig): void {
   const roleIds = new Set(config.roles.filter((r) => r.enabled !== false).map((r) => r.id));
   for (const [kind, t] of Object.entries(config.cells.templates)) {
     for (const key of ["lead_role", "doer_role", "check_role"] as const) {
       if (!roleIds.has(t[key])) {
-        throw new Error(`cells.templates.${kind}.${key}=${t[key]} not in roles`);
+        configError(`cells.templates.${kind}.${key}=${t[key]} not in roles`);
       }
     }
   }
   const roomIds = new Set(config.rooms.filter((r) => r.enabled !== false).map((r) => r.id));
   for (const must of ["leadership", "product", "program", "docs", "people"]) {
     if (!roomIds.has(must)) {
-      throw new Error(`required room disabled or missing: ${must}`);
+      configError(`required room disabled or missing: ${must}`);
     }
   }
   // Naming law R1: role id must never equal a room id
   for (const r of config.roles) {
     if (r.enabled === false) continue;
     if (roomIds.has(r.id)) {
-      throw new Error(`naming law R1: role id "${r.id}" collides with room id`);
+      configError(`naming law R1: role id "${r.id}" collides with room id`);
     }
   }
   // 17 §10 v1-fixed values: changing them is a config error, not a silent override.
   if (config.sponsor.human_only !== true) {
-    throw new Error("sponsor.human_only must be true in v1 (sponsor is always human)");
+    configError("sponsor.human_only must be true in v1 (sponsor is always human)");
   }
   if (config.staffing.mode !== "real_recruit") {
-    throw new Error("staffing.mode must be real_recruit in v1 (true recruiting)");
+    configError("staffing.mode must be real_recruit in v1 (true recruiting)");
   }
   if (config.staffing.persona_dimensions !== "full") {
-    throw new Error("staffing.persona_dimensions must be full in v1 (17 §6)");
+    configError("staffing.persona_dimensions must be full in v1 (17 §6)");
   }
   if (config.cells.lifetime !== "per_run") {
-    throw new Error("cells.lifetime must be per_run in v1 (D019)");
+    configError("cells.lifetime must be per_run in v1 (D019)");
   }
   if (config.pi.enabled && !config.pi.command_template) {
-    throw new Error("pi.command_template required when pi.enabled (18 phase C)");
+    configError("pi.command_template required when pi.enabled (18 phase C)");
   }
   if (config.opencode.enabled && !/^https?:\/\/.+/.test(config.opencode.base_url)) {
-    throw new Error("opencode.base_url must be an http(s) URL when opencode.enabled (D044)");
+    configError("opencode.base_url must be an http(s) URL when opencode.enabled (D044)");
   }
   if (
     !Number.isInteger(config.windows.split_hour) ||
     config.windows.split_hour < 0 ||
     config.windows.split_hour > 23
   ) {
-    throw new Error("windows.split_hour must be an integer in 0..23");
+    configError("windows.split_hour must be an integer in 0..23");
   }
   const { ratio, min_keep } = config.windows.compression;
   if (!(ratio > 0 && ratio <= 1)) {
-    throw new Error("windows.compression.ratio must be in (0, 1] (keep ratio after compression)");
+    configError("windows.compression.ratio must be in (0, 1] (keep ratio after compression)");
   }
   if (!Number.isInteger(min_keep) || min_keep < 1) {
-    throw new Error("windows.compression.min_keep must be a positive integer");
+    configError("windows.compression.min_keep must be a positive integer");
   }
   if (!Number.isInteger(config.sess_mgr.max_awake) || config.sess_mgr.max_awake < 1) {
-    throw new Error("sess_mgr.max_awake must be a positive integer");
+    configError("sess_mgr.max_awake must be a positive integer");
   }
   if (config.features.allow_implement_before_active) {
     console.warn("[picode] WARNING: allow_implement_before_active=true");
@@ -509,12 +514,12 @@ export function validateConfig(config: PicodeConfig): void {
   ]);
   for (const layer of config.self_evolve.allowed_layers) {
     if (!EVOLVE_LAYERS.has(layer)) {
-      throw new Error(`self_evolve.allowed_layers contains unknown layer: ${layer}`);
+      configError(`self_evolve.allowed_layers contains unknown layer: ${layer}`);
     }
   }
   if (config.self_evolve.allowed_layers.includes("code") &&
       !config.self_evolve.require_code_review_on_code_layer) {
-    throw new Error(
+    configError(
       "self_evolve.require_code_review_on_code_layer must be true when code layer is allowed (E5)",
     );
   }
@@ -539,10 +544,4 @@ export function roleDisplay(config: PicodeConfig, id: string): string {
 
 export function getDefaultConfig(): PicodeConfig {
   return structuredClone(DEFAULTS);
-}
-
-/** Path to package root (picode monorepo). */
-export function packageRoot(): string {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  return path.resolve(here, "../../..");
 }

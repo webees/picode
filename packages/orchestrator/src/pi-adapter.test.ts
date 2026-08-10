@@ -78,7 +78,7 @@ test("buildPiEnv carries token/profile/room/persona/transcript (18 phase C)", ()
 });
 
 test("DoD: wake spawns a live Pi process; sleep exits it and returns to sleeping", async () => {
-  const { dir, config, store } = setup({});
+  const { dir, config } = setup({});
   const { session, pi } = await wakeWithPi(dir, config, "ind-res", "intake");
   assert.ok(pi, "pi handle expected when enabled");
   assert.equal(session.state, "awake");
@@ -133,7 +133,7 @@ test("mock Pi received env (transcript dir) — end to end through the adapter",
 });
 
 test("pi disabled: wake is state-only, no process", async () => {
-  const { dir, config, store } = setup({ piEnabled: false });
+  const { dir, config } = setup({ piEnabled: false });
   const { session, pi } = await wakeWithPi(dir, config, "pm", "intake");
   assert.equal(pi, null);
   assert.equal(session.state, "awake");

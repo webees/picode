@@ -11,7 +11,7 @@ import {
   unparkGoal,
   sweepDraftPark,
 } from "./run-store.js";
-import { enqueueMerge, mergeNext, readMergeQueue } from "./merge.js";
+import { enqueueMerge, mergeNext } from "./merge.js";
 import { sweepProgress } from "./progress.js";
 import { statusSnapshot } from "./status.js";
 import {

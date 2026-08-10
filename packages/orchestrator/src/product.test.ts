@@ -58,6 +58,6 @@ test("sponsor human channel: only chat posts allowed (18 phase E)", async () => 
   // sponsor may NOT post progress (would fake an agent signal)
   await assert.rejects(
     () => bus.post("product", "sponsor", { type: "progress", body: "pong", refs: [] }),
-    /ROOM_POST_DENIED/,
+    (e: unknown) => (e as { code?: string }).code === "ROOM_POST_DENIED",
   );
 });

@@ -66,7 +66,7 @@ export const DEFAULT_TEAM_NAME_POOL = [
 ] as const;
 
 /** djb2 hash — deterministic and stable across processes/runs. */
-export function hashId(input: string): number {
+function hashId(input: string): number {
   let h = 5381;
   for (let i = 0; i < input.length; i++) {
     h = ((h << 5) + h + input.charCodeAt(i)) >>> 0;

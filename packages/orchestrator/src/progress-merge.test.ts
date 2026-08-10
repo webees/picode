@@ -6,8 +6,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { loadConfig } from "@picode/core";
 import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
-import { addChunkAndTask, approveBrief, draftBrief } from "./task.js";
-import { approveStaffing, createStaffingRequest, draftPersonas } from "./staffing.js";
+import { addChunkAndTask } from "./task.js";
 import { SessionStore } from "./session-store.js";
 import { writeProgress, sweepProgress } from "./progress.js";
 import { enqueueMerge, mergeNext, readMergeQueue } from "./merge.js";
@@ -29,7 +28,7 @@ function tmpGitRepo(): string {
 async function setupTask(opts: { scale?: "S" | "M" | "L"; timeoutSec?: number } = {}) {
   const repo = tmpGitRepo();
   const { runId } = createRun(repo, { title: "goal-001", scale: opts.scale ?? "S" });
-  const { dir, config: base } = resolveRunDir(repo, runId);
+  const { dir } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["compiles"]);
   setGoalStatus(dir, "active");
   if (opts.timeoutSec !== undefined) {

@@ -1,4 +1,4 @@
-import type { PicodeConfig } from "@picode/core";
+import { ErrorCode, PicodeError, type PicodeConfig } from "@picode/core";
 import { SessionStore } from "./session-store.js";
 
 /**
@@ -114,7 +114,7 @@ export async function wakeWithOpencode(
       /* keep error only */
     }
     await store.setError(agentId, msg);
-    throw Object.assign(new Error(msg), { code: "OPENCODE_SPAWN_FAILED" });
+    throw new PicodeError(ErrorCode.OPENCODE_SPAWN_FAILED, msg);
   }
 }
 

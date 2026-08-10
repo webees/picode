@@ -59,7 +59,11 @@ test("compressWindow folds oldest 20% of past windows, keeps current window", as
   const lines = fs.readFileSync(busFile, "utf8").trim().split("\n");
   const patched = lines.map((l, i) => {
     const m = JSON.parse(l);
-    if (i < 10) m.ts = at(9, i); // yesterday morning (dayOffset 0 = 2026-08-10 09:xx)
+    // i < 10: yesterday morning (dayOffset 0 = 2026-08-10 09:xx) — a past window.
+    // i >= 10 (the cur-* messages): same-day afternoon (2026-08-10 13:xx) — the
+    // current window relative to `now`. Pinning the ts makes the test immune to
+    // the machine clock (a real `now` ts could land in another window and be folded).
+    m.ts = i < 10 ? at(9, i) : at(13, i - 10);
     return JSON.stringify(m);
   });
   fs.writeFileSync(busFile, patched.join("\n") + "\n");

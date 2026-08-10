@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ensureDir, withFileLock, writeAtomic } from "@picode/core";
+import { ErrorCode, PicodeError, ensureDir, withFileLock, writeAtomic } from "@picode/core";
 import { groupByWindow, windowIdOf } from "./window.js";
 
 export type Access = "post" | "read";
@@ -114,14 +114,13 @@ export class RoomStore {
   ): Promise<BusMessage> {
     // spec 10 §1: every message MUST use a cataloged type
     if (!BUS_MESSAGE_TYPES.includes(msg.type)) {
-      throw Object.assign(new Error(`unknown bus message type: ${msg.type}`), {
-        code: "BUS_TYPE_DENIED",
-      });
+      throw new PicodeError(
+        ErrorCode.BUS_TYPE_DENIED,
+        `unknown bus message type: ${msg.type}`,
+      );
     }
     if (!this.canPost(room, agentId, msg.type)) {
-      throw Object.assign(new Error("ROOM_POST_DENIED"), {
-        code: "ROOM_POST_DENIED",
-      });
+      throw new PicodeError(ErrorCode.ROOM_POST_DENIED, `post denied for ${agentId} in room ${room}`);
     }
     const full: BusMessage = {
       ts: new Date().toISOString(),
@@ -144,9 +143,7 @@ export class RoomStore {
 
   history(room: string, agentId: string, limit = 50): BusMessage[] {
     if (!this.canRead(room, agentId)) {
-      throw Object.assign(new Error("ROOM_READ_DENIED"), {
-        code: "ROOM_READ_DENIED",
-      });
+      throw new PicodeError(ErrorCode.ROOM_READ_DENIED, `read denied for ${agentId} in room ${room}`);
     }
     const file = this.busPath(room);
     if (!fs.existsSync(file)) return [];

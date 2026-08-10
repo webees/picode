@@ -326,7 +326,6 @@ export async function approveStaffing(
   const request = readStaffingRequest(dir, taskId);
   if (!request) throw new Error(`no staffing request for ${taskId}`);
 
-  const task = readTaskYaml(dir, taskId);
   const teamName = request.team_name ?? generateTeamName(taskId);
   // 16 §8: team_name doubles as an archive file name — unsafe overrides must fail
   assertSafeName(teamName, "team_name");

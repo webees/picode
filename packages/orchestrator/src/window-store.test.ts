@@ -58,7 +58,9 @@ test("compressRunWindows writes run-level archive and windowStatus is read-only"
   // archive readable + status shows current window
   const read = readWindowArchive(dir);
   assert.equal(read?.window, "2026-08-10-pm");
-  const st = windowStatus(dir, config);
+  // windowStatus defaults to the real wall clock — pin `now` so the assertion
+  // is immune to the machine date (the test fixes "today" = 2026-08-10).
+  const st = windowStatus(dir, config, { now });
   assert.equal(st.current_window, "2026-08-10-pm");
   const lead = st.rooms.find((r) => r.room === "leadership");
   assert.ok(lead && lead.messages > 0);

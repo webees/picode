@@ -21,7 +21,7 @@ test("bus post ACL", async () => {
   await store.post("squad-1", "squad-lead@t1", { type: "progress", body: "ok", refs: [] });
   await assert.rejects(
     () => store.post("squad-1", "proc-audit", { type: "chat", body: "no", refs: [] }),
-    /ROOM_POST_DENIED/,
+    (e: unknown) => (e as { code?: string }).code === "ROOM_POST_DENIED",
   );
   const hist = store.history("squad-1", "proc-audit", 10);
   assert.equal(hist.length, 1);

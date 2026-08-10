@@ -1,6 +1,7 @@
 export * from "./config.js";
 export * from "./paths.js";
 export * from "./atomic.js";
+export * from "./errors.js";
 export * from "./tool-profiles.js";
 export * from "./session.js";
 export * from "./persona.js";

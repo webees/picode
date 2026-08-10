@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
 import {
+  ErrorCode,
+  PicodeError,
   assertTransition,
   ensureDir,
   withFileLock,
@@ -79,13 +81,16 @@ export class SessionStore {
    */
   register(roleId: string, opts: { agentId?: string; initialState?: "registered" | "sleeping" } = {}): SessionRecord {
     if (HUMAN_ONLY_ROLES.includes(roleId)) {
-      throw Object.assign(new Error("sponsor is human-only; cannot register session"), {
-        code: "SESSION_HUMAN_ONLY",
-      });
+      throw new PicodeError(
+        ErrorCode.SESSION_HUMAN_ONLY,
+        "sponsor is human-only; cannot register session",
+      );
     }
     const agentId = opts.agentId ?? roleId;
     const existing = this.get(agentId);
-    if (existing) throw new Error(`session already registered: ${agentId}`);
+    if (existing) {
+      throw new PicodeError(ErrorCode.SESSION_ALREADY_REGISTERED, `session already registered: ${agentId}`);
+    }
 
     const state = opts.initialState ?? "registered";
     const record: SessionRecord = {
@@ -115,9 +120,9 @@ export class SessionStore {
       if (!opts.force && opts.maxAwake !== undefined && opts.maxAwake >= 0) {
         const over = this.awake().filter((s) => s.agent_id !== agentId).length >= opts.maxAwake;
         if (over) {
-          throw Object.assign(
-            new Error(`max_awake=${opts.maxAwake} exceeded; wake "${agentId}" would exceed limit`),
-            { code: "MAX_AWAKE_EXCEEDED" },
+          throw new PicodeError(
+            ErrorCode.MAX_AWAKE_EXCEEDED,
+            `max_awake=${opts.maxAwake} exceeded; wake "${agentId}" would exceed limit`,
           );
         }
       }
@@ -139,7 +144,7 @@ export class SessionStore {
   }
 
   /** Transition sleeping|awake -> terminated (task dissolved, run closed, …). */
-  async terminate(agentId: string, reason: string): Promise<SessionRecord> {
+  async terminate(agentId: string, _reason: string): Promise<SessionRecord> {
     return this.transition(agentId, "terminated", (cur) => ({
       ...cur,
       error: null,
@@ -152,7 +157,9 @@ export class SessionStore {
   async setError(agentId: string, error: string): Promise<SessionRecord> {
     const p = this.sessionPath(agentId);
     return withFileLock(this.lockPath(), () => {
-      if (!fs.existsSync(p)) throw new Error(`session not found: ${agentId}`);
+      if (!fs.existsSync(p)) {
+        throw new PicodeError(ErrorCode.SESSION_NOT_FOUND, `session not found: ${agentId}`);
+      }
       const cur = YAML.parse(fs.readFileSync(p, "utf8")) as SessionRecord;
       const next = { ...cur, error };
       writeAtomic(p, YAML.stringify(next));
@@ -164,10 +171,15 @@ export class SessionStore {
   async attachPiSession(agentId: string, piSessionId: string): Promise<SessionRecord> {
     return withFileLock(this.lockPath(), () => {
       const p = this.sessionPath(agentId);
-      if (!fs.existsSync(p)) throw new Error(`session not found: ${agentId}`);
+      if (!fs.existsSync(p)) {
+        throw new PicodeError(ErrorCode.SESSION_NOT_FOUND, `session not found: ${agentId}`);
+      }
       const cur = YAML.parse(fs.readFileSync(p, "utf8")) as SessionRecord;
       if (cur.state !== "awake") {
-        throw new Error(`attachPiSession requires awake state, got ${cur.state}`);
+        throw new PicodeError(
+          ErrorCode.ILLEGAL_STATE,
+          `attachPiSession requires awake state, got ${cur.state}`,
+        );
       }
       const next: SessionRecord = { ...cur, pi_session_id: piSessionId };
       writeAtomic(p, YAML.stringify(next));
@@ -183,7 +195,9 @@ export class SessionStore {
   ): Promise<SessionRecord> {
     const p = this.sessionPath(agentId);
     return withFileLock(this.lockPath(), () => {
-      if (!fs.existsSync(p)) throw new Error(`session not found: ${agentId}`);
+      if (!fs.existsSync(p)) {
+        throw new PicodeError(ErrorCode.SESSION_NOT_FOUND, `session not found: ${agentId}`);
+      }
       const cur = YAML.parse(fs.readFileSync(p, "utf8")) as SessionRecord;
       assertTransition(cur.state, to, agentId);
       const next: SessionRecord = { ...cur, ...mutate(cur), state: to };

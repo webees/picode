@@ -95,16 +95,19 @@ export function readWindowArchive(dir: string): RunWindowArchive | null {
 }
 
 /** Window status: current window + per-room message counts (read-only). */
-export function windowStatus(dir: string, config: PicodeConfig): {
+export function windowStatus(
+  dir: string,
+  config: PicodeConfig,
+  opts: { now?: Date } = {},
+): {
   current_window: string;
   split_hour: number;
   compression: { ratio: number; min_keep: number };
   rooms: Array<{ room: string; messages: number }>;
   last_archive: string | null;
 } {
-  const now = new Date();
+  const now = opts.now ?? new Date();
   const { split_hour, compression } = config.windows;
-  const store = new RoomStore(dir);
   const rooms = config.rooms.map((r) => r.id).map((room) => {
     const file = path.join(dir, "bus", `${room}.jsonl`);
     const messages = fs.existsSync(file)

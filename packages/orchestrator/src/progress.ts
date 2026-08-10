@@ -3,7 +3,6 @@ import path from "node:path";
 import YAML from "yaml";
 import {
   ensureDir,
-  withFileLock,
   writeAtomic,
   type PicodeConfig,
 } from "@picode/core";
@@ -103,5 +102,3 @@ export function readTaskMeta(dir: string, taskId: string): {
   if (!fs.existsSync(p)) return {};
   return YAML.parse(fs.readFileSync(p, "utf8")) as { status?: string; chunk_id?: string };
 }
-
-export { withFileLock };

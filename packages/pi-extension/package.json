@@ -6,10 +6,12 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node --test dist/**/*.test.js 2>/dev/null || true"
+    "test": "node --test dist/*.test.js"
   },
   "pi": {
-    "extensions": ["./src/index.ts"]
+    "extensions": [
+      "./src/index.ts"
+    ]
   },
   "dependencies": {
     "@picode/core": "0.1.0",
@@ -20,5 +22,9 @@
     "typescript": "^5.8.2",
     "@types/node": "^22.13.10"
   },
-  "keywords": ["pi-package", "pi-extension", "picode"]
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "picode"
+  ]
 }

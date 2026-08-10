@@ -11,7 +11,10 @@ import { execFileSync } from "node:child_process";
 import { isIP } from "node:net";
 import YAML from "yaml";
 import {
+  ErrorCode,
+  errorCodeOf,
   matchGlob,
+  PicodeError,
   profileAllows,
   withFileLock,
   type ToolName,
@@ -38,7 +41,7 @@ function jsonResult(obj: unknown) {
   return { content: [{ type: "text", text: JSON.stringify(obj, null, 2) }] };
 }
 
-function err(code: string, message: string) {
+function err(code: ErrorCode, message: string) {
   return jsonResult({ ok: false, code, message });
 }
 
@@ -55,9 +58,10 @@ async function appendSessionCommand(
   cmd: { action: "wake" | "sleep" | "terminate"; agent_id: string; reason: string; force?: boolean },
 ) {
   if (from !== "sess-mgr") {
-    throw Object.assign(new Error(`command from non-sess-mgr rejected: ${from}`), {
-      code: "COMMAND_FROM_DENIED",
-    });
+    throw new PicodeError(
+      ErrorCode.COMMAND_FROM_DENIED,
+      `command from non-sess-mgr rejected: ${from}`,
+    );
   }
   const file = path.join(runDir, "session_commands.jsonl");
   const full = {
@@ -127,10 +131,10 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["room", "type", "body"],
     },
     async execute(_id, params) {
-      if (!allow("bus_post")) return err("TOOL_DENIED", "bus_post not in profile");
+      if (!allow("bus_post")) return err(ErrorCode.TOOL_DENIED, "bus_post not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
-      if (!store) return err("NO_RUN", "PICODE_RUN_ID/RUNS_ROOT not set");
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
+      if (!store) return err(ErrorCode.NO_RUN, "PICODE_RUN_ID/RUNS_ROOT not set");
       try {
         const msg = await store.post(String(params.room), agentId, {
           type: String(params.type),
@@ -139,7 +143,7 @@ export default function picodeExtension(pi: PiApi): void {
         });
         return jsonResult({ ok: true, message: msg });
       } catch (e) {
-        const code = (e as { code?: string }).code ?? "BUS_ERROR";
+        const code = errorCodeOf(e) ?? ErrorCode.BUS_ERROR;
         return err(code, e instanceof Error ? e.message : String(e));
       }
     },
@@ -158,10 +162,10 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["room"],
     },
     async execute(_id, params) {
-      if (!allow("bus_history")) return err("TOOL_DENIED", "bus_history not in profile");
+      if (!allow("bus_history")) return err(ErrorCode.TOOL_DENIED, "bus_history not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
-      if (!store) return err("NO_RUN", "run not set");
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
+      if (!store) return err(ErrorCode.NO_RUN, "run not set");
       try {
         const hist = store.history(
           String(params.room),
@@ -170,7 +174,7 @@ export default function picodeExtension(pi: PiApi): void {
         );
         return jsonResult({ ok: true, messages: hist });
       } catch (e) {
-        return err("ROOM_READ_DENIED", e instanceof Error ? e.message : String(e));
+        return err(ErrorCode.ROOM_READ_DENIED, e instanceof Error ? e.message : String(e));
       }
     },
   });
@@ -188,16 +192,16 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["path", "content"],
     },
     async execute(_id, params) {
-      if (!allow("repo_write")) return err("TOOL_DENIED", "repo_write not in profile");
+      if (!allow("repo_write")) return err(ErrorCode.TOOL_DENIED, "repo_write not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
       const rel = String(params.path).replace(/^\/+/, "");
       if (writePaths.length && !matchGlob(rel, writePaths)) {
-        return err("WRITE_PATH_DENIED", `path not in write_paths: ${rel}`);
+        return err(ErrorCode.WRITE_PATH_DENIED, `path not in write_paths: ${rel}`);
       }
       const abs = path.resolve(cwd, rel);
       if (!abs.startsWith(path.resolve(cwd))) {
-        return err("WRITE_PATH_DENIED", "path escapes cwd");
+        return err(ErrorCode.WRITE_PATH_DENIED, "path escapes cwd");
       }
       fs.mkdirSync(path.dirname(abs), { recursive: true });
       fs.writeFileSync(abs, String(params.content), "utf8");
@@ -215,17 +219,17 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["path"],
     },
     async execute(_id, params) {
-      if (!allow("repo_read")) return err("TOOL_DENIED", "repo_read not in profile");
+      if (!allow("repo_read")) return err(ErrorCode.TOOL_DENIED, "repo_read not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
       const rel = String(params.path).replace(/^\/+/, "");
       const allowed =
         writePaths.length === 0 && readPaths.length === 0
           ? true
           : matchGlob(rel, [...writePaths, ...readPaths, "tasks/**", "**/*.md"]);
-      if (!allowed) return err("READ_PATH_DENIED", rel);
+      if (!allowed) return err(ErrorCode.READ_PATH_DENIED, rel);
       const abs = path.resolve(cwd, rel);
-      if (!fs.existsSync(abs)) return err("NOT_FOUND", rel);
+      if (!fs.existsSync(abs)) return err(ErrorCode.NOT_FOUND, rel);
       return jsonResult({ ok: true, path: rel, content: fs.readFileSync(abs, "utf8") });
     },
   });
@@ -244,10 +248,10 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["summary"],
     },
     async execute(_id, params) {
-      if (!allow("progress_report")) return err("TOOL_DENIED", "progress_report not allowed");
+      if (!allow("progress_report")) return err(ErrorCode.TOOL_DENIED, "progress_report not allowed");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
-      if (!store) return err("NO_RUN", "no run");
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
+      if (!store) return err(ErrorCode.NO_RUN, "no run");
       const room = env("PICODE_SQUAD_ROOM") || env("PICODE_WORK_ROOM", "program");
       try {
         // lead should also be on task room — post to work room
@@ -281,7 +285,7 @@ export default function picodeExtension(pi: PiApi): void {
         }
         return jsonResult({ ok: true, message: msg });
       } catch (e) {
-        return err("BUS_ERROR", e instanceof Error ? e.message : String(e));
+        return err(ErrorCode.BUS_ERROR, e instanceof Error ? e.message : String(e));
       }
     },
   });
@@ -299,10 +303,10 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["need"],
     },
     async execute(_id, params) {
-      if (!allow("request_info")) return err("TOOL_DENIED", "request_info denied");
+      if (!allow("request_info")) return err(ErrorCode.TOOL_DENIED, "request_info denied");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
-      if (!runDir) return err("NO_RUN", "no run");
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
+      if (!runDir) return err(ErrorCode.NO_RUN, "no run");
       const reqDir = path.join(runDir, "requests");
       fs.mkdirSync(reqDir, { recursive: true });
       const id = `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -333,7 +337,7 @@ export default function picodeExtension(pi: PiApi): void {
     const abs = path.resolve(root, rel.replace(/^\/+/, ""));
     // boundary check: abs must equal root or start with root + sep
     if (abs !== root && !abs.startsWith(root + path.sep)) {
-      throw Object.assign(new Error("path escapes cwd"), { code: "PATH_ESCAPE" });
+      throw Object.assign(new Error("path escapes cwd"), { code: ErrorCode.PATH_ESCAPE });
     }
     return abs;
   }
@@ -362,7 +366,7 @@ export default function picodeExtension(pi: PiApi): void {
 
   function readText(rel: string): string {
     const abs = resolveInCwd(rel);
-    if (!fs.existsSync(abs)) throw Object.assign(new Error("NOT_FOUND"), { code: "NOT_FOUND" });
+    if (!fs.existsSync(abs)) throw Object.assign(new Error("NOT_FOUND"), { code: ErrorCode.NOT_FOUND });
     return fs.readFileSync(abs, "utf8");
   }
 
@@ -388,10 +392,10 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["agent_id"],
     },
     async execute(_id, params) {
-      if (!allow("session_wake")) return err("TOOL_DENIED", "session_wake not in profile");
+      if (!allow("session_wake")) return err(ErrorCode.TOOL_DENIED, "session_wake not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
-      if (!runDir) return err("NO_RUN", "no run");
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
+      if (!runDir) return err(ErrorCode.NO_RUN, "no run");
       try {
         const cmd = await appendSessionCommand(runDir, agentId, {
           ...sessionTargets(params),
@@ -399,7 +403,7 @@ export default function picodeExtension(pi: PiApi): void {
         });
         return jsonResult({ ok: true, queued: cmd });
       } catch (e) {
-        return err("COMMAND_FROM_DENIED", e instanceof Error ? e.message : String(e));
+        return err(ErrorCode.COMMAND_FROM_DENIED, e instanceof Error ? e.message : String(e));
       }
     },
   });
@@ -418,10 +422,10 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["agent_id"],
     },
     async execute(_id, params) {
-      if (!allow("session_sleep")) return err("TOOL_DENIED", "session_sleep not in profile");
+      if (!allow("session_sleep")) return err(ErrorCode.TOOL_DENIED, "session_sleep not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
-      if (!runDir) return err("NO_RUN", "no run");
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
+      if (!runDir) return err(ErrorCode.NO_RUN, "no run");
       try {
         const cmd = await appendSessionCommand(runDir, agentId, {
           ...sessionTargets(params),
@@ -429,7 +433,7 @@ export default function picodeExtension(pi: PiApi): void {
         });
         return jsonResult({ ok: true, queued: cmd });
       } catch (e) {
-        return err("COMMAND_FROM_DENIED", e instanceof Error ? e.message : String(e));
+        return err(ErrorCode.COMMAND_FROM_DENIED, e instanceof Error ? e.message : String(e));
       }
     },
   });
@@ -443,10 +447,10 @@ export default function picodeExtension(pi: PiApi): void {
       properties: {},
     },
     async execute() {
-      if (!allow("session_list")) return err("TOOL_DENIED", "session_list not in profile");
+      if (!allow("session_list")) return err(ErrorCode.TOOL_DENIED, "session_list not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
-      if (!runDir) return err("NO_RUN", "no run");
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
+      if (!runDir) return err(ErrorCode.NO_RUN, "no run");
       const sessions = listSessions(runDir);
       const awake = sessions.filter((s) => s.state === "awake").length;
       return jsonResult({ ok: true, awake_count: awake, sessions });
@@ -463,9 +467,9 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["pattern"],
     },
     async execute(_id, params) {
-      if (!allow("repo_glob")) return err("TOOL_DENIED", "repo_glob not in profile");
+      if (!allow("repo_glob")) return err(ErrorCode.TOOL_DENIED, "repo_glob not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
       const pattern = String(params.pattern);
       const matches = fileList().filter((f) => matchGlob(f, [pattern]));
       return jsonResult({ ok: true, pattern, matches });
@@ -486,16 +490,16 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["pattern"],
     },
     async execute(_id, params) {
-      if (!allow("repo_grep")) return err("TOOL_DENIED", "repo_grep not in profile");
+      if (!allow("repo_grep")) return err(ErrorCode.TOOL_DENIED, "repo_grep not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
       const raw = String(params.pattern);
-      if (raw.length > 200) return err("BAD_REGEX", "pattern too long (max 200)");
+      if (raw.length > 200) return err(ErrorCode.BAD_REGEX, "pattern too long (max 200)");
       let re: RegExp;
       try {
         re = new RegExp(raw);
       } catch {
-        return err("BAD_REGEX", raw);
+        return err(ErrorCode.BAD_REGEX, raw);
       }
       const glob = params.glob ? String(params.glob) : null;
       const max = Number(params.max ?? 50);
@@ -526,13 +530,13 @@ export default function picodeExtension(pi: PiApi): void {
       description: `Read-only git: ${name} in the worktree`,
       parameters: { type: "object", properties: {} },
       async execute() {
-        if (!allow(name as never)) return err("TOOL_DENIED", `${name} not in profile`);
+        if (!allow(name as never)) return err(ErrorCode.TOOL_DENIED, `${name} not in profile`);
         const a = auth();
-        if (a) return err("TOKEN_INVALID", a);
+        if (a) return err(ErrorCode.TOKEN_INVALID, a);
         try {
           return jsonResult({ ok: true, output: git(args({})) });
         } catch (e) {
-          return err("GIT_ERROR", e instanceof Error ? e.message : String(e));
+          return err(ErrorCode.GIT_ERROR, e instanceof Error ? e.message : String(e));
         }
       },
     });
@@ -551,18 +555,18 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["message"],
     },
     async execute(_id, params) {
-      if (!allow("git_commit")) return err("TOOL_DENIED", "git_commit not in profile");
+      if (!allow("git_commit")) return err(ErrorCode.TOOL_DENIED, "git_commit not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
       const msg = String(params.message);
-      if (!msg.trim()) return err("BAD_ARGS", "message required");
+      if (!msg.trim()) return err(ErrorCode.BAD_ARGS, "message required");
       try {
         git(["add", "-A"]);
         git(["commit", "-qm", msg]);
         const sha = git(["rev-parse", "HEAD"]);
         return jsonResult({ ok: true, sha });
       } catch (e) {
-        return err("GIT_ERROR", e instanceof Error ? e.message : String(e));
+        return err(ErrorCode.GIT_ERROR, e instanceof Error ? e.message : String(e));
       }
     },
   });
@@ -577,9 +581,9 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["cmd"],
     },
     async execute(_id, params) {
-      if (!allow("run_allowlisted")) return err("TOOL_DENIED", "run_allowlisted not in profile");
+      if (!allow("run_allowlisted")) return err(ErrorCode.TOOL_DENIED, "run_allowlisted not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
       const cmd = String(params.cmd);
       // token-boundary match: entry must equal the command or be followed by
       // whitespace — `npm test` must not allow `npm test-ci` or `npm test --x`
@@ -587,7 +591,7 @@ export default function picodeExtension(pi: PiApi): void {
         (entry) => cmd === entry || cmd.startsWith(`${entry} `) || cmd.startsWith(`${entry}\t`),
       );
       if (!allowed) {
-        return err("COMMAND_NOT_ALLOWLISTED", `command not in run_allowlist: ${cmd}`);
+        return err(ErrorCode.COMMAND_NOT_ALLOWLISTED, `command not in run_allowlist: ${cmd}`);
       }
       try {
         const [bin, ...rest] = cmd.split(/\s+/);
@@ -598,7 +602,7 @@ export default function picodeExtension(pi: PiApi): void {
         const stdout = (e as { stdout?: Buffer }).stdout?.toString?.() ?? "";
         return jsonResult({
           ok: false,
-          code: "COMMAND_FAILED",
+          code: ErrorCode.COMMAND_FAILED,
           exit_code: (e as { status?: number }).status ?? 1,
           output: (stdout + stderr).slice(-4000),
         });
@@ -616,9 +620,9 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["query"],
     },
     async execute(_id, params) {
-      if (!allow("web_search")) return err("TOOL_DENIED", "web_search not in profile");
+      if (!allow("web_search")) return err(ErrorCode.TOOL_DENIED, "web_search not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
       const query = String(params.query);
       const max = Number(params.max ?? 5);
       try {
@@ -641,7 +645,7 @@ export default function picodeExtension(pi: PiApi): void {
         }
         return jsonResult({ ok: true, query, results });
       } catch (e) {
-        return err("WEB_ERROR", e instanceof Error ? e.message : String(e));
+        return err(ErrorCode.WEB_ERROR, e instanceof Error ? e.message : String(e));
       }
     },
   });
@@ -658,12 +662,7 @@ export default function picodeExtension(pi: PiApi): void {
     const ip = isIP(h);
     if (ip === 4) {
       const parts = h.split(".").map(Number);
-      const [a, b, c, d] = [
-        parts[0] ?? 0,
-        parts[1] ?? 0,
-        parts[2] ?? 0,
-        parts[3] ?? 0,
-      ];
+      const [a, b] = [parts[0] ?? 0, parts[1] ?? 0];
       // 10/8, 127/8, 169.254/16, 172.16-31/12, 192.168/16, 0/8, 100.64/10
       if (a === 10 || a === 127 || a === 0) return true;
       if (a === 169 && b === 254) return true;
@@ -705,18 +704,18 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["url"],
     },
     async execute(_id, params) {
-      if (!allow("web_fetch")) return err("TOOL_DENIED", "web_fetch not in profile");
+      if (!allow("web_fetch")) return err(ErrorCode.TOOL_DENIED, "web_fetch not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
       const raw = String(params.url);
-      if (!/^https?:\/\//.test(raw)) return err("BAD_URL", "http(s) only");
+      if (!/^https?:\/\//.test(raw)) return err(ErrorCode.BAD_URL, "http(s) only");
       let u: URL;
       try {
         u = new URL(raw);
       } catch {
-        return err("BAD_URL", raw);
+        return err(ErrorCode.BAD_URL, raw);
       }
-      if (isBlockedHost(u.hostname)) return err("URL_BLOCKED", "private/loopback host refused");
+      if (isBlockedHost(u.hostname)) return err(ErrorCode.URL_BLOCKED, "private/loopback host refused");
       try {
         const res = await fetch(raw, {
           headers: { "User-Agent": "picode-research/0.1" },
@@ -727,14 +726,14 @@ export default function picodeExtension(pi: PiApi): void {
           const loc = res.headers.get("location");
           if (loc) {
             const next = new URL(loc, raw);
-            if (isBlockedHost(next.hostname)) return err("URL_BLOCKED", "redirect to private host refused");
+            if (isBlockedHost(next.hostname)) return err(ErrorCode.URL_BLOCKED, "redirect to private host refused");
           }
         }
         const buf = Buffer.from(await res.arrayBuffer());
         const text = buf.subarray(0, 20000).toString("utf8");
         return jsonResult({ ok: true, status: res.status, url: raw, text, truncated: buf.length > 20000 });
       } catch (e) {
-        return err("WEB_ERROR", e instanceof Error ? e.message : String(e));
+        return err(ErrorCode.WEB_ERROR, e instanceof Error ? e.message : String(e));
       }
     },
   });
@@ -752,10 +751,10 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["target_room", "need"],
     },
     async execute(_id, params) {
-      if (!allow("request_cross_room")) return err("TOOL_DENIED", "request_cross_room not in profile");
+      if (!allow("request_cross_room")) return err(ErrorCode.TOOL_DENIED, "request_cross_room not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
-      if (!runDir) return err("NO_RUN", "no run");
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
+      if (!runDir) return err(ErrorCode.NO_RUN, "no run");
       const reqDir = path.join(runDir, "requests");
       fs.mkdirSync(reqDir, { recursive: true });
       const id = `xreq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -783,10 +782,10 @@ export default function picodeExtension(pi: PiApi): void {
       required: ["rel"],
     },
     async execute(_id, params) {
-      if (!allow("state_read")) return err("TOOL_DENIED", "state_read not in profile");
+      if (!allow("state_read")) return err(ErrorCode.TOOL_DENIED, "state_read not in profile");
       const a = auth();
-      if (a) return err("TOKEN_INVALID", a);
-      if (!runDir) return err("NO_RUN", "no run");
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
+      if (!runDir) return err(ErrorCode.NO_RUN, "no run");
       const rel = String(params.rel).replace(/^\/+/, "");
       // whitelist state files only — never arbitrary run files
       const allowed =
@@ -796,10 +795,10 @@ export default function picodeExtension(pi: PiApi): void {
         /^tasks\/[A-Za-z0-9_-]+\/(task|progress)\.(yaml|json)$/.test(rel) ||
         /^tasks\/[A-Za-z0-9_-]+\/brief\/[A-Za-z0-9_.-]+\.(md|yaml|json)$/.test(rel) ||
         /^windows\/[A-Za-z0-9_-]+\.yaml$/.test(rel);
-      if (!allowed) return err("STATE_DENIED", rel);
+      if (!allowed) return err(ErrorCode.STATE_DENIED, rel);
       const abs = path.join(runDir, rel);
-      if (!abs.startsWith(path.join(runDir))) return err("STATE_DENIED", "escape");
-      if (!fs.existsSync(abs)) return err("NOT_FOUND", rel);
+      if (!abs.startsWith(path.join(runDir))) return err(ErrorCode.STATE_DENIED, "escape");
+      if (!fs.existsSync(abs)) return err(ErrorCode.NOT_FOUND, rel);
       return jsonResult({ ok: true, rel, content: fs.readFileSync(abs, "utf8") });
     },
   });

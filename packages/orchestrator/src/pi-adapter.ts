@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import type { PicodeConfig, SessionRecord } from "@picode/core";
+import { ErrorCode, PicodeError, type PicodeConfig, type SessionRecord } from "@picode/core";
 import { issueToken } from "@picode/bus";
 import { SessionStore } from "./session-store.js";
 
@@ -183,7 +183,7 @@ export async function wakeWithPi(
       /* keep error only */
     }
     await store.setError(agentId, msg);
-    throw Object.assign(new Error(msg), { code: "PI_SPAWN_FAILED" });
+    throw new PicodeError(ErrorCode.PI_SPAWN_FAILED, msg);
   }
 }
 

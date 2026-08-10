@@ -1,0 +1,86 @@
+/**
+ * Unified error-code registry (方向 A2 / E3).
+ *
+ * Every user-facing failure carries a stable machine-readable `code` so the
+ * CLI can render `[picode] ERROR: <code>: <message>` (E3) and scripts can
+ * branch on the code without parsing message text. Codes are constants, never
+ * inline string literals, so a typo fails at compile time.
+ *
+ * Throwing convention:
+ *   - bus / orchestrator / adapters: `throw new PicodeError(ErrorCode.X, msg)`
+ *   - pi-extension tools: return `err(ErrorCode.X, msg)` in the JSON result
+ *   - config validation: `throw new PicodeError(ErrorCode.CONFIG_INVALID, msg)`
+ */
+
+export const ErrorCode = {
+  // config / infra
+  CONFIG_INVALID: "CONFIG_INVALID",
+  LOCK_TIMEOUT: "LOCK_TIMEOUT",
+  // session state machine (17 §4)
+  SESSION_HUMAN_ONLY: "SESSION_HUMAN_ONLY",
+  SESSION_ALREADY_REGISTERED: "SESSION_ALREADY_REGISTERED",
+  SESSION_NOT_FOUND: "SESSION_NOT_FOUND",
+  ILLEGAL_TRANSITION: "ILLEGAL_TRANSITION",
+  ILLEGAL_STATE: "ILLEGAL_STATE",
+  MAX_AWAKE_EXCEEDED: "MAX_AWAKE_EXCEEDED",
+  // bus (10 §1/§2, room ACL)
+  BUS_TYPE_DENIED: "BUS_TYPE_DENIED",
+  ROOM_POST_DENIED: "ROOM_POST_DENIED",
+  ROOM_READ_DENIED: "ROOM_READ_DENIED",
+  // spawn adapters (18 phase C / D044)
+  PI_SPAWN_FAILED: "PI_SPAWN_FAILED",
+  OPENCODE_SPAWN_FAILED: "OPENCODE_SPAWN_FAILED",
+  COMMAND_FROM_DENIED: "COMMAND_FROM_DENIED",
+  // pi-extension tool results (09 matrix)
+  TOOL_DENIED: "TOOL_DENIED",
+  TOKEN_INVALID: "TOKEN_INVALID",
+  NO_RUN: "NO_RUN",
+  BUS_ERROR: "BUS_ERROR",
+  WRITE_PATH_DENIED: "WRITE_PATH_DENIED",
+  READ_PATH_DENIED: "READ_PATH_DENIED",
+  PATH_ESCAPE: "PATH_ESCAPE",
+  NOT_FOUND: "NOT_FOUND",
+  COMMAND_NOT_ALLOWLISTED: "COMMAND_NOT_ALLOWLISTED",
+  COMMAND_FAILED: "COMMAND_FAILED",
+  BAD_ARGS: "BAD_ARGS",
+  BAD_REGEX: "BAD_REGEX",
+  GIT_ERROR: "GIT_ERROR",
+  WEB_ERROR: "WEB_ERROR",
+  BAD_URL: "BAD_URL",
+  URL_BLOCKED: "URL_BLOCKED",
+  STATE_DENIED: "STATE_DENIED",
+} as const;
+
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
+
+/** Error carrying a stable machine-readable code (CLI/extension display). */
+export class PicodeError extends Error {
+  readonly code: ErrorCode;
+
+  constructor(code: ErrorCode, message: string) {
+    super(message);
+    this.name = "PicodeError";
+    this.code = code;
+  }
+}
+
+export function isPicodeError(e: unknown): e is PicodeError {
+  return e instanceof PicodeError;
+}
+
+/** Extract the code from any thrown value (plain errors have none). */
+export function errorCodeOf(e: unknown): ErrorCode | null {
+  if (e instanceof PicodeError) return e.code;
+  if (e && typeof e === "object" && "code" in e) {
+    const c = (e as { code?: unknown }).code;
+    if (typeof c === "string") return c as ErrorCode;
+  }
+  return null;
+}
+
+/** E3: uniform CLI/extension error rendering. */
+export function formatPicodeError(e: unknown): string {
+  const code = errorCodeOf(e);
+  const msg = e instanceof Error ? e.message : String(e);
+  return code ? `[picode] ERROR: ${code}: ${msg}` : `[picode] ERROR: ${msg}`;
+}

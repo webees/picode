@@ -30,7 +30,7 @@ export interface TaskState {
 }
 
 export function addChunkAndTask(
-  repoRoot: string,
+  _repoRoot: string,
   dir: string,
   config: PicodeConfig,
   opts: { chunkId: string; writePaths: string[]; readPaths?: string[] },
@@ -219,7 +219,7 @@ export function prepareTask(
 }
 
 export function printSpawnEnv(
-  repoRoot: string,
+  _repoRoot: string,
   dir: string,
   config: PicodeConfig,
   taskId: string,

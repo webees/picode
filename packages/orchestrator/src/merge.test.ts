@@ -74,7 +74,7 @@ test("enqueue writes merge queue; process merges branch into main (serial)", asy
 });
 
 test("scale L merge_ready wakes code-review AND sec-eng (T11)", async () => {
-  const { repo, dir, config, taskId } = await setupPreparedTask({ scale: "L" });
+  const { dir, config, taskId } = await setupPreparedTask({ scale: "L" });
   const sessions = new SessionStore(dir);
   // approveStaffing already slept the people triad; merge_ready must wake the gates
   const { applyEvent } = await import("./rules-engine.js");
@@ -84,7 +84,7 @@ test("scale L merge_ready wakes code-review AND sec-eng (T11)", async () => {
 });
 
 test("progress sweep flags stale tasks and wakes squad-lead (U8)", async () => {
-  const { repo, dir, config, taskId } = await setupPreparedTask();
+  const { dir, config, taskId } = await setupPreparedTask();
   // never reported → progress.json missing → stale
   const res = await sweepProgress(dir, config);
   assert.ok(res.overdue.some((o) => o.task_id === taskId));

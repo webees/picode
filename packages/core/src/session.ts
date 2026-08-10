@@ -6,6 +6,8 @@
  * `sponsor` never enters this machine (human, non-session).
  */
 
+import { ErrorCode, PicodeError } from "./errors.js";
+
 export type SessionState = "registered" | "sleeping" | "awake" | "terminated";
 
 export interface SessionRecord {
@@ -35,7 +37,8 @@ export function canTransition(from: SessionState, to: SessionState): boolean {
 
 export function assertTransition(from: SessionState, to: SessionState, agentId: string): void {
   if (!canTransition(from, to)) {
-    throw new Error(
+    throw new PicodeError(
+      ErrorCode.ILLEGAL_TRANSITION,
       `illegal session transition: ${from} -> ${to} for agent "${agentId}"`,
     );
   }
