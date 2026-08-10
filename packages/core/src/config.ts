@@ -52,8 +52,11 @@ export interface SessMgrRule {
 }
 
 export interface SessMgrConfig {
+  /** Reserved (D055): declared per 17 §10; not read by any implementation path yet. */
   enabled: boolean;
+  /** Reserved (D055): idle-sleep timer is not implemented; sweeps use timeouts.task_timeout_sec. */
   idle_sleep_sec: number;
+  /** Reserved (D055): force-wake is currently allowed unconditionally via `--force`. */
   allow_orch_force_wake: boolean;
   max_awake: number;
   always_register: boolean;
@@ -141,6 +144,7 @@ export interface EvolveGoalSpec {
 
 /** self_evolve config (19 §10 draft). */
 export interface SelfEvolveConfig {
+  /** Reserved (D055): enabled is declared per 19 §10; goal.kind drives evolution, not this flag. */
   enabled: boolean;
   /** Ordinary runs default to delivery; evolution must be declared. */
   default_kind: GoalKind;
@@ -148,11 +152,11 @@ export interface SelfEvolveConfig {
   allowed_layers: EvolveLayer[];
   /** Merge gate commands (E4); default npm test. */
   verify_commands: string[];
-  /** Human sponsor must approve merges of evolve runs (E3/E6 gate). */
+  /** Reserved (D055): sponsor merge approval is not mechanically enforced yet (E3/E6 gate). */
   require_sponsor_merge: boolean;
   /** code layer ⇒ code-review MUST be woken (E5). */
   require_code_review_on_code_layer: boolean;
-  /** E6 knowledge log directory (relative to repo knowledge_root). */
+  /** Reserved (D055): E6 knowledge log path is fixed at knowledge/evolve/<run_id>.md. */
   knowledge_log_glob: string;
   /** §4 MUST: target_repo must contain one of these markers. */
   platform_root_markers: string[];
@@ -171,8 +175,10 @@ export interface PicodeConfig {
   };
   paths: {
     runs_root: string;
+    /** Reserved (D055): skills root declared per 13 §9; evolve globs are hardcoded in evolve.ts. */
     skills_root: string;
     knowledge_root: string;
+    /** Reserved (D055): 13 §7 declares `prompts.root`; the implementation key is `paths.prompts_root`. */
     prompts_root: string;
     secret_globs: string[];
   };
@@ -180,33 +186,47 @@ export interface PicodeConfig {
     worktree_root: string;
     branch_template: string;
     base_branch: string;
+    /** Reserved (D055): rebase-on-merge is not implemented; mergeNext always uses --no-ff. */
     rebase_on_merge: boolean;
+    /** Reserved (D055): serialization is unconditional via merge.lock, not switchable. */
     merge_serial: boolean;
+    /** Reserved (D055): force-dissolve auto-commit is unconditional in closure.ts. */
     force_dissolve_autocommit: boolean;
   };
+  /** Reserved (D055): max_parallel_triads declared per 13 §8; concurrency is governed by max_awake only. */
   scheduler: { max_parallel_triads: number };
   timeouts: {
+    /** Reserved (D055): progress reporting interval; sweeps only use task_timeout_sec. */
     progress_interval_sec: number;
     task_timeout_sec: number;
     draft_idle_sec: number;
     draft_idle_policy: "park" | "stop" | "run_lead_advance";
+    /** Reserved (D055): cross-room TTL declared per 13 §8; meeting-* TTL is not enforced yet. */
     cross_room_ttl_sec: number;
     failed_branch_ttl_sec: number;
   };
   rooms: RoomConfig[];
   roles: RoleConfig[];
+  /** Reserved (D055): model routing declared per 13 §3; the runtime never selects models (opencode server default). */
   models: { default: string | null; check_model: string | null };
   research: { parallel_on_intake: boolean };
+  /** Reserved (D055): info-pipeline review is unconditional (I5) — not configurable yet. */
   info_pipeline: { require_run_lead_review: boolean };
+  /** Reserved (D055): cross-room supervision is unconditional (I5/D011) — not configurable yet. */
   cross_room: { require_run_lead_present: boolean };
   work_brief: {
     require_run_lead_approval: boolean;
+    /** Reserved (D055): seat slicing is always applied by draftPersonas. */
     seat_slicing: boolean;
+    /** Reserved (D055): brief assembly is always via the docs cell. */
     require_docs_assemble: boolean;
+    /** Reserved (D055): research attachments are always allowed after run-lead review. */
     allow_research_attach: boolean;
   };
   features: Record<string, boolean>;
+  /** Reserved (D055): only the "file" adapter exists; "messenger" is declared per 13 §3. */
   bus: { adapter: "file" | "messenger" };
+  /** `locale` reserved (D055): only i18n.strings is read by roomDisplay/roleDisplay. */
   i18n: { locale: string; strings?: Record<string, string> };
   pi: PiConfig;
   opencode: OpencodeConfig;
@@ -340,6 +360,7 @@ export const DEFAULTS: PicodeConfig = {
     allow_research_attach: true,
   },
   features: {
+    // Reserved (D055): declared per 13 §11; only allow_implement_before_active is read today.
     allow_bypass_write_paths: false,
     allow_implement_before_active: false,
     allow_agent_direct_messenger_io: false,

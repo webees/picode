@@ -1,5 +1,67 @@
 # Defaults extract — keep in sync with packages/core DEFAULTS + docs/spec/17-agent-runtime.md
 # Full option table: docs/reference/decision-catalog.md
+# 权威: packages/core/src/config.ts 的 DEFAULTS（本文件为摘录，非运行源）
+
+config_schema_version: "1"
+
+sess_mgr:
+  enabled: true            # Reserved (D055): 未读
+  idle_sleep_sec: 600      # Reserved (D055): 未读
+  allow_orch_force_wake: true   # Reserved (D055): 未读
+  max_awake: 8
+  always_register: true
+  rules:
+    - { event: run_created, wake: [sess-mgr, run-lead, pm] }
+    - { event: intake_start, wake: [run-lead, pm], wake_if: [ind-res] }
+    - { event: sponsor_message, wake: [run-lead] }
+    - { event: goal_active, wake: [scout, sys-arch] }
+    - { event: staffing_request, wake: [people-lead, recruiter, people-qa] }
+    - { event: brief_assemble, wake: [docs-lead, tech-writer, docs-qa] }
+    - { event: task_ready, wake_squad: true }
+    - { event: progress_due, wake_squad_lead: true }
+    - { event: merge_ready, wake: [release-eng], wake_gates: true }
+    - { event: task_dissolved, terminate_squad: true }
+    - { event: change_applied, wake_squad_lead: true }
+
+sponsor:
+  human_only: true         # v1 固定值（17 §10）；validateConfig 强制
+
+staffing:
+  mode: real_recruit       # v1 固定值（17 §10）
+  persona_dimensions: full # v1 固定值（17 §6）
+
+cells:
+  lifetime: per_run        # v1 固定值（D019）
+  templates:
+    implement: { lead_role: squad-lead, doer_role: engineer, check_role: sdet, room_kind: squad }
+    docs: { lead_role: docs-lead, doer_role: tech-writer, check_role: docs-qa, room: docs }
+    people: { lead_role: people-lead, doer_role: recruiter, check_role: people-qa, room: people }
+
+paths:
+  runs_root: ".picode/runs"
+  skills_root: "skills"            # Reserved (D055): 未读
+  knowledge_root: "docs/knowledge"
+  prompts_root: ".picode/prompts"  # Reserved (D055): 未读（13 §7 写 prompts.root）
+  secret_globs: ["**/.env", "**/.env.*", "**/secrets/**"]
+
+git:
+  worktree_root: ".picode/worktrees"
+  branch_template: "picode/{run_id}/{task_id}"
+  base_branch: main
+  rebase_on_merge: true            # Reserved (D055): 未读
+  merge_serial: true               # Reserved (D055): merge.lock 无条件串行
+  force_dissolve_autocommit: true  # Reserved (D055): 未读
+
+scheduler:
+  max_parallel_triads: 3           # Reserved (D055): 未读（并发由 max_awake 控制）
+
+timeouts:
+  progress_interval_sec: 300       # Reserved (D055): 未读
+  task_timeout_sec: 7200
+  draft_idle_sec: 86400
+  draft_idle_policy: park
+  cross_room_ttl_sec: 1800         # Reserved (D055): 未读
+  failed_branch_ttl_sec: 604800
 
 rooms:
   - { id: leadership, display_name: "工程领导", enabled: true }
@@ -39,17 +101,65 @@ roles:
   - { id: release-eng, display_name: "发布执行", tool_profile: gate.release-eng }
   - { id: sec-eng, display_name: "安全工程", tool_profile: gate.sec-eng }
 
+models:
+  default: null            # Reserved (D055): 未读（opencode 服务端默认模型）
+  check_model: null        # Reserved (D055): 未读
+
 research:
   parallel_on_intake: true
 
+info_pipeline:
+  require_run_lead_review: true    # Reserved (D055): 未读（I5 无条件强制）
+
+cross_room:
+  require_run_lead_present: true   # Reserved (D055): 未读（I5/D011 无条件强制）
+
 work_brief:
   require_run_lead_approval: true
-  seat_slicing: true
-  require_docs_assemble: true
-  allow_research_attach: true
+  seat_slicing: true               # Reserved (D055): 未读
+  require_docs_assemble: true      # Reserved (D055): 未读
+  allow_research_attach: true      # Reserved (D055): 未读
 
-# Overlay keys (see 17-agent-runtime §10)
-# sess_mgr: { enabled: true, idle_sleep_sec: 600, max_awake: 8, allow_orch_force_wake: true }
-# sponsor: { human_only: true }
-# staffing: { mode: real_recruit }
-# cells: { lifetime: per_run }
+features:
+  allow_bypass_write_paths: false            # Reserved (D055)
+  allow_implement_before_active: false       # 唯一被读取的 features 键
+  allow_agent_direct_messenger_io: false     # Reserved (D055)
+  allow_bare_bash: false                     # Reserved (D055)
+  run_lead_advance_force_without_sponsor: false  # Reserved (D055)
+
+bus:
+  adapter: file            # Reserved (D055): 仅 file 存在
+
+i18n:
+  locale: zh-CN            # Reserved (D055): 未读（strings 才被读）
+
+pi:
+  enabled: false
+  command_template: "pi --print"
+
+opencode:
+  enabled: false
+  base_url: "http://127.0.0.1:7788"
+  provider_id: null
+  model_id: null
+  system_prompt_prefix: "You are a picode agent. Follow your role prompt."
+
+product:
+  require_acceptance_before_active: true     # D034
+
+windows:
+  split_hour: 12
+  compression: { ratio: 0.8, min_keep: 20 }
+
+run_allowlist: []          # 空 = run_allowlisted 全拒（COMMAND_NOT_ALLOWLISTED）
+
+self_evolve:
+  enabled: true            # Reserved (D055): 未读（goal.kind 驱动）
+  default_kind: delivery
+  allowed_layers: [knowledge, prompts, docs, tests]
+  verify_commands: ["npm test"]
+  require_sponsor_merge: true                # Reserved (D055): 未读
+  require_code_review_on_code_layer: true
+  knowledge_log_glob: "docs/knowledge/evolve/"   # Reserved (D055): 路径固定
+  platform_root_markers: ["package.json"]
+  forbidden_path_globs: ["**/.env", "**/.env.*", "**/secrets/**", "**/*.pem"]
