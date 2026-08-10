@@ -31,12 +31,12 @@
 
 ## 2. 现状基线(已实现,禁止重写)
 
-| 包 | 已有 | 文件 |
+|包|已有|文件|
 |----|------|------|
-| `@picode/core` | 配置三层 deepMerge(`DEFAULTS → .picode/config.yaml → profiles → run override`)+ `validateConfig`(含命名法 R1:role id ≠ room id);`paths.ts`(runDir/worktreePath/branchName/matchGlob);`atomic.ts`(writeAtomic 临时文件+rename、withFileLock O_EXCL 锁、ensureDir);`tool-profiles.ts`(22 个画像,17 种工具名) | `packages/core/src/*.ts` |
-| `@picode/bus` | `RoomStore`(jsonl 消息 + members ACL:post/read、post_types_allow);`token.ts`(HMAC-SHA256 签发/校验,timingSafeEqual) | `packages/bus/src/*.ts` |
-| `@picode/orchestrator` | `run-store.ts`(createRun 目录树 + goal.yaml/run.yaml/chunks.yaml/secret.txt + 7 房初始 members);`task.ts`(addChunkAndTask、draftBrief/approveBrief、prepareTask=git worktree + triad.yaml、printSpawnEnv、checkWritePathsInDiff);`cli.ts`(init / goal set-status / chunk add / brief draft|approve / task prepare|spawn-print) | `packages/orchestrator/src/*.ts` |
-| `@picode/pi-extension` | 6 个工具:`bus_post` `bus_history` `repo_write` `repo_read` `progress_report` `request_info`;token 鉴权 + tool_profile 校验 + write_paths/read_paths 约束 | `packages/pi-extension/src/index.ts` |
+|`@picode/core`|配置三层 deepMerge(`DEFAULTS → .picode/config.yaml → profiles → run override`)+ `validateConfig`(含命名法 R1:role id ≠ room id);`paths.ts`(runDir/worktreePath/branchName/matchGlob);`atomic.ts`(writeAtomic 临时文件+rename、withFileLock O_EXCL 锁、ensureDir);`tool-profiles.ts`(22 个画像,17 种工具名)|`packages/core/src/*.ts`|
+|`@picode/bus`|`RoomStore`(jsonl 消息 + members ACL:post/read、post_types_allow);`token.ts`(HMAC-SHA256 签发/校验,timingSafeEqual)|`packages/bus/src/*.ts`|
+|`@picode/orchestrator`|`run-store.ts`(createRun 目录树 + goal.yaml/run.yaml/chunks.yaml/secret.txt + 7 房初始 members);`task.ts`(addChunkAndTask、draftBrief/approveBrief、prepareTask=git worktree + triad.yaml、printSpawnEnv、checkWritePathsInDiff);`cli.ts`(init / goal set-status / chunk add / brief draft\|approve / task prepare\|spawn-print)|`packages/orchestrator/src/*.ts`|
+|`@picode/pi-extension`|6 个工具:`bus_post` `bus_history` `repo_write` `repo_read` `progress_report` `request_info`;token 鉴权 + tool_profile 校验 + write_paths/read_paths 约束|`packages/pi-extension/src/index.ts`|
 
 测试现状:core 1 个、bus 2 个、orchestrator 0 个(`node --test dist/**/*.test.js`)。
 
