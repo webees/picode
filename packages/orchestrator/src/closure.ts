@@ -10,6 +10,7 @@ import {
   type PicodeConfig,
 } from "@picode/core";
 import { SessionStore } from "./session-store.js";
+import { terminateAgent } from "./pi-adapter.js";
 import { checkWritePathsInDiff, type TaskState } from "./task.js";
 
 /**
@@ -388,12 +389,13 @@ export async function dissolveTask(
   }
 
   // Terminate the triad (P14 #1: cancel notice; normal dissolve: dissolve).
+  // D057: terminateAgent also closes opencode/pi backend sessions.
   const sessions = new SessionStore(dir);
   const terminated: string[] = [];
   for (const seat of [task.triad["squad-lead"], task.triad.engineer, task.triad.sdet]) {
     const cur = sessions.get(seat);
     if (cur && cur.state !== "terminated") {
-      await sessions.terminate(seat, opts.force ? "force dissolve" : "dissolved");
+      await terminateAgent(dir, config, seat, opts.force ? "force dissolve" : "dissolved");
       terminated.push(seat);
     }
   }

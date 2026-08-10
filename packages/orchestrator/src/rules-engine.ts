@@ -9,7 +9,7 @@ import {
   type PicodeConfig,
 } from "@picode/core";
 import { SessionStore } from "./session-store.js";
-import { sleepWithPi, wakeWithPi } from "./pi-adapter.js";
+import { sleepAgent, terminateAgent, wakeAgent } from "./pi-adapter.js";
 import { hasEvolveLayer, isEvolveRun } from "./evolve-run.js";
 
 /**
@@ -138,7 +138,11 @@ export async function applyEvent(
           result.rejected = true;
           continue;
         }
-        await store.wake(a.agent_id, `event:${event}`);
+        // D057: rules-engine wakes go through the same spawn path as CLI wakes,
+        // so an opencode/pi backend actually provisions a real session.
+        await wakeAgent(dir, config, a.agent_id, `event:${event}`, {
+          maxAwake: config.sess_mgr.max_awake,
+        });
         a.outcome = "ok";
       } catch (e) {
         a.outcome = "rejected";
@@ -151,7 +155,7 @@ export async function applyEvent(
         a.reason = `not awake (${cur.state})`;
         continue;
       }
-      await store.sleep(a.agent_id, `event:${event}`);
+      await sleepAgent(dir, config, a.agent_id, `event:${event}`);
       a.outcome = "ok";
     } else if (a.action === "terminate") {
       if (cur.state === "terminated") {
@@ -164,7 +168,7 @@ export async function applyEvent(
         a.reason = "cannot terminate from registered";
         continue;
       }
-      await store.terminate(a.agent_id, `event:${event}`);
+      await terminateAgent(dir, config, a.agent_id, `event:${event}`);
       a.outcome = "ok";
     }
   }
@@ -263,15 +267,15 @@ export async function drainSessionCommands(
           } else if (cur.state !== "sleeping") {
             throw new Error(`cannot wake from ${cur.state}`);
           } else {
-            await wakeWithPi(dir, config, cmd.agent_id, cmd.reason, {
+            await wakeAgent(dir, config, cmd.agent_id, cmd.reason, {
               maxAwake: cmd.force ? undefined : config.sess_mgr.max_awake,
               force: cmd.force,
             });
           }
         } else if (cmd.action === "sleep") {
-          await sleepWithPi(dir, config, cmd.agent_id, cmd.reason);
+          await sleepAgent(dir, config, cmd.agent_id, cmd.reason);
         } else if (cmd.action === "terminate") {
-          await store.terminate(cmd.agent_id, cmd.reason);
+          await terminateAgent(dir, config, cmd.agent_id, cmd.reason);
         }
       } catch (e) {
         outcome = `error: ${e instanceof Error ? e.message : String(e)}`;

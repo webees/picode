@@ -60,6 +60,7 @@
 |D054|**命名律复核结论**（glossary §0）：R1（role∩room=∅）与 id 字符集（`^[a-z][a-z0-9-]*$`，因 id 用作文件名）机械强制；R2–R7 为新增 ID 的约定（前缀/后缀/四字），机械全量强制会产生误报，不加入校验器|
 |D055|**死配置键标记**（质量重构）：以下键按 13/17/19 声明于 `PicodeConfig` 与默认值，但实现零读取——保留以维持配置面兼容并在类型注释中标 `Reserved (D055)`：`sess_mgr.enabled/idle_sleep_sec/allow_orch_force_wake`、`paths.skills_root/prompts_root`、`git.rebase_on_merge/merge_serial/force_dissolve_autocommit`、`scheduler.max_parallel_triads`、`timeouts.progress_interval_sec/cross_room_ttl_sec`、`models.*`、`info_pipeline.*`、`cross_room.*`、`work_brief.seat_slicing/require_docs_assemble/allow_research_attach`、`features` 四键（除 `allow_implement_before_active`）、`bus.adapter`、`i18n.locale`、`self_evolve.enabled/require_sponsor_merge/knowledge_log_glob`；override 后统一 validateConfig 已防降级（D3 测试）|
 |D056|**CLI 流程清晰化**（方向 E）：命令注册表驱动 `picode --help` 按域分组（run/goal/session/staffing/task/merge/memory/evolve/window/status）；每命令 `--help` 显示 usage；缺失参数/未知命令抛 `USAGE` 码并附「下一步」提示；全部错误统一 `[picode] ERROR: <CODE>: <msg>`；文档地图与 GETTING_STARTED 补全新命令域（E4）|
+|D057|**真 LLM 闭环验证修复**（验收测试发现）：(1) `loader.ts` 补 13 §2 第 2 层「用户全局 ~/.picode/config.yaml」（原实现缺失），业务仓免配 LLM 后端；(2) 新增统一会话入口 `wakeAgent/sleepAgent/terminateAgent`，CLI 与规则引擎（applyEvent/drain/staffing/closure）共用——opencode/pi 配置下规则引擎 wake 真实建会话（原为纯状态机，导致「已 awake 无法补 spawn」死角），默认配置行为不变；(3) `npm test` 隔离 HOME（mktemp），单元测试不再受用户全局配置污染；(4) 新增 `npm run test:e2e`（scripts/e2e/smoke.sh + docs/guides/e2e-smoke.md）：临时仓完整交付闭环 + 真实 LLM 会话 + 串行 merge 合入 main|
 
 ## 开放
 

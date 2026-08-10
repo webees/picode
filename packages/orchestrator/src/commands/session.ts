@@ -1,7 +1,6 @@
 import { SessionStore } from "../session-store.js";
 import { applyEvent, drainSessionCommands, rosterSnapshot } from "../rules-engine.js";
-import { sleepWithPi, wakeWithPi, buildPiEnv } from "../pi-adapter.js";
-import { OpencodeSpawner, wakeWithOpencode } from "../opencode-adapter.js";
+import { sleepAgent, terminateAgent, wakeAgent } from "../pi-adapter.js";
 import type { Command, CommandContext } from "./types.js";
 import { need, unknownSub } from "./util.js";
 
@@ -29,22 +28,11 @@ export const sessionCommands: Command[] = [
     run: async (ctx: CommandContext) => {
       const agent = need(ctx, "--agent");
       const reason = ctx.arg("--reason") ?? "cli";
-      if (ctx.config!.opencode.enabled) {
-        const session = new SessionStore(ctx.dir!).get(agent);
-        if (!session) throw new Error(`session not found: ${agent}`);
-        const env = buildPiEnv(ctx.dir!, ctx.config!, session);
-        const r = await wakeWithOpencode(ctx.dir!, ctx.config!, agent, reason, env, {
-          maxAwake: ctx.config!.sess_mgr.max_awake,
-          force: ctx.has("--force"),
-        });
-        console.log(JSON.stringify(r, null, 2));
-      } else {
-        const rec = await wakeWithPi(ctx.dir!, ctx.config!, agent, reason, {
-          maxAwake: ctx.config!.sess_mgr.max_awake,
-          force: ctx.has("--force"),
-        });
-        console.log(JSON.stringify(rec, null, 2));
-      }
+      const r = await wakeAgent(ctx.dir!, ctx.config!, agent, reason, {
+        maxAwake: ctx.config!.sess_mgr.max_awake,
+        force: ctx.has("--force"),
+      });
+      console.log(JSON.stringify(r, null, 2));
     },
   },
   {
@@ -55,14 +43,7 @@ export const sessionCommands: Command[] = [
     run: async (ctx: CommandContext) => {
       const agent = need(ctx, "--agent");
       const reason = ctx.arg("--reason") ?? "cli";
-      const sessions = new SessionStore(ctx.dir!);
-      // opencode sessions carry an "oc-<id>" pi_session_id; stop them server-side
-      const cur = sessions.get(agent);
-      if (ctx.config!.opencode.enabled && cur?.pi_session_id?.startsWith("oc-")) {
-        const spawner = new OpencodeSpawner(ctx.config!);
-        await spawner.stop({ pid: -1, pi_session_id: cur.pi_session_id });
-      }
-      console.log(JSON.stringify(await sleepWithPi(ctx.dir!, ctx.config!, agent, reason), null, 2));
+      console.log(JSON.stringify(await sleepAgent(ctx.dir!, ctx.config!, agent, reason), null, 2));
     },
   },
   {
@@ -73,7 +54,7 @@ export const sessionCommands: Command[] = [
     run: async (ctx: CommandContext) => {
       const agent = need(ctx, "--agent");
       const reason = ctx.arg("--reason") ?? "cli";
-      console.log(JSON.stringify(await new SessionStore(ctx.dir!).terminate(agent, reason), null, 2));
+      console.log(JSON.stringify(await terminateAgent(ctx.dir!, ctx.config!, agent, reason), null, 2));
     },
   },
   {

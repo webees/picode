@@ -23,7 +23,8 @@ pi install npm:@tintinweb/pi-subagents
 cd /path/to/picode
 npm install
 npm run build
-npm test
+npm test          # 单元测试（mock，隔离 HOME，~5s）
+npm run test:e2e  # 真实 LLM 冒烟（需 opencode serve + key，见 docs/guides/e2e-smoke.md）
 ```
 
 ## 2. 在任意 git 项目中初始化 run

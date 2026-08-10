@@ -26,3 +26,10 @@ work_brief:
 
 i18n:
   locale: zh-CN
+
+# LLM 后端（D044）：opencode serve 本地服务；key 走环境变量 OPENCODE_GO_API_KEY（不入库）
+opencode:
+  enabled: true
+  base_url: "http://127.0.0.1:7788"
+  provider_id: opencode-go
+  model_id: deepseek-v4-flash

@@ -7,8 +7,10 @@
  * merge (13 §2: DEFAULTS → project → profile → run override) and validates
  * the *final* merged result, so a run-level override can never downgrade a
  * v1-fixed value (D3).
+ * Layers (13 §2): DEFAULTS → user-global → project → profile → run override.
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import YAML from "yaml";
 import { DEFAULTS, deepMerge, validateConfig, type PicodeConfig } from "./config.js";
@@ -18,9 +20,22 @@ function loadYamlFile(filePath: string): unknown {
   return YAML.parse(fs.readFileSync(filePath, "utf8")) ?? {};
 }
 
+/**
+ * Load the layered config (13 §2), lowest → highest priority:
+ *   1. built-in DEFAULTS
+ *   2. user-global ~/.picode/config.yaml   ← was missing before (D057 fix)
+ *   3. project <repo>/.picode/config.yaml
+ *   4. profile <repo>/.picode/profiles/<active_profile>.yaml
+ *   5. run override <runs_root>/<runId>/config.override.yaml
+ * `validateConfig` runs on the *final merged* result, so a lower layer can
+ * never downgrade a v1-fixed value.
+ */
 export function loadConfig(repoRoot: string, runId?: string): PicodeConfig {
+  const userGlobal = loadYamlFile(path.join(os.homedir(), ".picode", "config.yaml"));
+  let merged = deepMerge(DEFAULTS, userGlobal) as PicodeConfig;
+
   const project = loadYamlFile(path.join(repoRoot, ".picode", "config.yaml"));
-  let merged = deepMerge(DEFAULTS, project) as PicodeConfig;
+  merged = deepMerge(merged, project) as PicodeConfig;
 
   const profile = merged.active_profile;
   if (profile && profile !== "default") {

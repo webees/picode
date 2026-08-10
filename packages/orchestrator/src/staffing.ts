@@ -16,6 +16,7 @@ import {
 import { SESSION_EVENTS } from "@picode/core";
 import { readGoal } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
+import { sleepAgent } from "./pi-adapter.js";
 import { applyEvent } from "./rules-engine.js";
 
 export interface StaffingRequest {
@@ -368,10 +369,11 @@ export async function approveStaffing(
 
   // P04 delivery: the people cell's job is done — put it back to sleep so
   // gate wakes (merge_ready etc.) are not throttled by max_awake.
+  // D057: sleepAgent also closes opencode/pi backend sessions.
   for (const p of ["people-lead", "recruiter", "people-qa"]) {
     const s = sessions.get(p);
     if (s?.state === "awake") {
-      await sessions.sleep(p, "staffing-delivered");
+      await sleepAgent(dir, config, p, "staffing-delivered");
     }
   }
 

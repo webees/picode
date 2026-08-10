@@ -4,6 +4,7 @@ import path from "node:path";
 import { ErrorCode, PicodeError, type PicodeConfig, type SessionRecord } from "@picode/core";
 import { issueToken } from "@picode/bus";
 import { SessionStore } from "./session-store.js";
+import { OpencodeSpawner, wakeWithOpencode } from "./opencode-adapter.js";
 
 /**
  * Pi spawn adapter (18 phase C). Interface-isolated so a real `pi` binary,
@@ -218,4 +219,75 @@ export async function sleepWithPi(
     }
   }
   return store.sleep(agentId, reason);
+}
+
+/**
+ * 统一会话唤醒入口（D057 缺口 2 修复）：CLI 与规则引擎共用同一条 spawn 路径，
+ * 保证「规则引擎 wake 的会话」与「CLI wake 的会话」等价——
+ *   - opencode.enabled  → 经 opencode serve 建真实会话（pi_session_id = oc-<id>）
+ *   - pi.enabled        → 拉起真 Pi 进程（command_template）
+ *   - 两者都关          → 纯状态机（默认配置，行为与 v1 一致）
+ */
+export async function wakeAgent(
+  dir: string,
+  config: PicodeConfig,
+  agentId: string,
+  reason: string,
+  opts: { maxAwake?: number; force?: boolean } = {},
+): Promise<{ pi_session_id: string | null } | { session: SessionRecord; pi: PiHandle | null }> {
+  if (config.opencode.enabled) {
+    const session = new SessionStore(dir).get(agentId);
+    if (!session) {
+      throw new PicodeError(ErrorCode.SESSION_NOT_FOUND, `session not found: ${agentId}`);
+    }
+    const env = buildPiEnv(dir, config, session);
+    return wakeWithOpencode(dir, config, agentId, reason, env, opts);
+  }
+  return wakeWithPi(dir, config, agentId, reason, opts);
+}
+
+/**
+ * 统一会话休眠入口：opencode 会话先服务端 DELETE，再状态机 sleep；
+ * pi 会话先停进程；默认纯状态机。与 wakeAgent 对称。
+ */
+export async function sleepAgent(
+  dir: string,
+  config: PicodeConfig,
+  agentId: string,
+  reason: string,
+): Promise<SessionRecord> {
+  const cur = new SessionStore(dir).get(agentId);
+  if (config.opencode.enabled && cur?.pi_session_id?.startsWith("oc-")) {
+    await new OpencodeSpawner(config).stop({ pid: -1, pi_session_id: cur.pi_session_id });
+  }
+  return sleepWithPi(dir, config, agentId, reason);
+}
+
+/**
+ * 统一会话终止入口：先清理后端资源（opencode 会话 / pi 进程），再状态机
+ * terminate。与 wakeAgent/sleepAgent 对称。
+ */
+export async function terminateAgent(
+  dir: string,
+  config: PicodeConfig,
+  agentId: string,
+  reason: string,
+): Promise<SessionRecord> {
+  const cur = new SessionStore(dir).get(agentId);
+  if (config.opencode.enabled && cur?.pi_session_id?.startsWith("oc-")) {
+    await new OpencodeSpawner(config).stop({ pid: -1, pi_session_id: cur.pi_session_id });
+  }
+  const store = new SessionStore(dir);
+  const rec = store.get(agentId);
+  if (rec?.state === "awake" && rec.pi_session_id) {
+    const pid = piPidOf(rec.pi_session_id);
+    if (pid > 0) {
+      try {
+        makeSpawner(config).stop({ pid, pi_session_id: rec.pi_session_id });
+      } catch {
+        /* process may already be gone */
+      }
+    }
+  }
+  return store.terminate(agentId, reason);
 }
