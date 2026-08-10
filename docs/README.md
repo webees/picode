@@ -18,7 +18,6 @@
 |4|[standards/terminology.md](./standards/terminology.md)|运行时术语 **唯一正文**|
 |5|[spec/08-invariants.md](./spec/08-invariants.md)|不变量 I1–I15|
 |6|[guides/pi-quickstart.md](./guides/pi-quickstart.md)|Pi 最短路径|
-|6a|[guides/e2e-smoke.md](./guides/e2e-smoke.md)|真实 LLM 端到端冒烟（`npm run test:e2e`）|
 |7|[spec/11-implement-playbook.md](./spec/11-implement-playbook.md)|分阶段实现 T01–T19|
 |8|[spec/18-v1-completion-plan.md](./spec/18-v1-completion-plan.md)|**未完成项落地策划**|
 |9|[spec/19-self-evolution.md](./spec/19-self-evolution.md)|**自我进化（用 picode 升级 picode）**|
@@ -85,7 +84,7 @@
 |------|------|
 |[GETTING_STARTED.md](./GETTING_STARTED.md)|安装 + CLI 命令流（init → 双门闩 → spawn → 运维；全命令见 `picode --help`）|
 |[ARCHITECTURE.md](./ARCHITECTURE.md)|一页图 + 包职责|
-|[guides/](./guides/)|最短路径（不重复安装长文）|
+|[guides/](./guides/)|最短路径 + E2E 冒烟（不重复安装长文）|
 
 ### F · 追溯
 
