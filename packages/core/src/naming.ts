@@ -74,13 +74,18 @@ function hashId(input: string): number {
   return h;
 }
 
+/** Pick a name deterministically from a pool (shared by codename / team name). */
+function pickFromPool(input: string, pool: readonly string[], poolLabel: string): string {
+  if (pool.length === 0) throw new Error(`${poolLabel} pool is empty`);
+  return pool[hashId(input) % pool.length];
+}
+
 /** Pick a codename for a persona instance id (e.g. `engineer@task-x`). */
 export function generateCodename(
   instanceId: string,
   pool: readonly string[] = DEFAULT_CODENAME_POOL,
 ): string {
-  if (pool.length === 0) throw new Error("codename pool is empty");
-  return pool[hashId(instanceId) % pool.length];
+  return pickFromPool(instanceId, pool, "codename");
 }
 
 /** Pick a team name for a recruited triad (keyed by task id). */
@@ -88,8 +93,7 @@ export function generateTeamName(
   taskId: string,
   pool: readonly string[] = DEFAULT_TEAM_NAME_POOL,
 ): string {
-  if (pool.length === 0) throw new Error("team name pool is empty");
-  return pool[hashId(taskId) % pool.length];
+  return pickFromPool(taskId, pool, "team name");
 }
 
 /**

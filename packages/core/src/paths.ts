@@ -29,19 +29,23 @@ export function matchGlob(filePath: string, patterns: string[]): boolean {
   return patterns.some((p) => globToRegExp(p).test(normalized));
 }
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-}
+/** Regex metacharacters that must be escaped to match a glob segment literally. */
+const GLOB_ESCAPE_RE = /[.+^${}()|[\]\\]/g;
+/** Trailing double-glob suffix (`/...` can span any depth). */
+const DOUBLE_GLOB_SUFFIX = "/**";
+/** Stand-in for `**` so single `*` is expanded first (double-glob must survive it). */
+const DOUBLE_GLOB_PLACEHOLDER = "§§";
 
 function globToRegExp(glob: string): RegExp {
   const g = glob.replace(/\\/g, "/");
-  if (g.endsWith("/**")) {
-    const base = escapeRegExp(g.slice(0, -3));
+  if (g.endsWith(DOUBLE_GLOB_SUFFIX)) {
+    const base = g.slice(0, -DOUBLE_GLOB_SUFFIX.length).replace(GLOB_ESCAPE_RE, "\\$&");
     return new RegExp(`^${base}(/.*)?$`);
   }
-  const escaped = escapeRegExp(g)
-    .replace(/\*\*/g, "§§")
+  const escaped = g
+    .replace(GLOB_ESCAPE_RE, "\\$&")
+    .replace(/\*\*/g, DOUBLE_GLOB_PLACEHOLDER)
     .replace(/\*/g, "[^/]*")
-    .replace(/§§/g, ".*");
+    .replaceAll(DOUBLE_GLOB_PLACEHOLDER, ".*");
   return new RegExp(`^${escaped}$`);
 }
