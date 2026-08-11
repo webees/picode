@@ -85,3 +85,52 @@ test("board: render includes all columns in order", () => {
     last = i;
   }
 });
+
+const WRITE_APIS = [
+  "writeFileSync",
+  "writeFile",
+  "appendFileSync",
+  "appendFile",
+  "mkdirSync",
+  "mkdir",
+  "rmSync",
+  "rm",
+  "rmdirSync",
+  "rmdir",
+  "renameSync",
+  "rename",
+  "copyFileSync",
+  "copyFile",
+  "unlinkSync",
+  "unlink",
+  "writeSync",
+  "write",
+  "createWriteStream",
+];
+
+test("board: 源码零写路径（静态断言）", () => {
+  const src = fs.readFileSync(path.join(import.meta.dirname, "..", "src", "board.ts"), "utf8");
+  for (const api of WRITE_APIS) {
+    assert.ok(!src.includes(`fs.${api}`), `board.ts must not use fs.${api}`);
+  }
+});
+
+test("board: buildBoard 不修改 run 目录（运行时断言）", () => {
+  const run = tmpRun();
+  const snapshot = (dir: string): string[] => {
+    const out: string[] = [];
+    const walk = (p: string) => {
+      for (const e of fs.readdirSync(p, { withFileTypes: true })) {
+        const full = path.join(p, e.name);
+        if (e.isDirectory()) walk(full);
+        else out.push(`${path.relative(run, full)}:${fs.statSync(full).size}`);
+      }
+    };
+    walk(dir);
+    return out.sort();
+  };
+
+  const before = snapshot(run);
+  buildBoard(run);
+  assert.deepEqual(snapshot(run), before);
+});
