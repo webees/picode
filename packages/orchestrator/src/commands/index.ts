@@ -5,6 +5,7 @@
  */
 import type { Command, CommandContext } from "./types.js";
 import { runCommands } from "./run.js";
+import { boardCommands } from "./board.js";
 import { goalCommands } from "./goal.js";
 import { sessionCommands, sessionFallback } from "./session.js";
 import { staffingCommands, staffingFallback } from "./staffing.js";
@@ -19,6 +20,7 @@ export type { Command, CommandContext } from "./types.js";
 
 export const COMMANDS: Command[] = [
   ...runCommands,
+  ...boardCommands,
   ...goalCommands,
   ...sessionCommands,
   ...staffingCommands,
