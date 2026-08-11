@@ -377,66 +377,43 @@ export default function picodeExtension(pi: PiApi): void {
     force: !!params.force,
   });
 
-  pi.registerTool({
-    name: "session_wake",
-    label: "Picode Session Wake",
-    description:
-      "Enqueue a wake command for an agent (sess-mgr only). Orchestrator drains the queue.",
-    parameters: {
-      type: "object",
-      properties: {
-        agent_id: { type: "string" },
-        reason: { type: "string" },
-        force: { type: "boolean", description: "bypass max_awake" },
+  const sessionTool = (action: "wake" | "sleep") => {
+    pi.registerTool({
+      name: `session_${action}`,
+      label: `Picode Session ${action[0].toUpperCase()}${action.slice(1)}`,
+      description:
+        `Enqueue a ${action} command for an agent (sess-mgr only). Orchestrator drains the queue.`,
+      parameters: {
+        type: "object",
+        properties: {
+          agent_id: { type: "string" },
+          reason: { type: "string" },
+          ...(action === "wake"
+            ? { force: { type: "boolean", description: "bypass max_awake" } }
+            : {}),
+        },
+        required: ["agent_id"],
       },
-      required: ["agent_id"],
-    },
-    async execute(_id, params) {
-      if (!allow("session_wake")) return err(ErrorCode.TOOL_DENIED, "session_wake not in profile");
-      const a = auth();
-      if (a) return err(ErrorCode.TOKEN_INVALID, a);
-      if (!runDir) return err(ErrorCode.NO_RUN, "no run");
-      try {
-        const cmd = await appendSessionCommand(runDir, agentId, {
-          ...sessionTargets(params),
-          action: "wake",
-        });
-        return jsonResult({ ok: true, queued: cmd });
-      } catch (e) {
-        return err(ErrorCode.COMMAND_FROM_DENIED, e instanceof Error ? e.message : String(e));
-      }
-    },
-  });
-
-  pi.registerTool({
-    name: "session_sleep",
-    label: "Picode Session Sleep",
-    description:
-      "Enqueue a sleep command for an agent (sess-mgr only). Orchestrator drains the queue.",
-    parameters: {
-      type: "object",
-      properties: {
-        agent_id: { type: "string" },
-        reason: { type: "string" },
+      async execute(_id, params) {
+        if (!allow(`session_${action}` as ToolName))
+          return err(ErrorCode.TOOL_DENIED, `session_${action} not in profile`);
+        const a = auth();
+        if (a) return err(ErrorCode.TOKEN_INVALID, a);
+        if (!runDir) return err(ErrorCode.NO_RUN, "no run");
+        try {
+          const cmd = await appendSessionCommand(runDir, agentId, {
+            ...sessionTargets(params),
+            action,
+          });
+          return jsonResult({ ok: true, queued: cmd });
+        } catch (e) {
+          return err(ErrorCode.COMMAND_FROM_DENIED, e instanceof Error ? e.message : String(e));
+        }
       },
-      required: ["agent_id"],
-    },
-    async execute(_id, params) {
-      if (!allow("session_sleep")) return err(ErrorCode.TOOL_DENIED, "session_sleep not in profile");
-      const a = auth();
-      if (a) return err(ErrorCode.TOKEN_INVALID, a);
-      if (!runDir) return err(ErrorCode.NO_RUN, "no run");
-      try {
-        const cmd = await appendSessionCommand(runDir, agentId, {
-          ...sessionTargets(params),
-          action: "sleep",
-        });
-        return jsonResult({ ok: true, queued: cmd });
-      } catch (e) {
-        return err(ErrorCode.COMMAND_FROM_DENIED, e instanceof Error ? e.message : String(e));
-      }
-    },
-  });
+    });
+  };
+  sessionTool("wake");
+  sessionTool("sleep");
 
   pi.registerTool({
     name: "session_list",

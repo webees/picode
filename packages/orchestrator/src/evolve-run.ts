@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import {
   ensureDir,
   writeAtomic,
+  type EvolveLayer,
   type PicodeConfig,
 } from "@picode/core";
 import { readGoal } from "./run-store.js";
@@ -22,9 +23,9 @@ export function isEvolveRun(dir: string): boolean {
   }
 }
 
-export function hasEvolveLayer(dir: string, layer: string): boolean {
+export function hasEvolveLayer(dir: string, layer: EvolveLayer): boolean {
   try {
-    return readGoal(dir).evolve?.layers.includes(layer as never) ?? false;
+    return readGoal(dir).evolve?.layers.includes(layer) ?? false;
   } catch {
     return false;
   }

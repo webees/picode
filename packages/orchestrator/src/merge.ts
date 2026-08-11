@@ -3,6 +3,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import YAML from "yaml";
 import {
+  branchName,
   ensureDir,
   withFileLock,
   writeAtomic,
@@ -140,11 +141,6 @@ export async function mergeNext(
   dir: string,
   config: PicodeConfig,
 ): Promise<MergeOutcome> {
-  const branchFor = (taskId: string) =>
-    config.git.branch_template
-      .replace("{run_id}", path.basename(dir))
-      .replace("{task_id}", taskId);
-
   return withFileLock(lockPath(dir), async () => {
     const queue = readMergeQueue(dir);
     const queued = (q: MergeRequest) => q.status === "queued";
@@ -153,7 +149,7 @@ export async function mergeNext(
     if (idx === -1) return { merged: null, remaining: remaining(), skipped_due_to_active: false, skipped_due_to_deps: false };
 
     const req = queue[idx];
-    const branch = branchFor(req.task_id);
+    const branch = branchName(config, path.basename(dir), req.task_id);
     // never merge while the squad is still awake on that task
     const squadDir = path.join(dir, "sessions");
     const agents = [`squad-lead@${req.task_id}`, `engineer@${req.task_id}`, `sdet@${req.task_id}`];

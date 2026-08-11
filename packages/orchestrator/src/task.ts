@@ -29,6 +29,9 @@ export interface TaskState {
   max_retries: number;
 }
 
+/** Default first acceptance gate attached to every chunk/task (P02). */
+const DEFAULT_ACCEPTANCE = [{ id: "C1", type: "command", spec: "<project-test-command>" }];
+
 export function addChunkAndTask(
   _repoRoot: string,
   dir: string,
@@ -44,16 +47,16 @@ export function addChunkAndTask(
     chunks: Array<Record<string, unknown>>;
   };
   const taskId = `task-${opts.chunkId}`;
+  const writePaths = opts.writePaths;
+  const readPaths = opts.readPaths ?? [];
   data.chunks.push({
     id: opts.chunkId,
-    write_paths: opts.writePaths,
-    read_paths: opts.readPaths ?? [],
+    write_paths: writePaths,
+    read_paths: readPaths,
     public_contract: null,
     depends_on: [],
     shared_files: [],
-    acceptance: [
-      { id: "C1", type: "command", spec: "<project-test-command>" },
-    ],
+    acceptance: DEFAULT_ACCEPTANCE,
     status: "ready",
     task_id: taskId,
   });
@@ -65,9 +68,9 @@ export function addChunkAndTask(
     goal_id: goal.id,
     kind: "implement",
     status: "queued",
-    write_paths: opts.writePaths,
-    read_paths: opts.readPaths ?? [],
-    acceptance: [{ id: "C1", type: "command", spec: "<project-test-command>" }],
+    write_paths: writePaths,
+    read_paths: readPaths,
+    acceptance: DEFAULT_ACCEPTANCE,
     triad: {
       "squad-lead": `squad-lead@${taskId}`,
       engineer: `engineer@${taskId}`,

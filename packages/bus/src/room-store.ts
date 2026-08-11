@@ -40,6 +40,8 @@ export const BUS_MESSAGE_TYPES: readonly string[] = [
   "merge_ready",
   "window_rollup",
   "system",
+  "error.report",
+  "error.digest",
 ] as const;
 
 export interface Member {
@@ -145,16 +147,15 @@ export class RoomStore {
     if (!this.canRead(room, agentId)) {
       throw new PicodeError(ErrorCode.ROOM_READ_DENIED, `read denied for ${agentId} in room ${room}`);
     }
-    const file = this.busPath(room);
-    if (!fs.existsSync(file)) return [];
-    const lines = fs.readFileSync(file, "utf8").trim().split("\n").filter(Boolean);
-    return lines
-      .slice(-limit)
-      .map((l) => JSON.parse(l) as BusMessage);
+    return this.readBus(room).slice(-limit);
   }
 
   /** Read every message in the room (system operation, no ACL). */
   private readAll(room: string): BusMessage[] {
+    return this.readBus(room);
+  }
+
+  private readBus(room: string): BusMessage[] {
     const file = this.busPath(room);
     if (!fs.existsSync(file)) return [];
     return fs
