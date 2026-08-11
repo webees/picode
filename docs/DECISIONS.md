@@ -75,3 +75,8 @@
 |O004|可选 pi-subagents 临时 fork（非主路径）|
 |O005|self_evolve write_paths 生成器与 verify_commands 接入|
 |O006|cell `check_signoff` 与 `violations`/proc-audit 红灯：spec 10 仅定义 type，无文件/流程格式；proc-audit 的 `drift`/`alert` bus 通道已就绪（成员表 `post_types_allow`），红灯记录文件留待 spec 细化|
+
+## D063 — error.report / error.digest 消息类型（T2 越权改 spec 处置）
+- 2026-08-11 · 来源：T2 插件权限分类任务（模型越权直接改 spec 登记 bus 消息类型）
+- 决定：回退 spec 改动；消息类型决策记本条目；错误收集机制（docs/errors/ + bus error.report/error.digest）自本决策生效
+- 纪律强化：spec 正文变更必须经 DECISIONS 门禁；正确内容放进错误通道仍是流程事故（run-lead 裁决）
