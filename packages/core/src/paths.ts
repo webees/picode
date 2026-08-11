@@ -29,14 +29,17 @@ export function matchGlob(filePath: string, patterns: string[]): boolean {
   return patterns.some((p) => globToRegExp(p).test(normalized));
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+}
+
 function globToRegExp(glob: string): RegExp {
   const g = glob.replace(/\\/g, "/");
   if (g.endsWith("/**")) {
-    const base = g.slice(0, -3).replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    const base = escapeRegExp(g.slice(0, -3));
     return new RegExp(`^${base}(/.*)?$`);
   }
-  const escaped = g
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+  const escaped = escapeRegExp(g)
     .replace(/\*\*/g, "§§")
     .replace(/\*/g, "[^/]*")
     .replace(/§§/g, ".*");
