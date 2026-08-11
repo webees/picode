@@ -1,35 +1,37 @@
-config_schema_version: "1"
+config_schema_version: '1'
 active_profile: default
-
 paths:
-  runs_root: ".picode/runs"
-  skills_root: "skills"
-  knowledge_root: "docs/knowledge"
-  prompts_root: ".picode/prompts"
-
+  runs_root: .picode/runs
+  skills_root: skills
+  knowledge_root: docs/knowledge
+  prompts_root: .picode/prompts
 git:
-  worktree_root: ".picode/worktrees"
-  branch_template: "picode/{run_id}/{task_id}"
+  worktree_root: .picode/worktrees
+  branch_template: picode/{run_id}/{task_id}
   base_branch: main
-
 scheduler:
   max_parallel_triads: 3
-
 research:
   parallel_on_intake: true
-
 work_brief:
   require_run_lead_approval: true
   seat_slicing: true
   require_docs_assemble: true
   allow_research_attach: true
-
 i18n:
   locale: zh-CN
-
 # LLM 后端（D044）：opencode serve 本地服务；key 走环境变量 OPENCODE_GO_API_KEY（不入库）
 opencode:
   enabled: true
-  base_url: "http://127.0.0.1:7788"
+  base_url: http://127.0.0.1:7788
   provider_id: opencode-go
   model_id: deepseek-v4-flash
+self_evolve:
+  allowed_layers:
+  - knowledge
+  - prompts
+  - docs
+  - tests
+  - code
+sess_mgr:
+  max_awake: 15
