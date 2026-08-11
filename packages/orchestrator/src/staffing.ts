@@ -317,7 +317,12 @@ export async function approveStaffing(
   config: PicodeConfig,
   taskId: string,
   by = "run-lead",
-): Promise<{ staffing: StaffingState; wokeSquad: boolean }> {
+): Promise<{
+  staffing: StaffingState;
+  wokeSquad: boolean;
+  /** D058: wake rejections surfaced to the caller (event engine stays best-effort). */
+  wokeErrors: Array<{ agent_id: string; reason: string }>;
+}> {
   const issues = checkPersonas(dir, config, taskId);
   if (issues.length) {
     throw new Error(
@@ -378,10 +383,18 @@ export async function approveStaffing(
   }
 
   // Double latch: wake squad when the work brief is also approved (P05).
+  // D058: the event engine stays fire-and-forget (best-effort, never throws),
+  // but wake rejections are surfaced to the caller — observability, not silence.
   let wokeSquad = false;
+  const wokeErrors: Array<{ agent_id: string; reason: string }> = [];
   if (briefApproved(dir, taskId, config)) {
-    await applyEvent(dir, config, SESSION_EVENTS.TASK_READY, { taskId });
+    const ev = await applyEvent(dir, config, SESSION_EVENTS.TASK_READY, { taskId });
     wokeSquad = true;
+    for (const a of ev.actions) {
+      if (a.action === "wake" && a.outcome === "rejected") {
+        wokeErrors.push({ agent_id: a.agent_id, reason: a.reason ?? a.outcome });
+      }
+    }
   }
-  return { staffing, wokeSquad };
+  return { staffing, wokeSquad, wokeErrors };
 }

@@ -79,6 +79,11 @@ export const staffingCommands: Command[] = [
       const taskId = need(ctx, "--task");
       const r = await approveStaffing(ctx.dir!, ctx.config!, taskId, ctx.arg("--by") ?? "run-lead");
       console.log(JSON.stringify(r, null, 2));
+      // D058: wake failures are visible, not silent — the event engine is
+      // best-effort, but the operator must see rejections at the call site.
+      for (const e of r.wokeErrors) {
+        console.error(`[picode] WARN: 唤醒失败 ${e.agent_id}: ${e.reason}（可稍后 session wake 重试）`);
+      }
     },
   },
   {

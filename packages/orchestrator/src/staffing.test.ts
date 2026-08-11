@@ -258,3 +258,40 @@ test("naming: non-string codename (YAML number) is rejected, not coerced", async
   assert.ok(eng, "engineer should have an issue");
   assert.match(eng.problems.join("; "), /must be a string/);
 });
+
+test("D058: wake rejections surface as woke_errors (max_awake=0), event engine stays best-effort", async () => {
+  const { repo, dir, config, taskId } = setup();
+  draftBrief(dir, taskId);
+  approveBrief(dir, taskId, "run-lead");
+  await createStaffingRequest(dir, config, taskId, { skills: ["typescript", "testing"] });
+  draftPersonas(repo, dir, config, taskId);
+  // max_awake=0 ⇒ every wake in the task_ready event is rejected
+  const cfg = structuredClone(config) as typeof config;
+  cfg.sess_mgr.max_awake = 0;
+  const r = await approveStaffing(dir, cfg, taskId);
+  assert.equal(r.wokeSquad, true, "event fired");
+  assert.equal(r.wokeErrors.length, 3, "all three triad wakes rejected");
+  for (const e of r.wokeErrors) {
+    assert.match(e.reason, /max_awake/);
+  }
+  const seats = r.wokeErrors.map((e) => e.agent_id).sort();
+  assert.deepEqual(seats, [
+    "engineer@task-chunk-a",
+    "sdet@task-chunk-a",
+    "squad-lead@task-chunk-a",
+  ]);
+  // best-effort preserved: approve itself succeeded and sessions stay sleeping
+  const store = new SessionStore(dir);
+  for (const seat of seats) assert.equal(store.get(seat)?.state, "sleeping");
+});
+
+test("D058: no wake errors when max_awake allows the triad", async () => {
+  const { repo, dir, config, taskId } = setup();
+  draftBrief(dir, taskId);
+  approveBrief(dir, taskId, "run-lead");
+  await createStaffingRequest(dir, config, taskId, { skills: ["typescript", "testing"] });
+  draftPersonas(repo, dir, config, taskId);
+  const r = await approveStaffing(dir, config, taskId);
+  assert.equal(r.wokeSquad, true);
+  assert.deepEqual(r.wokeErrors, []);
+});
