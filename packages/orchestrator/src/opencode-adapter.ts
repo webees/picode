@@ -51,7 +51,12 @@ export class OpencodeSpawner {
     const { id } = await this.request<{ id: string }>("POST", "/session", {
       title: `picode:${agentId}`,
     });
-    // fire the first message so the session is actually live on the server
+    // fire the first message so the session is actually live on the server.
+    // D061: noReply — the message is queued asynchronously and spawn returns
+    // immediately. Waiting synchronously is unsafe: the build agent may start
+    // acting on the "ready" prompt (exploring the repo, running tools), and a
+    // long-running model turn would abort the spawn (120s timeout, observed in
+    // dogfood E2E). The agent processes the ready message in its own loop.
     const parts: Array<{ type: string; text: string }> = [
       { type: "text", text: "你已就绪。按角色 prompt 工作;如需联网/查询按 picode 信息控制流程申请,不要私自 web。" },
     ];
@@ -62,6 +67,7 @@ export class OpencodeSpawner {
     await this.request("POST", `/session/${id}/message`, {
       parts,
       system,
+      noReply: true,
       ...(model ? { model } : {}),
     });
     return { pid: -1, pi_session_id: `oc-${id}` };
