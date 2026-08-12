@@ -575,13 +575,6 @@ export function roomDisplay(config: PicodeConfig, id: string): string {
   return room?.display_name ?? id;
 }
 
-export function roleDisplay(config: PicodeConfig, id: string): string {
-  const key = `role.${id}`;
-  if (config.i18n.strings?.[key]) return config.i18n.strings[key];
-  const role = config.roles.find((r) => r.id === id);
-  return role?.display_name ?? id;
-}
-
 export function getDefaultConfig(): PicodeConfig {
   return structuredClone(DEFAULTS);
 }
