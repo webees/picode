@@ -58,6 +58,13 @@ body 宜短；大内容用 `refs[]`。
 见 `reference/schemas/progress.yaml`。  
 默认间隔 300s；连续 2 次无实质进展 → `at_risk: true`。
 
+## 3.1 check_signoff 格式草案（O006 · C7）
+
+- 提交方：docs cell 的 tech-writer；接收方：run-lead
+- 文件：`runs/<run_id>/gates/check_signoff/<task_id>.yaml`
+- 字段：`schema_version / task_id / checkpoints[]（{id, passed, at, by}）/ summary`
+- 红灯记录：proc-audit 在 `runs/<run_id>/gates/violations.yaml` 追加 `{ts, rule, agent_id, detail}`；bus 通道 `drift`/`alert` 已就绪（成员表 `post_types_allow`），文件格式自本条目生效
+
 ## 4. 禁止
 
 - 用 `chat` 冒充 `handoff_ack` / `check_signoff` / 合并批准。  
