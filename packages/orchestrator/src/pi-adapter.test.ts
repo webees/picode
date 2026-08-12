@@ -1,9 +1,9 @@
 import { test } from "node:test";
+import { gitInit } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { loadConfig } from "@picode/core";
 import { createRun, resolveRunDir } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
@@ -17,8 +17,7 @@ import {
 } from "./pi-adapter.js";
 
 function tmpGitRepo(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-test-"));
-  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
+  const dir = gitInit({ prefix: "picode-test-" });
   return dir;
 }
 

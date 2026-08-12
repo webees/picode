@@ -1,7 +1,7 @@
 import { test } from "node:test";
+import { gitInit } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import YAML from "yaml";
@@ -19,10 +19,7 @@ import { writeMemoryBrief, ackMemoryBrief, listMemoryBriefs } from "./docs-memor
 import { createChangeOrder, transitionChangeOrder, readChangeOrders } from "./memory.js";
 
 function tmpGitRepo(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-test-"));
-  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
-  execFileSync("git", ["config", "user.email", "t@p"], { cwd: dir });
-  execFileSync("git", ["config", "user.name", "t"], { cwd: dir });
+  const dir = gitInit({ prefix: "picode-test-", email: "t@p" });
   fs.writeFileSync(path.join(dir, "README.md"), "# t\n");
   execFileSync("git", ["add", "."], { cwd: dir });
   execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });

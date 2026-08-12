@@ -1,7 +1,7 @@
 import { test } from "node:test";
+import { gitInit } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRun, resolveRunDir } from "./run-store.js";
@@ -9,10 +9,7 @@ import { compressRunWindows, windowStatus, readWindowArchive } from "./window-st
 import { RoomStore } from "@picode/bus";
 
 function tmpGitRepo(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-winstore-"));
-  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
-  execFileSync("git", ["config", "user.email", "t@picode"], { cwd: dir });
-  execFileSync("git", ["config", "user.name", "picode-test"], { cwd: dir });
+  const dir = gitInit({ prefix: "picode-winstore-", name: "picode-test" });
   fs.writeFileSync(path.join(dir, "README.md"), "# t\n");
   execFileSync("git", ["add", "."], { cwd: dir });
   execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });

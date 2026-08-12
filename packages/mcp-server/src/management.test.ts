@@ -4,9 +4,9 @@
  * existing gates stay intact (P01 acceptance gate, double latch, worktree).
  */
 import { test } from "node:test";
+import { gitInit } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { allTools } from "./registry.js";
@@ -14,10 +14,7 @@ import { toMcpError } from "./errors.js";
 import type { ServerEnv } from "./context.js";
 
 function tmpGitRepo(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-mcp-"));
-  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
-  execFileSync("git", ["config", "user.email", "t@picode"], { cwd: dir });
-  execFileSync("git", ["config", "user.name", "t"], { cwd: dir });
+  const dir = gitInit({ prefix: "picode-mcp-" });
   fs.writeFileSync(path.join(dir, "README.md"), "# tmp\n");
   execFileSync("git", ["add", "-A"], { cwd: dir });
   execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
