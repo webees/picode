@@ -36,6 +36,10 @@ export interface RunWindowArchive {
   total_folded: number;
   total_kept: number;
   archive_path: string;
+  /** Semantic summary (P2 语义压缩层); null until a summary is written. */
+  summary: string | null;
+  /** Latch: true = a semantic summary is due for this window. */
+  summary_due: boolean;
 }
 
 export async function compressRunWindows(
@@ -68,6 +72,9 @@ export async function compressRunWindows(
   }
   const windowId = windowIdOf(now, split_hour).id;
   const archivePath = path.join(dir, "windows", `${windowId}.yaml`);
+  // 语义压缩层产物保留:重压缩是幂等的机械折叠,若语义摘要/门闩已写入
+  // (P2 语义摘要层),不得用默认 null/false 覆盖。
+  const prev = readYamlFile<RunWindowArchive>(archivePath) ?? null;
   const archive: RunWindowArchive = {
     schema_version: "1",
     window: windowId,
@@ -78,6 +85,8 @@ export async function compressRunWindows(
     total_folded: results.reduce((s, r) => s + r.folded, 0),
     total_kept: results.reduce((s, r) => s + r.kept, 0),
     archive_path: archivePath,
+    summary: prev?.summary ?? null,
+    summary_due: prev?.summary_due ?? false,
   };
   ensureDir(path.dirname(archivePath));
   writeYamlFile(archivePath, archive);

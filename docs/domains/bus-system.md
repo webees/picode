@@ -48,7 +48,8 @@ Pi 工具：`bus_post` / `bus_history`（`@picode/pi-extension`）。
 `RoomStore.compressWindow` 把每个房间 jsonl 中**旧窗口**的最老 `1 - ratio`（默认 20%）消息折叠为一条 `window_rollup`（`meta.window / folded / kept / archive`），折叠原文追加归档到 `bus/archive/<room>.<window>.jsonl`（可审计，不丢数据）；保留最近 `ratio`（默认 80%）原文，**当前窗口不折叠**。压缩在 `.lock` 内整体重写 jsonl。
 
 run 级入口：`picode window compress [--rooms a,b]` 汇总各房结果并写 `windows/<window>.yaml`（会话/记忆压缩产物）；`picode window status` 只读快照。  
-消息类型 `window_rollup` 见 [10-bus-messages](../spec/10-bus-messages.md)。
+消息类型 `window_rollup` 见 [10-bus-messages](../spec/10-bus-messages.md)。  
+`windows/<window>.yaml` 是**语义摘要层**（P2）载体：机械折叠产出机械 `window_rollup`，语义摘要由模型/文档小组写入 `summary`（默认 null），`summary_due` 门闩（默认 false）标记该窗口待生成语义摘要；重压缩幂等，不覆盖已写入的语义摘要与门闩。
 
 ## 6. 与房间逻辑 ID
 

@@ -217,7 +217,7 @@ timeouts:
 
 ## 8.1 上/下午窗口压缩（可配）
 
-一天按 `split_hour` 分成上/下午两个窗口；`picode window compress` 将每个房间 bus 中**旧窗口**的最老 `1 - ratio` 消息折叠为一条 `window_rollup` 摘要（原文归档到 `bus/archive/<room>.<window>.jsonl`），保留最近 `ratio` 原文，当前窗口不折叠。结果写 run 级 `windows/<window>.yaml`，供会话唤醒/文档小组作为压缩记忆引用。
+一天按 `split_hour` 分成上/下午两个窗口；`picode window compress` 将每个房间 bus 中**旧窗口**的最老 `1 - ratio` 消息折叠为一条 `window_rollup` 摘要（原文归档到 `bus/archive/<room>.<window>.jsonl`），保留最近 `ratio` 原文，当前窗口不折叠。结果写 run 级 `windows/<window>.yaml`，供会话唤醒/文档小组作为压缩记忆引用。`windows/<window>.yaml` 同时是语义摘要层（P2）载体：`summary`（默认 null）承载语义摘要，`summary_due` 门闩（默认 false）标记待生成摘要的窗口，重压缩幂等不覆盖。
 
 ```yaml
 windows:
