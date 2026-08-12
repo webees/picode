@@ -164,6 +164,20 @@ export class SessionStore {
     });
   }
 
+  /** Clear a session error after successful recovery (serve 自动恢复). No state change. */
+  async clearError(agentId: string): Promise<SessionRecord> {
+    const p = this.sessionPath(agentId);
+    return withFileLock(this.lockPath(), () => {
+      const cur = readYamlFile<SessionRecord>(p);
+      if (!cur) {
+        throw new PicodeError(ErrorCode.SESSION_NOT_FOUND, `session not found: ${agentId}`);
+      }
+      const next = { ...cur, error: null };
+      writeYamlFile(p, next);
+      return next;
+    });
+  }
+
   /** Record the live Pi session id on an awake session (stage C). */
   async attachPiSession(agentId: string, piSessionId: string): Promise<SessionRecord> {
     return withFileLock(this.lockPath(), () => {

@@ -118,6 +118,151 @@ test("probeServeHealth: opencode 未启用时直接通过（ERR-01 watchdog）",
   assert.deepEqual(r, { ok: true, failed: [] });
 });
 
+/** opencode serve mock：base_url 探测受 state.down 控制，/message 返回 parts。 */
+function mockServe(
+  state: { down: boolean },
+  calls: Array<{ url: string; method: string; body?: unknown }>,
+  opts: { messageFailures?: number } = {},
+) {
+  const orig = globalThis.fetch;
+  let msgAttempts = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+    const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+    calls.push({ url, method, body });
+    if (method === "POST" && url.includes("/message")) {
+      msgAttempts++;
+      if (msgAttempts <= (opts.messageFailures ?? 0)) {
+        throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+      }
+      return new Response(
+        JSON.stringify({ info: {}, parts: [{ type: "text", text: "ack" }] }),
+        { status: 200 },
+      );
+    }
+    if (state.down) throw new Error("serve down");
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  }) as typeof fetch;
+  return () => {
+    globalThis.fetch = orig;
+  };
+}
+
+/** 造一个处于 error 的 awake opencode 会话（pm）。 */
+async function errorAwakeOcSession(_dir: string, store: SessionStore, sesId: string) {
+  await store.wake("pm", "test");
+  await store.attachPiSession("pm", `oc-${sesId}`);
+  await store.setError("pm", "serve 健康探测失败（ERR-01 watchdog）");
+}
+
+function enableOpencode(config: ReturnType<typeof resolveRunDir>["config"]): void {
+  config.opencode.enabled = true;
+  config.opencode.base_url = "http://127.0.0.1:7788";
+  config.opencode.provider_id = "opencode-go";
+  config.opencode.model_id = "deepseek-v4-flash";
+}
+
+test("probeServeHealth: 失联→恢复→自动重投喂 ready 并清 error（P1）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  await errorAwakeOcSession(dir, store, "ses_serve1");
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const state = { down: true };
+  const restore = mockServe(state, calls);
+  try {
+    const down = await probeServeHealth(dir, config, { recoveryBackoffMs: [0, 0, 0] });
+    assert.equal(down.ok, false);
+    assert.deepEqual(down.failed, ["pm"]);
+    assert.match(store.get("pm")!.error ?? "", /健康探测失败/);
+
+    state.down = false;
+    const up = await probeServeHealth(dir, config, { recoveryBackoffMs: [0, 0, 0] });
+    assert.equal(up.ok, true);
+    assert.deepEqual(up.failed, []);
+    assert.equal(store.get("pm")!.error, null, "恢复成功后必须清 error");
+
+    const posts = calls.filter((c) => c.method === "POST" && c.url.includes("/message"));
+    assert.equal(posts.length, 1, "恢复只投喂一次");
+    assert.equal(posts[0].url, "http://127.0.0.1:7788/session/ses_serve1/message");
+    const msg = posts[0].body as { noReply: boolean; parts: Array<{ type: string; text: string }> };
+    assert.equal(msg.noReply, true, "重投喂必须复用 D061 noReply 语义");
+    assert.ok(msg.parts.length >= 1);
+    assert.ok(store.get("pm")!.pi_session_id, "pi_session_id 不变（原地恢复，非重 spawn）");
+  } finally {
+    restore();
+  }
+});
+
+test("probeServeHealth: 恢复会写转录归档（投喂文本 + 响应 parts，P4）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  await errorAwakeOcSession(dir, store, "ses_serve2");
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const state = { down: false };
+  const restore = mockServe(state, calls);
+  try {
+    await probeServeHealth(dir, config, { recoveryBackoffMs: [0, 0, 0] });
+    const file = path.join(dir, "transcripts", "pm.jsonl");
+    assert.ok(fs.existsSync(file), "恢复投喂必须写入转录");
+    const entries = fs
+      .readFileSync(file, "utf8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as { type: string });
+    const types = entries.map((e) => e.type).sort();
+    assert.deepEqual(types, ["incoming", "outgoing"]);
+  } finally {
+    restore();
+  }
+});
+
+test("probeServeHealth: 恢复失败退避耗尽后保持 error（最多 3 次）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  await errorAwakeOcSession(dir, store, "ses_serve3");
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const state = { down: false };
+  const restore = mockServe(state, calls, { messageFailures: Number.MAX_SAFE_INTEGER });
+  try {
+    const r = await probeServeHealth(dir, config, { recoveryBackoffMs: [0, 0, 0] });
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.failed, ["pm"], "恢复失败保持 error");
+    assert.match(store.get("pm")!.error ?? "", /健康探测失败/);
+    const posts = calls.filter((c) => c.method === "POST" && c.url.includes("/message"));
+    assert.equal(posts.length, 3, "退避重试最多 3 次");
+  } finally {
+    restore();
+  }
+});
+
+test("probeServeHealth: 风暴限流 —— 每会话最多 1 次自动恢复（P1）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  await errorAwakeOcSession(dir, store, "ses_serve4");
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const state = { down: false };
+  const restore = mockServe(state, calls);
+  try {
+    const first = await probeServeHealth(dir, config, { recoveryBackoffMs: [0, 0, 0] });
+    assert.deepEqual(first.failed, []);
+    assert.equal(store.get("pm")!.error, null);
+    const postsAfterFirst = calls.filter((c) => c.method === "POST" && c.url.includes("/message"));
+    assert.equal(postsAfterFirst.length, 1);
+
+    // 再次进入 error：已恢复过 1 次，必须保持 error，不重投喂
+    await store.setError("pm", "serve 健康探测失败（ERR-01 watchdog）");
+    const second = await probeServeHealth(dir, config, { recoveryBackoffMs: [0, 0, 0] });
+    assert.equal(second.ok, true);
+    assert.deepEqual(second.failed, ["pm"], "超出 1 次自动恢复 → 保持 error");
+    assert.match(store.get("pm")!.error ?? "", /健康探测失败/);
+    const postsAfterSecond = calls.filter((c) => c.method === "POST" && c.url.includes("/message"));
+    assert.equal(postsAfterSecond.length, 1, "不得重投喂");
+  } finally {
+    restore();
+  }
+});
+
 test("guardianTick: drains the sess-mgr command queue and applies derived events", async () => {
   const { repo, dir, config, store } = setupRun();
   activateGoal(dir);

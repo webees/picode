@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { readYamlFile, SESSION_EVENTS, type PicodeConfig } from "@picode/core";
+import { readYamlFile, withFileLock, SESSION_EVENTS, type PicodeConfig } from "@picode/core";
 import { SessionStore } from "./session-store.js";
 import {
   applyEvent,
@@ -9,7 +9,9 @@ import {
 } from "./rules-engine.js";
 import { sweepDraftPark, readGoal } from "./run-store.js";
 import { sweepProgress, type SweepResult } from "./progress.js";
-import { sleepAgent } from "./pi-adapter.js";
+import { sleepAgent, buildPiEnv } from "./pi-adapter.js";
+import { OpencodeSpawner } from "./opencode-adapter.js";
+import { TranscriptStore } from "./transcript-store.js";
 
 /**
  * Self-drive guardian (TC-02): a deterministic loop that advances a run
@@ -133,32 +135,169 @@ export function deriveEvents(dir: string, config: PicodeConfig): DerivedEvent[] 
   return events;
 }
 
+/** 服务恢复退避（秒级→下次尝试前的等待）；最多 3 次尝试（P1 自动恢复）。 */
+export const SERVE_RECOVERY_BACKOFF_MS = [1_000, 5_000, 15_000];
+export const MAX_SERVE_RECOVERY_ATTEMPTS = 3;
+
+export interface ServeHealthOpts {
+  /** base_url 探测超时。 */
+  probeTimeoutMs?: number;
+  /** 每次恢复尝试之间的退避；默认 [1s, 5s, 15s]。 */
+  recoveryBackoffMs?: number[];
+  /** 恢复尝试上限；默认 3。 */
+  maxRecoveryAttempts?: number;
+}
+
 /**
- * ERR-01 watchdog (run-lead 决策): opencode 后端启用时健康探测；
- * serve 失联的 awake opencode 会话标记 error（可观测，不自动重 spawn 防风暴）。
+ * ERR-01 watchdog + P1 serve 自动恢复：
+ *  - serve 失联：把 awake 的 opencode 会话标记 error（可观测）。
+ *  - serve 恢复：对处于 error 的 awake opencode 会话做有界恢复——退避重投喂
+ *    ready 消息（D061 noReply），成功后清 error 并记入恢复台账。
+ *  - 防风暴：每会话最多 1 次自动恢复（台账持久化），超出保持 error。
  */
 export async function probeServeHealth(
   dir: string,
   config: PicodeConfig,
+  opts: ServeHealthOpts = {},
 ): Promise<{ ok: boolean; failed: string[] }> {
   if (!config.opencode.enabled) return { ok: true, failed: [] };
   const url = config.opencode.base_url.replace(/\/+$/, "");
-  let ok = true;
   try {
-    await fetch(url, { signal: AbortSignal.timeout(5_000) });
+    await fetch(url, { signal: AbortSignal.timeout(opts.probeTimeoutMs ?? 5_000) });
   } catch {
-    ok = false;
+    return {
+      ok: false,
+      failed: await markServeSessionsError(dir, "serve 健康探测失败（ERR-01 watchdog）"),
+    };
   }
-  if (ok) return { ok: true, failed: [] };
+  return { ok: true, failed: await recoverServeSessions(dir, config, opts) };
+}
+
+/** serve 失联时把 awake 的 opencode 会话标记 error；返回受影响 agent 列表。 */
+async function markServeSessionsError(dir: string, reason: string): Promise<string[]> {
   const store = new SessionStore(dir);
   const failed: string[] = [];
   for (const s of store.awake()) {
     if (s.pi_session_id?.startsWith("oc-")) {
-      await store.setError(s.agent_id, "serve 健康探测失败（ERR-01 watchdog）");
+      await store.setError(s.agent_id, reason);
       failed.push(s.agent_id);
     }
   }
-  return { ok: false, failed };
+  return failed;
+}
+
+/** 对处于 error 的 awake opencode 会话逐台做有界恢复；返回仍处 error 的 agent 列表。 */
+async function recoverServeSessions(
+  dir: string,
+  config: PicodeConfig,
+  opts: ServeHealthOpts,
+): Promise<string[]> {
+  const store = new SessionStore(dir);
+  const ledger = new ServeRecoveryStore(dir);
+  const transcript = new TranscriptStore(dir);
+  const failed: string[] = [];
+  for (const s of store.awake()) {
+    if (!s.pi_session_id?.startsWith("oc-") || !s.error) continue;
+    if (ledger.hasRecovered(s.agent_id)) {
+      // 防风暴：已自动恢复过 1 次，超出保持 error
+      failed.push(s.agent_id);
+      continue;
+    }
+    const spawner = new OpencodeSpawner(config, {
+      onMessagePosted: (e) => {
+        const jobs: Promise<unknown>[] = [transcript.recordOutgoing(e.agent_id, e.text)];
+        if (e.parts.length > 0) {
+          jobs.push(transcript.recordResponse(e.agent_id, e.parts));
+        }
+        return Promise.all(jobs).then(() => {});
+      },
+    });
+    const recovered = await attemptServeRecovery(dir, config, s.agent_id, spawner, opts);
+    if (recovered) {
+      await ledger.record(s.agent_id);
+      await new SessionStore(dir).clearError(s.agent_id);
+    } else {
+      failed.push(s.agent_id);
+    }
+  }
+  return failed;
+}
+
+/** 一次有界恢复：退避重投喂 ready 消息，成功即返回 true。 */
+async function attemptServeRecovery(
+  dir: string,
+  config: PicodeConfig,
+  agentId: string,
+  spawner: OpencodeSpawner,
+  opts: ServeHealthOpts,
+): Promise<boolean> {
+  const maxAttempts = opts.maxRecoveryAttempts ?? MAX_SERVE_RECOVERY_ATTEMPTS;
+  const backoff = opts.recoveryBackoffMs ?? SERVE_RECOVERY_BACKOFF_MS;
+  const session = new SessionStore(dir).get(agentId);
+  if (!session?.pi_session_id) return false;
+  const env = buildPiEnv(dir, config, session);
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      const wait = backoff[Math.min(attempt - 1, backoff.length - 1)] ?? 0;
+      await delay(wait);
+    }
+    try {
+      await spawner.sendReady(session.pi_session_id, agentId, env);
+      return true;
+    } catch {
+      /* transient/hard failure → 退避重试；耗尽后保持 error */
+    }
+  }
+  return false;
+}
+
+/** 每会话 1 次自动恢复的持久化台账（runs/<id>/serve-recovery.jsonl，防风暴）。 */
+export interface ServeRecoveryRecord {
+  schema_version: "1";
+  type: "serve_recovery";
+  agent_id: string;
+  recovered_at: string;
+}
+
+class ServeRecoveryStore {
+  constructor(private runDir: string) {}
+
+  private path(): string {
+    return path.join(this.runDir, "serve-recovery.jsonl");
+  }
+
+  private lockPath(): string {
+    return path.join(this.runDir, ".serve-recovery.lock");
+  }
+
+  hasRecovered(agentId: string): boolean {
+    const p = this.path();
+    if (!fs.existsSync(p)) return false;
+    const lines = fs
+      .readFileSync(p, "utf8")
+      .split("\n")
+      .filter((l) => l.trim().length > 0);
+    for (const line of lines) {
+      try {
+        if ((JSON.parse(line) as { agent_id?: string }).agent_id === agentId) return true;
+      } catch {
+        /* 跳过损坏行 */
+      }
+    }
+    return false;
+  }
+
+  async record(agentId: string): Promise<void> {
+    const rec: ServeRecoveryRecord = {
+      schema_version: "1",
+      type: "serve_recovery",
+      agent_id: agentId,
+      recovered_at: new Date().toISOString(),
+    };
+    await withFileLock(this.lockPath(), () => {
+      fs.appendFileSync(this.path(), JSON.stringify(rec) + "\n", "utf8");
+    });
+  }
 }
 
 /** Result of one guardian tick (one pass over the run). */

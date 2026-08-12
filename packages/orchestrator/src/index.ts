@@ -20,6 +20,8 @@ export * from "./task.js";
 // sessions
 export * from "./session-store.js";
 export * from "./pi-adapter.js";
+// transcription (P4)
+export * from "./transcript-store.js";
 // gates
 export * from "./closure.js";
 export * from "./merge.js";
