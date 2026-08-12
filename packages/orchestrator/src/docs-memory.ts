@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { ensureDir, writeAtomic } from "@picode/core";
+import { ensureDir, readYamlFile, writeAtomic } from "@picode/core";
 
 /**
  * Memory Brief (18 phase G / 08-invariants I14): the docs lead (docs-lead)
@@ -51,7 +51,7 @@ export function writeMemoryBrief(
 export function ackMemoryBrief(dir: string, id: string, by = "run-lead"): MemoryBrief {
   const p = path.join(briefsDir(dir), `${id}.yaml`);
   if (!fs.existsSync(p)) throw new Error(`memory brief not found: ${id}`);
-  const brief = YAML.parse(fs.readFileSync(p, "utf8")) as MemoryBrief;
+  const brief = readYamlFile<MemoryBrief>(p)!;
   if (brief.status === "acked") return brief;
   const next: MemoryBrief = {
     ...brief,
@@ -69,6 +69,6 @@ export function listMemoryBriefs(dir: string): MemoryBrief[] {
   return fs
     .readdirSync(d)
     .filter((f) => f.endsWith(".yaml"))
-    .map((f) => YAML.parse(fs.readFileSync(path.join(d, f), "utf8")) as MemoryBrief)
+    .map((f) => readYamlFile<MemoryBrief>(path.join(d, f))!)
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 }

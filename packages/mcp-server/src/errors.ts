@@ -6,12 +6,9 @@
  */
 import { PicodeError, errorCodeOf } from "@picode/core";
 
-export interface McpErrorResult {
-  content: Array<{ type: "text"; text: string }>;
-  isError: true;
-}
-
-export function toMcpError(e: unknown): McpErrorResult {
+export function toMcpError(
+  e: unknown,
+): { content: Array<{ type: "text"; text: string }>; isError: true } {
   const code = e instanceof PicodeError ? e.code : (errorCodeOf(e) ?? "INTERNAL");
   const message = e instanceof Error ? e.message : String(e);
   return {

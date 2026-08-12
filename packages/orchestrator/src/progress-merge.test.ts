@@ -4,11 +4,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { loadConfig } from "@picode/core";
+import { loadConfig, writeAtomic } from "@picode/core";
 import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
 import { addChunkAndTask } from "./task.js";
 import { SessionStore } from "./session-store.js";
-import { writeProgress, sweepProgress } from "./progress.js";
+import { progressPath, sweepProgress } from "./progress.js";
 import { enqueueMerge, mergeNext, readMergeQueue } from "./merge.js";
 import { applyEvent } from "./rules-engine.js";
 
@@ -52,7 +52,7 @@ test("T11: progress sweep fires progress_due and wakes squad-lead", async () => 
     store.register(seat, { agentId: `${seat}@${taskId}`, initialState: "sleeping" });
   }
   // fresh progress → not overdue
-  writeProgress(dir, taskId, { phase: "implementing", blocked: false, summary: "on track" });
+  writeAtomic(progressPath(dir, taskId), JSON.stringify({ task_id: taskId, phase: "implementing", blocked: false, summary: "on track", updated_at: new Date().toISOString() }));
   const r1 = await sweepProgress(dir, config);
   assert.deepEqual(r1.overdue, []);
 

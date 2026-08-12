@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { assertSafeName, ensureDir, writeAtomic, type PicodeConfig } from "@picode/core";
+import { assertSafeName, ensureDir, readYamlFile, writeAtomic, type PicodeConfig } from "@picode/core";
 import {
   HANDOFF_FILES,
   handoffDir,
@@ -136,7 +136,7 @@ function seatDelta(seat: string, ctx: ScoreCtx): number {
 export function readScores(dir: string, taskId: string): TaskScores | null {
   const p = scoresPath(dir, taskId);
   if (!fs.existsSync(p)) return null;
-  return YAML.parse(fs.readFileSync(p, "utf8")) as TaskScores;
+  return readYamlFile<TaskScores>(p)!;
 }
 
 /**
@@ -269,7 +269,7 @@ export function scoreTask(
 /** Append one record to an HR archive, recomputing the summary (idempotent per task_id). */
 export function upsertArchive(file: string, rec: Pick<HrArchive, "kind" | "key" | "seat"> & { records: HrRecord[] }): HrArchive {
   const existing = fs.existsSync(file)
-    ? (YAML.parse(fs.readFileSync(file, "utf8")) as HrArchive)
+    ? readYamlFile<HrArchive>(file)!
     : null;
   const records = existing?.records ?? [];
   const recToAdd = rec.records[0];

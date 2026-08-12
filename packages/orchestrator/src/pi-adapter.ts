@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { ErrorCode, PicodeError, type PicodeConfig, type SessionRecord } from "@picode/core";
+import { ErrorCode, PicodeError, readRunSecret, type PicodeConfig, type SessionRecord } from "@picode/core";
 import { issueToken } from "@picode/bus";
 import { SessionStore } from "./session-store.js";
 import { OpencodeSpawner, wakeWithOpencode } from "./opencode-adapter.js";
@@ -108,12 +108,6 @@ const ROLE_PRIMARY_ROOM: Record<string, string> = {
   "sess-mgr": "leadership",
 };
 
-function readSecret(dir: string): string {
-  const p = path.join(dir, "secret.txt");
-  if (!fs.existsSync(p)) return "dev-secret";
-  return fs.readFileSync(p, "utf8").trim();
-}
-
 /** Build the Pi session env (18 phase C: token, profile, cwd, room, persona). */
 export function buildPiEnv(
   dir: string,
@@ -121,7 +115,7 @@ export function buildPiEnv(
   session: SessionRecord,
 ): Record<string, string> {
   const runId = path.basename(dir);
-  const secret = readSecret(dir);
+  const secret = readRunSecret(dir);
   const profile =
     config.roles.find((r) => r.id === session.role_id)?.tool_profile ?? "implement.engineer";
   const room = ROLE_PRIMARY_ROOM[session.role_id] ?? "leadership";

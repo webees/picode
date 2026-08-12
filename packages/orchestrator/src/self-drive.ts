@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import YAML from "yaml";
-import { SESSION_EVENTS, type PicodeConfig } from "@picode/core";
+import { readYamlFile, SESSION_EVENTS, type PicodeConfig } from "@picode/core";
 import { SessionStore } from "./session-store.js";
 import {
   applyEvent,
@@ -49,27 +48,27 @@ interface ChunkMeta {
 function readChunks(dir: string): ChunkMeta[] {
   const p = path.join(dir, "chunks.yaml");
   if (!fs.existsSync(p)) return [];
-  const data = YAML.parse(fs.readFileSync(p, "utf8")) as { chunks?: ChunkMeta[] };
-  return data.chunks ?? [];
+  const data = readYamlFile<{ chunks?: ChunkMeta[] }>(p);
+  return data?.chunks ?? [];
 }
 
 function readTask(dir: string, taskId: string): TaskMeta | null {
   const p = path.join(dir, "tasks", taskId, "task.yaml");
   if (!fs.existsSync(p)) return null;
-  return YAML.parse(fs.readFileSync(p, "utf8")) as TaskMeta;
+  return readYamlFile<TaskMeta>(p);
 }
 
 function readRunState(dir: string): { halt?: boolean } | null {
   const p = path.join(dir, "run.yaml");
   if (!fs.existsSync(p)) return null;
-  return YAML.parse(fs.readFileSync(p, "utf8")) as { halt?: boolean };
+  return readYamlFile<{ halt?: boolean }>(p);
 }
 
 function briefApproved(dir: string, taskId: string): boolean {
   const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");
   if (!fs.existsSync(p)) return false;
-  const b = YAML.parse(fs.readFileSync(p, "utf8")) as { status?: string };
-  return b.status === "approved";
+  const b = readYamlFile<{ status?: string }>(p);
+  return b?.status === "approved";
 }
 
 function seatIdsOf(task: TaskMeta): string[] | null {

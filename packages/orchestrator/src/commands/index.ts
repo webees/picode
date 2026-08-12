@@ -46,7 +46,6 @@ export const DOMAIN_ORDER = [
   "memory",
   "evolve",
   "window",
-  "status",
   "self-drive",
 ];
 

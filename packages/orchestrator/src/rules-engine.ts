@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import YAML from "yaml";
 import {
   ErrorCode,
   PicodeError,
   ensureDir,
+  readYamlFile,
   withFileLock,
   type PicodeConfig,
 } from "@picode/core";
@@ -36,8 +36,8 @@ interface TaskTriad {
 function readTaskTriad(dir: string, taskId: string): TaskTriad | null {
   const p = path.join(dir, "tasks", taskId, "task.yaml");
   if (!fs.existsSync(p)) return null;
-  const task = YAML.parse(fs.readFileSync(p, "utf8")) as { triad?: TaskTriad };
-  return task.triad ?? null;
+  const task = readYamlFile<{ triad?: TaskTriad }>(p);
+  return task?.triad ?? null;
 }
 
 /**
@@ -179,8 +179,8 @@ export async function applyEvent(
 function readGoalScale(dir: string): "S" | "M" | "L" {
   const p = path.join(dir, "goal.yaml");
   if (!fs.existsSync(p)) return "S";
-  const goal = YAML.parse(fs.readFileSync(p, "utf8")) as { scale?: "S" | "M" | "L" };
-  return goal.scale ?? "S";
+  const goal = readYamlFile<{ scale?: "S" | "M" | "L" }>(p);
+  return goal?.scale ?? "S";
 }
 
 /**

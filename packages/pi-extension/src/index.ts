@@ -16,6 +16,7 @@ import {
   matchGlob,
   PicodeError,
   profileAllows,
+  readRunSecret,
   withFileLock,
   type ToolName,
 } from "@picode/core";
@@ -43,12 +44,6 @@ function jsonResult(obj: unknown) {
 
 function err(code: ErrorCode, message: string) {
   return jsonResult({ ok: false, code, message });
-}
-
-function loadSecret(runsRoot: string, runId: string): string {
-  const p = path.join(runsRoot, runId, "secret.txt");
-  if (!fs.existsSync(p)) return "dev-secret";
-  return fs.readFileSync(p, "utf8").trim();
 }
 
 /** sess-mgr command queue: runs/<id>/session_commands.jsonl (18 phase B). */
@@ -104,7 +99,7 @@ export default function picodeExtension(pi: PiApi): void {
 
   const runDir = runId && runsRoot ? path.join(runsRoot, runId) : "";
   const store = runDir ? new RoomStore(runDir) : null;
-  const secret = runDir ? loadSecret(runsRoot, runId) : "dev-secret";
+  const secret = runDir ? readRunSecret(runDir) : "dev-secret";
 
   function auth(): string | null {
     if (!agentId || !token) return "TOKEN_INVALID: missing PICODE_AGENT_ID/TOKEN";

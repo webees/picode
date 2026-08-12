@@ -20,9 +20,8 @@
  *   _task_id      progress_report 写 progress.json 用
  *   _squad_room   progress_report 汇报房间（默认 program）
  */
-import fs from "node:fs";
 import path from "node:path";
-import { PicodeError, ErrorCode } from "@picode/core";
+import { PicodeError, ErrorCode, readRunSecret } from "@picode/core";
 import { issueToken } from "@picode/bus";
 import picodeExtension from "@picode/pi-extension";
 import type { ToolDef } from "./registry.js";
@@ -58,13 +57,6 @@ function captureTools(env: Record<string, string>): Map<string, CapturedTool> {
   return tools;
 }
 
-/** Read the run secret (dev-secret fallback matches pi-extension loadSecret). */
-function readSecret(runsRoot: string, runId: string): string {
-  const p = path.join(runsRoot, runId, "secret.txt");
-  if (!fs.existsSync(p)) return "dev-secret";
-  return fs.readFileSync(p, "utf8").trim();
-}
-
 function envOf(p: Record<string, unknown>, k: string, fallback = ""): string {
   const v = p[k];
   return v === undefined || v === null ? fallback : String(v);
@@ -86,7 +78,7 @@ function buildEnv(p: Record<string, unknown>, env: ServerEnv): Record<string, st
   }
   if (!agentId) throw new PicodeError(ErrorCode.USAGE, "_agent_id required");
   const runsRoot = runsRootOf(env, runId);
-  const secret = readSecret(runsRoot, runId);
+  const secret = readRunSecret(path.join(runsRoot, runId));
   const token = envOf(p, "_token", issueToken(agentId, secret));
   return {
     PICODE_RUN_ID: runId,

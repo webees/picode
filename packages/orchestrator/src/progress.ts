@@ -1,11 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import YAML from "yaml";
-import {
-  ensureDir,
-  writeAtomic,
-  type PicodeConfig,
-} from "@picode/core";
+import { readYamlFile, type PicodeConfig } from "@picode/core";
 import { SESSION_EVENTS } from "@picode/core";
 import { applyEvent } from "./rules-engine.js";
 
@@ -24,23 +19,6 @@ export interface ProgressState {
 
 export function progressPath(dir: string, taskId: string): string {
   return path.join(dir, "tasks", taskId, "progress.json");
-}
-
-export function writeProgress(
-  dir: string,
-  taskId: string,
-  p: Omit<ProgressState, "task_id" | "updated_at">,
-): ProgressState {
-  const state: ProgressState = {
-    task_id: taskId,
-    phase: p.phase,
-    blocked: p.blocked,
-    summary: p.summary,
-    updated_at: new Date().toISOString(),
-  };
-  ensureDir(path.dirname(progressPath(dir, taskId)));
-  writeAtomic(progressPath(dir, taskId), JSON.stringify(state, null, 2));
-  return state;
 }
 
 export function readProgress(dir: string, taskId: string): ProgressState | null {
@@ -100,6 +78,5 @@ export function readTaskMeta(dir: string, taskId: string): {
   chunk_id?: string;
 } {
   const p = path.join(dir, "tasks", taskId, "task.yaml");
-  if (!fs.existsSync(p)) return {};
-  return YAML.parse(fs.readFileSync(p, "utf8")) as { status?: string; chunk_id?: string };
+  return readYamlFile<{ status?: string; chunk_id?: string }>(p) ?? {};
 }

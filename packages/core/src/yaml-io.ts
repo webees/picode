@@ -11,6 +11,7 @@
  * throw (a corrupt state file must never be silently treated as absent).
  */
 import fs from "node:fs";
+import path from "node:path";
 import YAML from "yaml";
 import { writeAtomic } from "./atomic.js";
 
@@ -18,6 +19,13 @@ import { writeAtomic } from "./atomic.js";
 export function readYamlFile<T>(filePath: string): T | null {
   if (!fs.existsSync(filePath)) return null;
   return YAML.parse(fs.readFileSync(filePath, "utf8")) as T;
+}
+
+/** Run secret (runs/<id>/secret.txt); dev-secret fallback matches spawn env. */
+export function readRunSecret(runDir: string): string {
+  const p = path.join(runDir, "secret.txt");
+  if (!fs.existsSync(p)) return "dev-secret";
+  return fs.readFileSync(p, "utf8").trim();
 }
 
 /** Atomic YAML write (temp + rename, I10). */

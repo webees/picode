@@ -8,6 +8,7 @@ import {
   generateCodename,
   generateTeamName,
   missingPersonaDimensions,
+  readYamlFile,
   simpleGlobMatch,
   writeAtomic,
   type Persona,
@@ -69,13 +70,13 @@ function staffingDir(dir: string, taskId: string): string {
 export function readStaffingRequest(dir: string, taskId: string): StaffingRequest | null {
   const p = path.join(staffingDir(dir, taskId), "request.yaml");
   if (!fs.existsSync(p)) return null;
-  return YAML.parse(fs.readFileSync(p, "utf8")) as StaffingRequest;
+  return readYamlFile<StaffingRequest>(p)!;
 }
 
 export function readStaffing(dir: string, taskId: string): StaffingState | null {
   const p = path.join(staffingDir(dir, taskId), "staffing.yaml");
   if (!fs.existsSync(p)) return null;
-  return YAML.parse(fs.readFileSync(p, "utf8")) as StaffingState;
+  return readYamlFile<StaffingState>(p)!;
 }
 
 export function readTaskYaml(dir: string, taskId: string): {
@@ -310,10 +311,7 @@ function briefApproved(dir: string, taskId: string, config: PicodeConfig): boole
   if (!config.work_brief.require_run_lead_approval) return true;
   const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");
   if (!fs.existsSync(p)) return false;
-  const b = YAML.parse(fs.readFileSync(p, "utf8")) as {
-    status?: string;
-    approved_by?: string;
-  };
+  const b = readYamlFile<{ status?: string; approved_by?: string }>(p)!;
   return b.status === "approved" && !!b.approved_by;
 }
 

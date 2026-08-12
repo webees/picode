@@ -1,4 +1,4 @@
-import { evolveWritePaths, type EvolveGoalSpec } from "@picode/core";
+import { evolveWritePaths } from "@picode/core";
 import { readGoal } from "../run-store.js";
 import { writeEvolveKnowledgeLog } from "../evolve-run.js";
 import type { Command, CommandContext } from "./types.js";
@@ -31,6 +31,3 @@ export const evolveCommands: Command[] = [
     },
   },
 ];
-
-// keep the type import referenced for CLI parity checks
-export type { EvolveGoalSpec };

@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import YAML from "yaml";
-import type { PicodeConfig } from "@picode/core";
+import { readYamlFile, type PicodeConfig } from "@picode/core";
 import { readGoal } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
 import { readMergeQueue } from "./merge.js";
@@ -40,14 +39,14 @@ export interface StatusSnapshot {
 function briefStatus(dir: string, taskId: string): string {
   const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");
   if (!fs.existsSync(p)) return "missing";
-  const b = YAML.parse(fs.readFileSync(p, "utf8")) as { status?: string };
+  const b = readYamlFile<{ status?: string }>(p)!;
   return b.status ?? "missing";
 }
 
 function staffingStatus(dir: string, taskId: string): string {
   const p = path.join(dir, "tasks", taskId, "staffing", "staffing.yaml");
   if (!fs.existsSync(p)) return "missing";
-  const s = YAML.parse(fs.readFileSync(p, "utf8")) as { status?: string };
+  const s = readYamlFile<{ status?: string }>(p)!;
   return s.status ?? "missing";
 }
 
@@ -76,7 +75,7 @@ export function statusSnapshot(dir: string, config: PicodeConfig): StatusSnapsho
     for (const entry of fs.readdirSync(tasksDir)) {
       const tpath = path.join(tasksDir, entry, "task.yaml");
       if (!fs.existsSync(tpath)) continue;
-      const t = YAML.parse(fs.readFileSync(tpath, "utf8")) as { id: string; status: string };
+      const t = readYamlFile<{ id: string; status: string }>(tpath)!;
       const prog = readProgress(dir, t.id);
       tasks.push({
         task_id: t.id,

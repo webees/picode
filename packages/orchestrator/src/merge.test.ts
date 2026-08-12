@@ -14,7 +14,7 @@ import {
   approveStaffing,
 } from "./staffing.js";
 import { enqueueMerge, mergeNext, readMergeQueue } from "./merge.js";
-import { writeProgress, sweepProgress } from "./progress.js";
+import { progressPath, sweepProgress } from "./progress.js";
 import { SessionStore } from "./session-store.js";
 
 function tmpGitRepo(): string {
@@ -95,7 +95,7 @@ test("progress sweep flags stale tasks and wakes squad-lead (U8)", async () => {
 
 test("fresh progress report is not flagged", async () => {
   const { dir, config, taskId } = await setupPreparedTask();
-  writeProgress(dir, taskId, { phase: "running", blocked: false, summary: "working" });
+  writeAtomic(progressPath(dir, taskId), JSON.stringify({ task_id: taskId, phase: "running", blocked: false, summary: "working", updated_at: new Date().toISOString() }));
   const res = await sweepProgress(dir, config);
   assert.equal(res.overdue.length, 0);
 });

@@ -6,6 +6,7 @@ import {
   branchName,
   ensureDir,
   matchGlob,
+  readYamlFile,
   worktreePath,
   writeAtomic,
   type PicodeConfig,
@@ -43,9 +44,7 @@ export function addChunkAndTask(
     throw new Error("goal not active; cannot add implement task");
   }
   const chunksPath = path.join(dir, "chunks.yaml");
-  const data = YAML.parse(fs.readFileSync(chunksPath, "utf8")) as {
-    chunks: Array<Record<string, unknown>>;
-  };
+  const data = readYamlFile<{ chunks: Array<Record<string, unknown>> }>(chunksPath)!;
   const taskId = `task-${opts.chunkId}`;
   const writePaths = opts.writePaths;
   const readPaths = opts.readPaths ?? [];
@@ -124,7 +123,7 @@ export function draftBrief(dir: string, taskId: string): void {
 
 export function approveBrief(dir: string, taskId: string, by: string): void {
   const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");
-  const brief = YAML.parse(fs.readFileSync(p, "utf8")) as Record<string, unknown>;
+  const brief = readYamlFile<Record<string, unknown>>(p)!;
   brief.status = "approved";
   brief.approved_by = by;
   brief.approved_at = new Date().toISOString();
@@ -135,10 +134,7 @@ export function assertBriefApproved(dir: string, taskId: string, config: PicodeC
   if (!config.work_brief.require_run_lead_approval) return;
   const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");
   if (!fs.existsSync(p)) throw new Error("work brief missing");
-  const brief = YAML.parse(fs.readFileSync(p, "utf8")) as {
-    status?: string;
-    approved_by?: string;
-  };
+  const brief = readYamlFile<{ status?: string; approved_by?: string }>(p)!;
   if (brief.status !== "approved" || !brief.approved_by) {
     throw new Error("work brief not approved by run-lead");
   }

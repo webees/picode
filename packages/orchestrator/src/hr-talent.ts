@@ -1,7 +1,6 @@
-import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { assertSafeName, ensureDir, writeAtomic, type PicodeConfig } from "@picode/core";
+import { assertSafeName, ensureDir, readYamlFile, writeAtomic, type PicodeConfig } from "@picode/core";
 import type { Seat } from "./staffing.js";
 
 /**
@@ -95,14 +94,9 @@ function nameLedgerPath(repoRoot: string, config: PicodeConfig): string {
   return path.join(repoRoot, config.paths.knowledge_root, "hr", "name-ledger.yaml");
 }
 
-function readYaml<T>(file: string): T | null {
-  if (!fs.existsSync(file)) return null;
-  return YAML.parse(fs.readFileSync(file, "utf8")) as T;
-}
-
 export function readTalentPool(repoRoot: string, config: PicodeConfig): TalentPool {
   return (
-    readYaml<TalentPool>(talentPoolPath(repoRoot, config)) ?? {
+    readYamlFile<TalentPool>(talentPoolPath(repoRoot, config)) ?? {
       schema_version: "1",
       updated_at: "",
       records: [],
@@ -113,7 +107,7 @@ export function readTalentPool(repoRoot: string, config: PicodeConfig): TalentPo
 
 export function readNameLedger(repoRoot: string, config: PicodeConfig): NameLedger {
   return (
-    readYaml<NameLedger>(nameLedgerPath(repoRoot, config)) ?? {
+    readYamlFile<NameLedger>(nameLedgerPath(repoRoot, config)) ?? {
       schema_version: "1",
       updated_at: "",
       entries: [],

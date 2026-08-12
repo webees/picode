@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import YAML from "yaml";
 import {
   branchName,
   ensureDir,
+  readYamlFile,
   withFileLock,
   writeAtomic,
   type PicodeConfig,
@@ -41,9 +41,7 @@ function lockPath(dir: string): string {
 export function taskDependencies(dir: string, taskId: string): string[] {
   const chunksPath = path.join(dir, "chunks.yaml");
   if (!fs.existsSync(chunksPath)) return [];
-  const data = YAML.parse(fs.readFileSync(chunksPath, "utf8")) as {
-    chunks?: Array<{ id: string; task_id?: string; depends_on?: string[] }>;
-  };
+  const data = readYamlFile<{ chunks?: Array<{ id: string; task_id?: string; depends_on?: string[] }> }>(chunksPath)!;
   const chunk = (data.chunks ?? []).find(
     (c) => c.task_id === taskId || `task-${c.id}` === taskId,
   );

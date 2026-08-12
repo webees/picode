@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { ensureDir, writeAtomic, type PicodeConfig } from "@picode/core";
+import { ensureDir, readYamlFile, writeAtomic, type PicodeConfig } from "@picode/core";
 import { RoomStore } from "@picode/bus";
 
 /**
@@ -36,7 +36,7 @@ export function readChangeOrders(dir: string): ChangeOrder[] {
   return fs
     .readdirSync(d)
     .filter((f) => f.endsWith(".yaml"))
-    .map((f) => YAML.parse(fs.readFileSync(path.join(d, f), "utf8")) as ChangeOrder)
+    .map((f) => readYamlFile<ChangeOrder>(path.join(d, f))!)
     .sort((a, b) => a.ts.localeCompare(b.ts));
 }
 
@@ -72,7 +72,7 @@ export async function createChangeOrder(
 export function transitionChangeOrder(dir: string, id: string, to: "applied" | "closed"): ChangeOrder {
   const p = coPath(dir, id);
   if (!fs.existsSync(p)) throw new Error(`change order not found: ${id}`);
-  const co = YAML.parse(fs.readFileSync(p, "utf8")) as ChangeOrder;
+  const co = readYamlFile<ChangeOrder>(p)!;
   if (co.status === "closed") throw new Error(`change order already closed: ${id}`);
   co.status = to;
   if (to === "applied") {
@@ -81,9 +81,7 @@ export function transitionChangeOrder(dir: string, id: string, to: "applied" | "
     // task.yaml so the squad sees the new requirement without losing work.
     const tp = path.join(dir, "tasks", co.task_id, "task.yaml");
     if (fs.existsSync(tp)) {
-      const task = YAML.parse(fs.readFileSync(tp, "utf8")) as {
-        change_orders?: Array<{ co_id: string; summary: string; applied_at: string }>;
-      };
+      const task = readYamlFile<{ change_orders?: Array<{ co_id: string; summary: string; applied_at: string }> }>(tp)!;
       const list = task.change_orders ?? [];
       list.push({ co_id: co.id, summary: co.summary, applied_at: co.applied_at });
       task.change_orders = list;
@@ -100,7 +98,7 @@ export function transitionChangeOrder(dir: string, id: string, to: "applied" | "
 export function parkDraft(dir: string, taskId: string): { status: string; parked_at: string } {
   const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");
   if (!fs.existsSync(p)) throw new Error(`brief not found: ${taskId}`);
-  const brief = YAML.parse(fs.readFileSync(p, "utf8")) as Record<string, unknown>;
+  const brief = readYamlFile<Record<string, unknown>>(p)!;
   if (brief.status === "approved") throw new Error(`brief already approved: ${taskId}`);
   const parked = { status: "parked", parked_at: new Date().toISOString() };
   writeAtomic(p, YAML.stringify({ ...brief, ...parked }));
@@ -116,13 +114,13 @@ export function ingestTaskKnowledge(
 ): string {
   const tpath = path.join(dir, "tasks", taskId, "task.yaml");
   if (!fs.existsSync(tpath)) throw new Error(`task not found: ${taskId}`);
-  const task = YAML.parse(fs.readFileSync(tpath, "utf8")) as {
+  const task = readYamlFile<{
     id: string;
     chunk_id?: string;
     status: string;
     write_paths?: string[];
     acceptance?: Array<{ id: string; type: string; spec: string }>;
-  };
+  }>(tpath)!;
   const acc = (task.acceptance ?? []).map((a) => `- [${a.type}] ${a.spec}`).join("\n");
   const md =
     `# Knowledge — ${taskId}\n\n` +

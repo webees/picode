@@ -5,6 +5,7 @@ import YAML from "yaml";
 import {
   branchName,
   ensureDir,
+  readYamlFile,
   worktreePath,
   writeAtomic,
   type PicodeConfig,
@@ -79,7 +80,7 @@ export function submitEvidence(
 export function readEvidence(dir: string, taskId: string): EvidenceState | null {
   const p = evidencePath(dir, taskId);
   if (!fs.existsSync(p)) return null;
-  return YAML.parse(fs.readFileSync(p, "utf8")) as EvidenceState;
+  return readYamlFile<EvidenceState>(p)!;
 }
 
 /** T07: no evidence pass → no handoff/dissolve path. */
@@ -115,15 +116,13 @@ export function acceptancePath(dir: string, taskId: string): string {
 function readTask(dir: string, taskId: string): TaskState {
   const p = path.join(dir, "tasks", taskId, "task.yaml");
   if (!fs.existsSync(p)) throw new Error(`task not found: ${taskId}`);
-  return YAML.parse(fs.readFileSync(p, "utf8")) as TaskState;
+  return readYamlFile<TaskState>(p)!;
 }
 
 function chunkDependsOn(dir: string, chunkId: string): string[] {
   const p = path.join(dir, "chunks.yaml");
   if (!fs.existsSync(p)) return [];
-  const data = YAML.parse(fs.readFileSync(p, "utf8")) as {
-    chunks: Array<{ id: string; depends_on?: string[] }>;
-  };
+  const data = readYamlFile<{ chunks: Array<{ id: string; depends_on?: string[] }> }>(p)!;
   return data.chunks.find((c) => c.id === chunkId)?.depends_on ?? [];
 }
 
@@ -233,7 +232,7 @@ export function ackHandoff(
 export function readAcceptance(dir: string, taskId: string): AcceptanceState | null {
   const p = acceptancePath(dir, taskId);
   if (!fs.existsSync(p)) return null;
-  return YAML.parse(fs.readFileSync(p, "utf8")) as AcceptanceState;
+  return readYamlFile<AcceptanceState>(p)!;
 }
 
 /** T08: no handoff ack → no dissolve. */
@@ -246,9 +245,7 @@ export function assertHandoffAccepted(dir: string, taskId: string): void {
 function setChunkStatus(dir: string, chunkId: string, status: string): string | null {
   const p = path.join(dir, "chunks.yaml");
   if (!fs.existsSync(p)) return null;
-  const data = YAML.parse(fs.readFileSync(p, "utf8")) as {
-    chunks: Array<{ id: string; status?: string }>;
-  };
+  const data = readYamlFile<{ chunks: Array<{ id: string; status?: string }> }>(p)!;
   const chunk = data.chunks.find((c) => c.id === chunkId);
   if (!chunk) return null;
   chunk.status = status;
@@ -443,7 +440,7 @@ export function gcFailedWorktrees(repoRoot: string, dir: string, config: PicodeC
     const taskId = entry.name;
     const tp = path.join(tasksDir, taskId, "task.yaml");
     if (!fs.existsSync(tp)) continue;
-    const task = YAML.parse(fs.readFileSync(tp, "utf8")) as { status?: string };
+    const task = readYamlFile<{ status?: string }>(tp)!;
     if (task.status !== "failed" && task.status !== "cancelled") continue;
     if (now - fs.statSync(tp).mtimeMs < ttlMs) {
       skipped.push(taskId);
