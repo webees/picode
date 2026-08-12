@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import YAML from "yaml";
-import { ensureDir, readYamlFile, writeAtomic, type PicodeConfig } from "@picode/core";
+import { ensureDir, readYamlFile, writeAtomic, writeYamlFile, type PicodeConfig } from "@picode/core";
 import { RoomStore } from "@picode/bus";
 
 /**
@@ -58,7 +57,7 @@ export async function createChangeOrder(
     closed_at: null,
   };
   ensureDir(coDir(dir));
-  writeAtomic(coPath(dir, co.id), YAML.stringify(co));
+  writeYamlFile(coPath(dir, co.id), co);
   const bus = new RoomStore(dir);
   await bus.post("leadership", by, {
     type: "change_order",
@@ -85,12 +84,12 @@ export function transitionChangeOrder(dir: string, id: string, to: "applied" | "
       const list = task.change_orders ?? [];
       list.push({ co_id: co.id, summary: co.summary, applied_at: co.applied_at });
       task.change_orders = list;
-      writeAtomic(tp, YAML.stringify(task));
+      writeYamlFile(tp, task);
     }
   } else {
     co.closed_at = new Date().toISOString();
   }
-  writeAtomic(p, YAML.stringify(co));
+  writeYamlFile(p, co);
   return co;
 }
 
@@ -101,7 +100,7 @@ export function parkDraft(dir: string, taskId: string): { status: string; parked
   const brief = readYamlFile<Record<string, unknown>>(p)!;
   if (brief.status === "approved") throw new Error(`brief already approved: ${taskId}`);
   const parked = { status: "parked", parked_at: new Date().toISOString() };
-  writeAtomic(p, YAML.stringify({ ...brief, ...parked }));
+  writeYamlFile(p, { ...brief, ...parked });
   return parked;
 }
 

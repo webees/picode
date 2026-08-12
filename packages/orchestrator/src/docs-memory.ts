@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import YAML from "yaml";
-import { ensureDir, readYamlFile, writeAtomic } from "@picode/core";
+import { ensureDir, readYamlFile, writeYamlFile } from "@picode/core";
 
 /**
  * Memory Brief (18 phase G / 08-invariants I14): the docs lead (docs-lead)
@@ -43,7 +42,7 @@ export function writeMemoryBrief(
     acked_at: null,
   };
   ensureDir(briefsDir(dir));
-  writeAtomic(path.join(briefsDir(dir), `${brief.id}.yaml`), YAML.stringify(brief));
+  writeYamlFile(path.join(briefsDir(dir), `${brief.id}.yaml`), brief);
   return brief;
 }
 
@@ -59,7 +58,7 @@ export function ackMemoryBrief(dir: string, id: string, by = "run-lead"): Memory
     acked_by: by,
     acked_at: new Date().toISOString(),
   };
-  writeAtomic(p, YAML.stringify(next));
+  writeYamlFile(p, next);
   return next;
 }
 

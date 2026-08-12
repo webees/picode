@@ -10,6 +10,7 @@ import {
   worktreePath,
   writeAtomic,
   type PicodeConfig,
+  writeYamlFile,
 } from "@picode/core";
 import { RoomStore, issueToken } from "@picode/bus";
 import { readGoal } from "./run-store.js";
@@ -59,7 +60,7 @@ export function addChunkAndTask(
     status: "ready",
     task_id: taskId,
   });
-  writeAtomic(chunksPath, YAML.stringify(data));
+  writeYamlFile(chunksPath, data);
 
   const task: TaskState = {
     id: taskId,
@@ -85,7 +86,7 @@ export function addChunkAndTask(
   ensureDir(path.join(taskDir, "evidence"));
   ensureDir(path.join(taskDir, "handoff"));
   ensureDir(path.join(taskDir, "inbox"));
-  writeAtomic(path.join(taskDir, "task.yaml"), YAML.stringify(task));
+  writeYamlFile(path.join(taskDir, "task.yaml"), task);
 
   const store = new RoomStore(dir);
   store.saveMembers(task.work_room, [
@@ -104,9 +105,9 @@ export function draftBrief(dir: string, taskId: string): void {
   ensureDir(briefDir);
   const md = `# Work Brief\n\n## Objectives\n\n- (run-lead: fill in)\n\n## Non-goals\n\n- \n\n## Acceptance\n\nSee task.yaml\n\n## Forbidden\n\n- No web access; use request_info\n- Stay inside write_paths\n`;
   writeAtomic(path.join(briefDir, "WORK_BRIEF.md"), md);
-  writeAtomic(
+  writeYamlFile(
     path.join(briefDir, "brief.yaml"),
-    YAML.stringify({
+    {
       schema_version: "1",
       task_id: taskId,
       version: 1,
@@ -117,7 +118,7 @@ export function draftBrief(dir: string, taskId: string): void {
       approved_at: null,
       objectives: [],
       non_goals: [],
-    }),
+    },
   );
 }
 
@@ -127,7 +128,7 @@ export function approveBrief(dir: string, taskId: string, by: string): void {
   brief.status = "approved";
   brief.approved_by = by;
   brief.approved_at = new Date().toISOString();
-  writeAtomic(p, YAML.stringify(brief));
+  writeYamlFile(p, brief);
 }
 
 export function assertBriefApproved(dir: string, taskId: string, config: PicodeConfig): void {
@@ -210,9 +211,9 @@ export function prepareTask(
       },
     },
   };
-  writeAtomic(path.join(dir, "tasks", taskId, "triad.yaml"), YAML.stringify(triad));
+  writeYamlFile(path.join(dir, "tasks", taskId, "triad.yaml"), triad);
   task.status = "assigned";
-  writeAtomic(path.join(dir, "tasks", taskId, "task.yaml"), YAML.stringify(task));
+  writeYamlFile(path.join(dir, "tasks", taskId, "task.yaml"), task);
 
   return { worktree: wt, branch };
 }

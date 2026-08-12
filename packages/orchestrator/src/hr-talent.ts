@@ -1,6 +1,5 @@
 import path from "node:path";
-import YAML from "yaml";
-import { assertSafeName, ensureDir, readYamlFile, writeAtomic, type PicodeConfig } from "@picode/core";
+import { assertSafeName, ensureDir, readYamlFile, writeYamlFile, type PicodeConfig } from "@picode/core";
 import type { Seat } from "./staffing.js";
 
 /**
@@ -165,7 +164,7 @@ export function appendTalentRecords(
   pool.summary = computeTalentSummary(pool.records);
   pool.updated_at = new Date().toISOString();
   ensureDir(path.dirname(talentPoolPath(repoRoot, config)));
-  writeAtomic(talentPoolPath(repoRoot, config), YAML.stringify(pool));
+  writeYamlFile(talentPoolPath(repoRoot, config), pool);
   return pool;
 }
 
@@ -198,7 +197,7 @@ export function appendLedgerEntries(
   ledger.entries.sort((a, b) => (a.first_used_at < b.first_used_at ? -1 : 1));
   ledger.updated_at = now;
   ensureDir(path.dirname(nameLedgerPath(repoRoot, config)));
-  writeAtomic(nameLedgerPath(repoRoot, config), YAML.stringify(ledger));
+  writeYamlFile(nameLedgerPath(repoRoot, config), ledger);
   return ledger;
 }
 

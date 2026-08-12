@@ -13,6 +13,7 @@ import {
   writeAtomic,
   type Persona,
   type PicodeConfig,
+  writeYamlFile,
 } from "@picode/core";
 import { SESSION_EVENTS } from "@picode/core";
 import { readGoal } from "./run-store.js";
@@ -132,7 +133,7 @@ export async function createStaffingRequest(
     created_at: new Date().toISOString(),
   };
   ensureDir(staffingDir(dir, taskId));
-  writeAtomic(path.join(staffingDir(dir, taskId), "request.yaml"), YAML.stringify(request));
+  writeYamlFile(path.join(staffingDir(dir, taskId), "request.yaml"), request);
   await applyEvent(dir, config, SESSION_EVENTS.STAFFING_REQUEST);
   return { request };
 }
@@ -218,7 +219,7 @@ export function draftPersonas(
     written.push(file);
   }
   request.status = "in_hr";
-  writeAtomic(path.join(staffingDir(dir, taskId), "request.yaml"), YAML.stringify(request));
+  writeYamlFile(path.join(staffingDir(dir, taskId), "request.yaml"), request);
   return { personas: written };
 }
 
@@ -381,7 +382,7 @@ export async function approveStaffing(
     team_name: teamName,
     triad,
   };
-  writeAtomic(path.join(staffingDir(dir, taskId), "staffing.yaml"), YAML.stringify(staffing));
+  writeYamlFile(path.join(staffingDir(dir, taskId), "staffing.yaml"), staffing);
 
   // Identity registry (16 §9.3): record every locked codename/team_name in the
   // name ledger so future same-run hires never reuse a name (TC-03/TC-12).
@@ -405,7 +406,7 @@ export async function approveStaffing(
     }
   }
   request.status = "approved";
-  writeAtomic(path.join(staffingDir(dir, taskId), "request.yaml"), YAML.stringify(request));
+  writeYamlFile(path.join(staffingDir(dir, taskId), "request.yaml"), request);
 
   // P04 delivery: the people cell's job is done — put it back to sleep so
   // gate wakes (merge_ready etc.) are not throttled by max_awake.

@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import YAML from "yaml";
 import {
   branchName,
   ensureDir,
@@ -9,6 +8,7 @@ import {
   worktreePath,
   writeAtomic,
   type PicodeConfig,
+  writeYamlFile,
 } from "@picode/core";
 import { SessionStore } from "./session-store.js";
 import { terminateAgent } from "./pi-adapter.js";
@@ -73,7 +73,7 @@ export function submitEvidence(
     at: new Date().toISOString(),
   };
   ensureDir(path.dirname(evidencePath(dir, taskId)));
-  writeAtomic(evidencePath(dir, taskId), YAML.stringify(ev));
+  writeYamlFile(evidencePath(dir, taskId), ev);
   return ev;
 }
 
@@ -225,7 +225,7 @@ export function ackHandoff(
     accepted_at: new Date().toISOString(),
     notes: notes ?? existing?.notes ?? null,
   };
-  writeAtomic(acceptancePath(dir, taskId), YAML.stringify(acc));
+  writeYamlFile(acceptancePath(dir, taskId), acc);
   return acc;
 }
 
@@ -249,7 +249,7 @@ function setChunkStatus(dir: string, chunkId: string, status: string): string | 
   const chunk = data.chunks.find((c) => c.id === chunkId);
   if (!chunk) return null;
   chunk.status = status;
-  writeAtomic(p, YAML.stringify(data));
+  writeYamlFile(p, data);
   return status;
 }
 
@@ -354,15 +354,15 @@ export async function dissolveTask(
         backupRef = execFileSync("git", ["-C", wt, "rev-parse", "HEAD"], {
           encoding: "utf8",
         }).trim();
-        writeAtomic(
+        writeYamlFile(
           path.join(dir, "tasks", taskId, "backup.yaml"),
-          YAML.stringify({
+          {
             schema_version: "1",
             task_id: taskId,
             backup_ref: backupRef,
             at: new Date().toISOString(),
             reason: "force dissolve",
-          }),
+          },
         );
       }
     } catch (e) {
@@ -399,7 +399,7 @@ export async function dissolveTask(
 
   const finalStatus = opts.force ? (opts.status ?? "failed") : "dissolved";
   task.status = finalStatus;
-  writeAtomic(path.join(dir, "tasks", taskId, "task.yaml"), YAML.stringify(task));
+  writeYamlFile(path.join(dir, "tasks", taskId, "task.yaml"), task);
 
   // Normal dissolve unlocks downstream chunks; force leaves the chunk retryable.
   const chunkStatus = opts.force ? null : setChunkStatus(dir, task.chunk_id, "done");

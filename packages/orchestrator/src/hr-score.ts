@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { assertSafeName, ensureDir, readYamlFile, writeAtomic, type PicodeConfig } from "@picode/core";
+import { assertSafeName, ensureDir, readYamlFile, writeYamlFile, type PicodeConfig } from "@picode/core";
 import {
   HANDOFF_FILES,
   handoffDir,
@@ -214,7 +214,7 @@ export function scoreTask(
     persona_scores: personaScores,
   };
   ensureDir(path.dirname(scoresPath(dir, taskId)));
-  writeAtomic(scoresPath(dir, taskId), YAML.stringify(scores));
+  writeYamlFile(scoresPath(dir, taskId), scores);
 
   // Knowledge-base aggregation for later optimization.
   const runId = path.basename(dir);
@@ -291,6 +291,6 @@ export function upsertArchive(file: string, rec: Pick<HrArchive, "kind" | "key" 
     updated_at: new Date().toISOString(),
   };
   ensureDir(path.dirname(file));
-  writeAtomic(file, YAML.stringify(archive));
+  writeYamlFile(file, archive);
   return archive;
 }
