@@ -73,5 +73,3 @@ export const SESSION_EVENTS = {
 
 export type SessionEvent = (typeof SESSION_EVENTS)[keyof typeof SESSION_EVENTS];
 
-/** All event ids (for config validation of rule tables). */
-export const SESSION_EVENT_IDS: readonly string[] = Object.values(SESSION_EVENTS);

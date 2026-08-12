@@ -31,10 +31,6 @@ export function hasEvolveLayer(dir: string, layer: EvolveLayer): boolean {
   }
 }
 
-export function evolveSpecOf(dir: string): ReturnType<typeof readGoal>["evolve"] {
-  return readGoal(dir).evolve;
-}
-
 /** E4: run self_evolve.verify_commands before merge; throws on non-zero. */
 export function runVerifyCommands(
   repoRoot: string,
