@@ -220,6 +220,11 @@ self_evolve:
   allowed_layers: [knowledge, prompts, docs, tests]  # code/policy 显式加
   verify_commands:
     - "npm test"
+  budgets:                        # C1 防失控预算（每会话独立）
+    maxTurns: 20                  # wake 轮次上限；0 = 不限
+    maxTokens: 0                  # token 上限；0 = 不限（v1 无计量器，声明保留）
+    timeoutMs: 0                  # 单次持续 awake 时长上限；0 = 不限
+    gate_commands: []             # 预算耗尽时的验证命令（v1 声明，不执行）
   require_sponsor_merge: true
   require_code_review_on_code_layer: true
   knowledge_log_glob: "docs/knowledge/evolve/"
@@ -230,6 +235,8 @@ self_evolve:
     - "**/secrets/**"
     - "**/*.pem"
 ```
+
+**预算（C1，融合 prime-agent autonomous budgets Q1）：** 每个会话有独立的防失控预算 `self_evolve.budgets`，默认 `maxTurns: 20`（wake 轮次上限）/ `maxTokens: 0`（token 不限，v1 无计量器）/ `timeoutMs: 0`（持续 awake 时长不限）/ `gate_commands: []`（预算耗尽时的验证命令）。预算以 0 = 不限、正值为限量；达到限额的 awake 会话由 guardian 的 `checkBudgets` 置 `error="budget exceeded"` 并 sleep 停靠——gate 停靠**不视为成功**（"达到限额 ≠ 任务成功"），default 值保守，正常会话远低于上限，不改现有行为。
 
 ---
 

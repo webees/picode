@@ -101,6 +101,8 @@ export class SessionStore {
       wake_reason: null,
       persona_path: null,
       error: null,
+      // C1-run-budgets: per-session wake-turn meter starts at 0.
+      budget: { turns: 0 },
     };
     ensureDir(this.sessionsDir());
     writeYamlFile(this.sessionPath(agentId), record);
@@ -123,7 +125,13 @@ export class SessionStore {
           );
         }
       }
-      return { ...cur, wake_reason: reason, last_wake_at: new Date().toISOString() };
+      return {
+        ...cur,
+        wake_reason: reason,
+        last_wake_at: new Date().toISOString(),
+        // C1-run-budgets: each sleeping→awake transition counts as one turn.
+        budget: { turns: (cur.budget?.turns ?? 0) + 1 },
+      };
     });
   }
 

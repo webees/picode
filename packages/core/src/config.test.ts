@@ -84,3 +84,46 @@ test("D4: reserved keys keep their defaults but are documented (no reads in impl
   assert.equal(cfg.bus.adapter, "file");
   assert.equal(cfg.self_evolve.enabled, true);
 });
+
+test("C1: self_evolve.budgets conservative defaults (0 = unlimited, 20 wake-turns)", () => {
+  const b = getDefaultConfig().self_evolve.budgets;
+  assert.equal(b.maxTurns, 20);
+  assert.equal(b.maxTokens, 0);
+  assert.equal(b.timeoutMs, 0);
+  assert.deepEqual(b.gate_commands, []);
+});
+
+test("C1: budgets overridable via project yaml (incl. gate_commands parsing)", () => {
+  const dir = tmpRepoWithConfig(
+    "self_evolve:\n  budgets:\n    maxTurns: 3\n    maxTokens: 50000\n    timeoutMs: 600000\n    gate_commands:\n      - \"npm test\"\n      - \"npm run build\"\n",
+  );
+  const cfg = loadConfig(dir);
+  const b = cfg.self_evolve.budgets;
+  assert.equal(b.maxTurns, 3);
+  assert.equal(b.maxTokens, 50000);
+  assert.equal(b.timeoutMs, 600000);
+  assert.deepEqual(b.gate_commands, ["npm test", "npm run build"]);
+  // untouched budgets defaults survive the merge
+  assert.equal(getDefaultConfig().self_evolve.budgets.maxTurns, 20);
+});
+
+test("C1: validateConfig rejects invalid budgets values", () => {
+  const base = getDefaultConfig();
+  const budgets = base.self_evolve.budgets;
+  const patches: Array<Record<string, unknown>> = [
+    { maxTurns: -1 },
+    { maxTurns: 1.5 },
+    { maxTokens: -1 },
+    { timeoutMs: -1 },
+    { timeoutMs: 100.5 },
+    { gate_commands: ["ok", 42] },
+    { gate_commands: "npm test" },
+  ];
+  for (const patch of patches) {
+    const cfg = {
+      ...base,
+      self_evolve: { ...base.self_evolve, budgets: { ...budgets, ...patch } },
+    };
+    assert.throws(() => validateConfig(cfg as typeof base), Error, `expected rejection for ${JSON.stringify(patch)}`);
+  }
+});

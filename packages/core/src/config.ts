@@ -142,6 +142,22 @@ export interface EvolveGoalSpec {
   forbidden_paths: string[];
 }
 
+/**
+ * Runaway budget per session (C1-run-budgets / prime-agent autonomous.ts Q1).
+ * 0 = unlimited. Conservative defaults: normal sessions stay far below the
+ * ceilings, so existing behavior is unchanged — the cap only stops loops.
+ */
+export interface EvolveBudgetsConfig {
+  /** Max wake turns per session; exceeding → setError + sleep (限额 ≠ 成功). */
+  maxTurns: number;
+  /** Max tokens per session; v1 has no token meter (declared, 0 = unlimited). */
+  maxTokens: number;
+  /** Max continuous awake wall-clock ms; 0 = unlimited. */
+  timeoutMs: number;
+  /** Gate verification commands on budget exhaustion; stopping is not success. */
+  gate_commands: string[];
+}
+
 /** self_evolve config (19 §10 draft). */
 export interface SelfEvolveConfig {
   /** Reserved (D055): enabled is declared per 19 §10; goal.kind drives evolution, not this flag. */
@@ -152,6 +168,8 @@ export interface SelfEvolveConfig {
   allowed_layers: EvolveLayer[];
   /** Merge gate commands (E4); default npm test. */
   verify_commands: string[];
+  /** Runaway protection (C1): per-session turn/token/time ceilings. */
+  budgets: EvolveBudgetsConfig;
   /** Reserved (D055): sponsor merge approval is not mechanically enforced yet (E3/E6 gate). */
   require_sponsor_merge: boolean;
   /** code layer ⇒ code-review MUST be woken (E5). */
@@ -390,6 +408,14 @@ export const DEFAULTS: PicodeConfig = {
     default_kind: "delivery",
     allowed_layers: ["knowledge", "prompts", "docs", "tests"],
     verify_commands: ["npm run build && npm test"],
+    // C1 conservative defaults: 0 = unlimited; 20 wake-turns is a far ceiling
+    // that only runaway wake/sleep loops hit, so default behavior is unchanged.
+    budgets: {
+      maxTurns: 20,
+      maxTokens: 0,
+      timeoutMs: 0,
+      gate_commands: [],
+    },
     require_sponsor_merge: true,
     require_code_review_on_code_layer: true,
     knowledge_log_glob: "docs/knowledge/evolve/",
@@ -565,6 +591,26 @@ export function validateConfig(config: PicodeConfig): void {
   }
   if (config.self_evolve.allowed_layers.includes("policy")) {
     console.warn("[picode] WARNING: self_evolve policy layer is high-risk (19 §5 E3/E5)");
+  }
+  const b = config.self_evolve.budgets;
+  for (const [key, val] of [
+    ["maxTurns", b.maxTurns],
+    ["maxTokens", b.maxTokens],
+    ["timeoutMs", b.timeoutMs],
+  ] as const) {
+    if (!Number.isInteger(val) || val < 0) {
+      configError(
+        `self_evolve.budgets.${key} must be a non-negative integer (0 = unlimited)`,
+      );
+    }
+  }
+  if (
+    !Array.isArray(b.gate_commands) ||
+    b.gate_commands.some((c) => typeof c !== "string")
+  ) {
+    configError(
+      "self_evolve.budgets.gate_commands must be an array of command strings",
+    );
   }
 }
 

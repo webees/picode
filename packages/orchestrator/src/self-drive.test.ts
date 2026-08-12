@@ -8,6 +8,7 @@ import { addChunkAndTask, approveBrief, draftBrief } from "./task.js";
 import { SessionStore } from "./session-store.js";
 import { appendSessionCommand } from "./rules-engine.js";
 import {
+  checkBudgets,
   deriveEvents,
   guardianTick,
   probeServeHealth,
@@ -298,6 +299,66 @@ test("sleepIdleSessions: sleeps awake sessions idle beyond idle_sleep_sec", asyn
   const slept = await sleepIdleSessions(dir, config);
   assert.deepEqual(slept, ["pm"]);
   assert.equal(store.get("pm")!.state, "sleeping");
+});
+
+test("checkBudgets: default config does not stop a normal session (默认不触发)", async () => {
+  const { dir, config, store } = setupRun();
+  await store.wake("pm", "test");
+  const r = await checkBudgets(dir, config);
+  assert.deepEqual(r, { stopped: [], exceeded: [], gate_commands: [] });
+  const rec = store.get("pm")!;
+  assert.equal(rec.state, "awake");
+  assert.equal(rec.error, null);
+});
+
+test("checkBudgets: over-limit session is stopped — setError + sleep (超限停靠)", async () => {
+  const { dir, config, store } = setupRun();
+  config.self_evolve.budgets.maxTurns = 2;
+  await store.wake("pm", "turn-1");
+  await store.sleep("pm", "turn-1");
+  await store.wake("pm", "turn-2"); // second wake-turn reaches the cap
+
+  const r = await checkBudgets(dir, config);
+  assert.deepEqual(r.stopped, ["pm"]);
+  assert.equal(r.exceeded.length, 1);
+  assert.equal(r.exceeded[0].field, "maxTurns");
+  assert.equal(r.exceeded[0].limit, 2);
+  assert.equal(r.exceeded[0].used, 2);
+
+  const rec = store.get("pm")!;
+  assert.equal(rec.state, "sleeping", "超限会话必须停靠");
+  assert.equal(rec.budget?.turns, 2);
+  assert.match(rec.error ?? "", /budget exceeded \(maxTurns: 2\/2\)/);
+});
+
+test("checkBudgets: timeoutMs stops a long-awake session and surfaces gate_commands", async () => {
+  const { dir, config, store } = setupRun();
+  config.self_evolve.budgets.timeoutMs = 1000;
+  config.self_evolve.budgets.gate_commands = ["npm test", "npm run build"];
+  await store.wake("pm", "test");
+  const rec = store.get("pm")!;
+  rec.last_wake_at = new Date(Date.now() - 3600_000).toISOString();
+  const YAML = (await import("yaml")).default;
+  fs.writeFileSync(path.join(dir, "sessions", "pm.yaml"), YAML.stringify(rec));
+
+  const r = await checkBudgets(dir, config);
+  assert.deepEqual(r.stopped, ["pm"]);
+  assert.equal(r.exceeded[0].field, "timeoutMs");
+  assert.deepEqual(r.gate_commands, ["npm test", "npm run build"], "gate_commands 配置原样透出");
+  const stopped = store.get("pm")!;
+  assert.equal(stopped.state, "sleeping");
+  assert.match(stopped.error ?? "", /budget exceeded \(timeoutMs/);
+});
+
+test("guardianTick: stops an over-budget awake session in the same pass", async () => {
+  const { dir, config, store } = setupRun();
+  config.self_evolve.budgets.maxTurns = 1;
+  await store.wake("pm", "test");
+
+  const res = await guardianTick(dir, config);
+  assert.deepEqual(res.budgets.stopped, ["pm"]);
+  assert.equal(store.get("pm")!.state, "sleeping");
+  assert.match(store.get("pm")!.error ?? "", /budget exceeded/);
 });
 
 test("runGuardian: bounded by max-ticks and stops on halt file", async () => {
