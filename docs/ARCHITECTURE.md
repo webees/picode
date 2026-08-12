@@ -9,6 +9,7 @@
 |层|组件|LLM|
 |----|------|-----|
 |人类|`sponsor`|**否**|
+|外部接入|`@picode/mcp-server`（stdio · 56 工具）|**是**（客户端侧）|
 |编排|`@picode/orchestrator`|**否**（状态机、门闩、session 执行）|
 |调度|`sess-mgr` 会话|**是**（唤醒/休眠决策）|
 |平台/任务岗|Pi + `@picode/pi-extension`|**是**（仅 awake）|
@@ -59,6 +60,7 @@
 |`@picode/bus`|token、房间 ACL、消息 type 注册表、jsonl、窗口压缩|
 |`@picode/orchestrator`|run/task/brief/staffing/session/merge/evolve/window CLI（命令注册表按域分组）|
 |`@picode/pi-extension`|bus_* · repo_* · git_* · request_* · session_* · state_read · web_* · run_allowlisted（09 矩阵 20 工具）|
+|`@picode/mcp-server`|MCP 服务器（stdio）：编排面 36 工具（包装 store 函数）+ 执行面 20 工具（复用 pi-extension，ACL 全保留，D064）|
 
 ## 4. 往哪读
 
@@ -71,3 +73,4 @@
 |选项默认|[decision-catalog](./reference/decision-catalog.md)|
 |不变量|[08-invariants](./spec/08-invariants.md)|
 |Git/Bus/工具|[domains/](./domains/)|
+|MCP 接入|[guides/mcp-quickstart](./guides/mcp-quickstart.md)|

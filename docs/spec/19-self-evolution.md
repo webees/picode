@@ -66,6 +66,15 @@ sponsor 提出「升级 picode：…」
 |sess-mgr|同 17；进化 run 宜提高 `code-review`/`sec-eng` 唤醒权重|
 |sponsor|**永远人类**；合入 main / 升 tag / 开 policy 层 MUST 人类确认|
 
+### 3.1 外部执行者：MCP 客户端 = 受管工位（D064）
+
+除真招聘的 squad（opencode/Pi 会话）外，进化 run 的执行者也可以是 **MCP 客户端**（外部 LLM 经 `@picode/mcp-server` stdio 接入）：
+
+- **身份**：MCP 服务器 = 可信本地进程；每个执行工具调用携带 `_agent_id`，token 由服务器代签（run secret），走与 Bus 一致的 token/房间/画像判定（D004、bus-system §2）——客户端不能伪造 `from`，也不能越 profile 用工具
+- **工具面**：编排面（36）驱动全流程门闩（init → 双门闩 → prepare → evidence → merge）；执行面（20）在 worktree 内写码/验证（repo_write 受 write_paths、run_allowlisted 受白名单边界）
+- **纪律不变**：E1–E7 门闩、审查门、sponsor 永远人类、`knowledge/evolve/<run_id>.md`（E6）全部照旧；MCP 客户端只是「会思考的工位」的第三种后端（另两种 = opencode serve / Pi 进程，D057 三态路由之外的外部形态）
+- **成熟度**：外部驱动不改变 E0→E4 打开顺序；E3（code 层）仍须 18 完成 + O005 就绪后评估
+
 ---
 
 ## 4. Goal 扩展字段（设计）

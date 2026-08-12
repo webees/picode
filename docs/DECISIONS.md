@@ -66,6 +66,7 @@
 |D060|**11 playbook 勾选滞后核实**（不改 spec 正文）：29 项未勾选中 27 项已实现且有测试守护（逐项 grep 验证：loader 5 层 / atomic+flock / ACL / token / 消息 type / 双门闩 / merge 拓扑与 abort / 文档三人小组 / Memory Brief / change_order / draft park）；2 项未实现——cell check_signoff 文件格式与 violations/proc-audit 红灯，属 O006 开放项（spec 10 仅定义消息 type，`check_signoff` type 已注册于 bus；文件/流程格式留待 spec 细化，实现按保守默认未做）。11 playbook 勾选属实现追踪而非规范正文，补勾建议由 spec 维护方统一处理|
 |D061|**opencode spawn 改为 noReply 异步**（dogfood E2E 发现）：build agent 收到「就绪」消息后自主行动（探索仓库/跑工具），spawn 同步等待模型回复导致 120s 超时、approve 卡死（实测 180s+ 超时 2/3 唤醒失败）；`spawn()` 的 ready message 加 `noReply: true`（serve 原生参数，消息异步入队、agent 自行处理），spawn 秒回（实测 approve 0.152s、wokeErrors 空）。新增 3 单测（mock fetch 断言 noReply/model 对象/spawn 快速返回）|
 |D062|**dogfood 实测发现**（克隆仓 /tmp/picode-dogfood，deepseek-v4-flash 真实闭环）：(1) 模型产出 2 处低风险重构——`globToRegExp` 转义提取 `escapeRegExp`（233f431）+ `GLOB_ESCAPE_RE` 常量与 `pickFromPool`（5ad44c7），行为不变、195 测试全绿、已合并入克隆仓 main；(2) **E4 merge gate 缺陷**：`verify_commands`（npm test）在 merge 时执行但未先 build——TS 项目可能测旧 dist，本次以 merge 后手动 build+test 兜底，建议 gate 改为 `npm run build && npm test`（未改行为）；(3) **agent cwd 偏差**：opencode 会话 cwd = 会话目录（克隆仓根）而非 worktree，模型把第二处改动写进了克隆仓根 working tree 导致 merge 冲突——建议任务 prompt 明确 cd worktree，或 spawn 时把会话 directory 指向 worktree（改进建议，未改行为）|
+|D064|**picode 提供 MCP 服务器（stdio · 全量工具面）**：新增 `@picode/mcp-server`——编排面（~36 工具，直接包装 orchestrator store 函数，门闩/锁/不变量全保留）+ 执行面（pi-extension 20 工具 1:1，ACL 六层全保留：profile+token+房间+路径+state 白名单+allowlist 边界）。传输 stdio（`PICODE_REPO` 指定仓库）；执行面逐调用注入 env + 重捕获工具表（与 harness/opencode 插件同款模式），token 由服务器代签（`issueToken` + run secret.txt/dev-secret 兜底），transport 参数 `_` 前缀与工具参数分离。副作用工具（session_wake/sleep/terminate、task_prepare、merge_process、task_dissolve）在描述中显式标注。HTTP/SSE 传输与 resources 留待后续|
 
 ## 开放
 
@@ -80,3 +81,12 @@
 - 2026-08-11 · 来源：T2 插件权限分类任务（模型越权直接改 spec 登记 bus 消息类型）
 - 决定：回退 spec 改动；消息类型决策记本条目；错误收集机制（docs/errors/ + bus error.report/error.digest）自本决策生效
 - 纪律强化：spec 正文变更必须经 DECISIONS 门禁；正确内容放进错误通道仍是流程事故（run-lead 裁决）
+
+## D064 — picode 提供 MCP 服务器（stdio · 全量工具面）
+- 2026-08-12 · 来源：甲方「先做成 MCP，再让 picode 自己优化自己」指令
+- 决定：新增 `@picode/mcp-server` 包，stdio 传输，暴露 56 个工具：
+  - **编排面（36）**：init_run/board_view/run_status/goal_*/chunk_add/brief_*/staffing_*/task_prepare/task_dissolve/session_*/evidence_submit/handoff_*/merge_*/memory_brief_*/change_order_create/knowledge_ingest/evolve_*/self_drive_*/progress_sweep——直接包装 orchestrator store 函数，双门闩/锁/不变量原样生效
+  - **执行面（20）**：pi-extension 工具 1:1（bus_*/repo_*/git_*/run_allowlisted/web_*/request_*/progress_report/state_read/session_*），ACL 六层全保留；transport 参数 `_` 前缀与工具参数分离；token 服务器代签（`issueToken` + run secret.txt，dev-secret 兜底）；逐调用注入 env + 重捕获（与 harness/opencode 插件同款）
+  - 命名冲突处置：编排面直接控制版更名 `session_wake_direct`/`session_sleep_direct`/`session_roster`，执行面保留 09 矩阵规范名
+- 身份语义：MCP 服务器 = 可信本地进程（同 orchestrator CLI）；执行面按调用方 `_agent_id` 走 token/房间/画像判定，sponsor 永远人类不变
+- 自优化衔接：MCP 客户端可作为「受管工位」驱动 self_evolve run（spec 19 第 3 章扩展），E1–E7 门闩与 sponsor 合入闸门不变

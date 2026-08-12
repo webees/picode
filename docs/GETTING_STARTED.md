@@ -123,6 +123,17 @@ node $PICODE/.../cli.js window compress --repo . --run $RUN         # 窗口压�
 node $PICODE/.../cli.js staffing scores --repo . --run $RUN --task $TASK  # 评分档案（16 §9）
 ```
 
+## 5.2 MCP 接入（D064）
+
+外部 LLM/客户端可通过 MCP 服务器驱动同一套流程（stdio，56 工具：编排面 36 + 执行面 20）：
+
+```bash
+npm run build
+PICODE_REPO=. npm run mcp        # stdio 服务器
+```
+
+客户端配置与完整工具清单见 [guides/mcp-quickstart.md](./guides/mcp-quickstart.md)。
+
 ## 6. 规范索引
 
 - 文档地图：`docs/README.md` · 权威：`docs/AUTHORITY.md`  

@@ -18,6 +18,7 @@
 |4|[standards/terminology.md](./standards/terminology.md)|运行时术语 **唯一正文**|
 |5|[spec/08-invariants.md](./spec/08-invariants.md)|不变量 I1–I15|
 |6|[guides/pi-quickstart.md](./guides/pi-quickstart.md)|Pi 最短路径|
+|6b|[guides/mcp-quickstart.md](./guides/mcp-quickstart.md)|MCP 接入（D064）|
 |7|[spec/11-implement-playbook.md](./spec/11-implement-playbook.md)|分阶段实现 T01–T19|
 |8|[spec/18-v1-completion-plan.md](./spec/18-v1-completion-plan.md)|**未完成项落地策划**|
 |9|[spec/19-self-evolution.md](./spec/19-self-evolution.md)|**自我进化（用 picode 升级 picode）**|

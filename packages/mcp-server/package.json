@@ -1,0 +1,27 @@
+{
+  "name": "@picode/mcp-server",
+  "version": "0.1.0",
+  "description": "picode MCP server — management + execution tool surface over stdio (D064)",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "picode-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && node --test dist/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@picode/bus": "^0.1.0",
+    "@picode/core": "^0.1.0",
+    "@picode/orchestrator": "^0.1.0",
+    "@picode/pi-extension": "^0.1.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
