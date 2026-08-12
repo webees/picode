@@ -19,6 +19,26 @@ export interface WindowInfo {
   date: string;
 }
 
+/**
+ * Run-level window rollup record (`windows/<window>.yaml`, 语义压缩层 P2).
+ *
+ * The mechanical fold produces the mechanical `window_rollup` bus message;
+ * this record is the run archive shape that carries the *semantic* summary
+ * layer: `summary` (model-written) and `summary_due` (latch). Both default to
+ * unset/null on a mechanical fold and must survive subsequent mechanical
+ * re-compression untouched.
+ */
+export interface WindowRollup {
+  /** Window id, e.g. "2026-08-10-pm". */
+  window: string;
+  /** Archive file path (windows/<window>.yaml). */
+  archive_path: string;
+  /** Semantic summary (P2: docs cell model summary); null when not yet written. */
+  summary?: string | null;
+  /** Semantic-summary latch: true = a summary is due for this window. */
+  summary_due?: boolean;
+}
+
 export function windowIdOf(isoTs: string | Date, splitHour: number): WindowInfo {
   const d = typeof isoTs === "string" ? new Date(isoTs) : isoTs;
   const pad = (n: number) => String(n).padStart(2, "0");

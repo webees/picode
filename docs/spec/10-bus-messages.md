@@ -50,8 +50,10 @@ body 宜短；大内容用 `refs[]`。
 |`cell_done`|cell lead|本房, task|cell_id|环节完成待 check|
 |`check_signoff`|check seat|本房|cell_id, result|监督签字|
 |`merge_ready`|squad-lead/tpm|task, release|branch, sha|进入 merge 队列|
-|`window_rollup`|orchestrator|任意|window, folded, kept, archive|上/下午窗口压缩摘要（替换被折叠的旧消息）|
+|`window_rollup`|orchestrator|任意|window, folded, kept, archive|上/下午窗口压缩摘要（机械折叠，替换被折叠的旧消息）|
 |`system`|orchestrator|任意||系统通知|
+
+`window_rollup` 为机械折叠摘要；语义摘要层（P2）由 run 级 `windows/<window>.yaml` 承载——`summary`（默认 null）+ `summary_due` 门闩（默认 false），见 [bus-system](../domains/bus-system.md) §5.1。
 
 ## 3. progress（实现三角 MUST）
 
