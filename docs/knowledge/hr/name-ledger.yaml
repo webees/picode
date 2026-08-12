@@ -1,5 +1,5 @@
 schema_version: "1"
-updated_at: 2026-08-12T17:35:59.448Z
+updated_at: 2026-08-12T19:47:14.464Z
 entries:
   - kind: team_name
     name: 春山
@@ -121,3 +121,75 @@ entries:
     task_id: task-dead-code-cleanup
     seat: sdet
     first_used_at: 2026-08-12T17:35:59.448Z
+  - kind: team_name
+    name: 鸣沙
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-problem-docs
+    seat: null
+    first_used_at: 2026-08-12T19:40:08.927Z
+  - kind: codename
+    name: 应龙
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-problem-docs
+    seat: squad-lead
+    first_used_at: 2026-08-12T19:40:08.927Z
+  - kind: codename
+    name: 腾蛇
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-problem-docs
+    seat: engineer
+    first_used_at: 2026-08-12T19:40:08.927Z
+  - kind: codename
+    name: 烛龙
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-problem-docs
+    seat: sdet
+    first_used_at: 2026-08-12T19:40:08.927Z
+  - kind: team_name
+    name: 牧野
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-err-fix
+    seat: null
+    first_used_at: 2026-08-12T19:41:42.193Z
+  - kind: codename
+    name: 鲲鹏
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-err-fix
+    seat: squad-lead
+    first_used_at: 2026-08-12T19:41:42.193Z
+  - kind: codename
+    name: 玄武
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-err-fix
+    seat: engineer
+    first_used_at: 2026-08-12T19:41:42.193Z
+  - kind: codename
+    name: 九尾
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-err-fix
+    seat: sdet
+    first_used_at: 2026-08-12T19:41:42.193Z
+  - kind: team_name
+    name: 紫电
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-evolve-e6
+    seat: null
+    first_used_at: 2026-08-12T19:47:14.464Z
+  - kind: codename
+    name: 獬豸
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-evolve-e6
+    seat: squad-lead
+    first_used_at: 2026-08-12T19:47:14.464Z
+  - kind: codename
+    name: 鲲鹏-r2
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-evolve-e6
+    seat: engineer
+    first_used_at: 2026-08-12T19:47:14.464Z
+  - kind: codename
+    name: 衔烛
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-evolve-e6
+    seat: sdet
+    first_used_at: 2026-08-12T19:47:14.464Z
