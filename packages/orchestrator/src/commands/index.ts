@@ -15,6 +15,7 @@ import { memoryCommands } from "./memory.js";
 import { evolveCommands } from "./evolve.js";
 import { windowCommands } from "./window.js";
 import { statusCommands } from "./status.js";
+import { selfDriveCommands, selfDriveFallback } from "./self-drive.js";
 
 export type { Command, CommandContext } from "./types.js";
 
@@ -30,6 +31,7 @@ export const COMMANDS: Command[] = [
   ...evolveCommands,
   ...windowCommands,
   ...statusCommands,
+  ...selfDriveCommands,
 ];
 
 /** Domain ordering for the grouped help (E2). */
@@ -44,6 +46,8 @@ export const DOMAIN_ORDER = [
   "memory",
   "evolve",
   "window",
+  "status",
+  "self-drive",
 ];
 
 /**
@@ -71,6 +75,8 @@ export function fallbackFor(verb: string): ((ctx: CommandContext) => never) | nu
       return staffingFallback;
     case "merge":
       return mergeFallback;
+    case "self-drive":
+      return selfDriveFallback;
     default:
       return null;
   }

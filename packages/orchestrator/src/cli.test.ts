@@ -39,7 +39,7 @@ function tmpGitRepo(): string {
 test("E2: --help groups commands by domain and lists every registered command", () => {
   const { status, stdout } = runCli(["--help"]);
   assert.equal(status, 0);
-  for (const domain of ["run:", "goal:", "session:", "staffing:", "task:", "merge:", "memory:", "evolve:", "window:", "status:"]) {
+  for (const domain of ["run:", "goal:", "session:", "staffing:", "task:", "merge:", "memory:", "evolve:", "window:", "status:", "self-drive:"]) {
     assert.ok(stdout.includes(domain), `help shows ${domain} group`);
   }
   for (const cmd of [
@@ -50,6 +50,7 @@ test("E2: --help groups commands by domain and lists every registered command", 
     "picode merge process",
     "picode window compress",
     "picode status --repo",
+    "picode self-drive tick",
   ]) {
     assert.ok(stdout.includes(cmd), `help lists ${cmd}`);
   }
