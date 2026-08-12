@@ -15,6 +15,41 @@ export interface OpencodeHandle {
   pi_session_id: string; // "oc-<opencode-session-id>"
 }
 
+/**
+ * Client-side guard for ERR-01 (serve stream hang): a serve that never flushes
+ * its response must not hang spawn forever. `requestWithRetry` bounds total
+ * latency while retrying transient failures (timeout / network glitch) with a
+ * short backoff; HTTP-level failures still fail fast so behavior is unchanged.
+ */
+export interface OpencodeRetryPolicy {
+  /** Total attempts including the first. */
+  attempts: number;
+  /** Per-attempt timeout passed to AbortSignal.timeout. */
+  timeoutMs: number;
+  /** Delay between attempts. */
+  backoffMs: number;
+}
+
+/** Ready-message POST (the LLM call): noReply fires the prompt without waiting
+ * for a model turn, so a serve hang here is a transport issue, not a slow model. */
+const READY_MESSAGE_RETRY: OpencodeRetryPolicy = {
+  attempts: 3,
+  timeoutMs: 30_000,
+  backoffMs: 500,
+};
+
+/** True for serve-hang / network glitches that justify a bounded retry. */
+function isTransientFetchError(e: unknown): boolean {
+  if (e instanceof Error) {
+    if (e.name === "TimeoutError" || e.name === "AbortError") return true;
+    return e instanceof TypeError; // fetch network failures surface as TypeError
+  }
+  if (typeof DOMException !== "undefined" && e instanceof DOMException) {
+    return e.name === "TimeoutError" || e.name === "AbortError";
+  }
+  return false;
+}
+
 export class OpencodeSpawner {
   constructor(private config: PicodeConfig) {}
 
@@ -45,6 +80,33 @@ export class OpencodeSpawner {
     }
   }
 
+  /** Bounded retry for transient failures (ERR-01): transient errors are
+   * retried up to `policy.attempts`; anything else propagates immediately. */
+  private async requestWithRetry<T>(
+    method: string,
+    urlPath: string,
+    body: unknown,
+    policy: OpencodeRetryPolicy,
+  ): Promise<T> {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < policy.attempts; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, policy.backoffMs));
+      }
+      try {
+        return await this.request<T>(method, urlPath, body, policy.timeoutMs);
+      } catch (e) {
+        lastErr = e;
+        if (!isTransientFetchError(e)) throw e;
+      }
+    }
+    throw new Error(
+      `opencode ${method} ${urlPath} failed after ${policy.attempts} attempts: ${
+        lastErr instanceof Error ? lastErr.message : String(lastErr)
+      }`,
+    );
+  }
+
   async spawn(agentId: string, env: Record<string, string>): Promise<OpencodeHandle> {
     const persona = env.PICODE_PERSONA ? `\n\nRole prompt:\n${env.PICODE_PERSONA}` : "";
     const system = `${this.config.opencode.system_prompt_prefix}${persona}`;
@@ -64,12 +126,12 @@ export class OpencodeSpawner {
       this.config.opencode.provider_id && this.config.opencode.model_id
         ? { providerID: this.config.opencode.provider_id, modelID: this.config.opencode.model_id }
         : undefined;
-    await this.request("POST", `/session/${id}/message`, {
+    await this.requestWithRetry("POST", `/session/${id}/message`, {
       parts,
       system,
       noReply: true,
       ...(model ? { model } : {}),
-    });
+    }, READY_MESSAGE_RETRY);
     return { pid: -1, pi_session_id: `oc-${id}` };
   }
 
