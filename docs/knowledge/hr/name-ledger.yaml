@@ -1,5 +1,5 @@
 schema_version: "1"
-updated_at: 2026-08-12T19:56:31.540Z
+updated_at: 2026-08-12T21:06:04.442Z
 entries:
   - kind: team_name
     name: 春山
@@ -313,3 +313,147 @@ entries:
     task_id: task-roles-unify
     seat: sdet
     first_used_at: 2026-08-12T19:56:31.540Z
+  - kind: team_name
+    name: 紫电-r3
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-serve-robust
+    seat: null
+    first_used_at: 2026-08-12T20:16:36.272Z
+  - kind: codename
+    name: 破军-r2
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-serve-robust
+    seat: squad-lead
+    first_used_at: 2026-08-12T20:16:36.272Z
+  - kind: codename
+    name: 鲲鹏-r4
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-serve-robust
+    seat: engineer
+    first_used_at: 2026-08-12T20:16:36.272Z
+  - kind: codename
+    name: 衔烛-r3
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-serve-robust
+    seat: sdet
+    first_used_at: 2026-08-12T20:16:36.272Z
+  - kind: team_name
+    name: 玉衡
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-refine
+    seat: null
+    first_used_at: 2026-08-12T20:16:36.473Z
+  - kind: codename
+    name: 玄武-r2
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-refine
+    seat: squad-lead
+    first_used_at: 2026-08-12T20:16:36.473Z
+  - kind: codename
+    name: 青松-r4
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-refine
+    seat: engineer
+    first_used_at: 2026-08-12T20:16:36.473Z
+  - kind: codename
+    name: 毕方
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-refine
+    seat: sdet
+    first_used_at: 2026-08-12T20:16:36.473Z
+  - kind: team_name
+    name: 开阳
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-compaction
+    seat: null
+    first_used_at: 2026-08-12T20:16:36.657Z
+  - kind: codename
+    name: 青松-r5
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-compaction
+    seat: squad-lead
+    first_used_at: 2026-08-12T20:16:36.657Z
+  - kind: codename
+    name: 玄武-r3
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-compaction
+    seat: engineer
+    first_used_at: 2026-08-12T20:16:36.657Z
+  - kind: codename
+    name: 九尾-r2
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-compaction
+    seat: sdet
+    first_used_at: 2026-08-12T20:16:36.657Z
+  - kind: team_name
+    name: 惊雷
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-skills
+    seat: null
+    first_used_at: 2026-08-12T20:16:36.832Z
+  - kind: codename
+    name: 磐石
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-skills
+    seat: squad-lead
+    first_used_at: 2026-08-12T20:16:36.832Z
+  - kind: codename
+    name: 孤鸿
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-skills
+    seat: engineer
+    first_used_at: 2026-08-12T20:16:36.832Z
+  - kind: codename
+    name: 玄武-r4
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-skills
+    seat: sdet
+    first_used_at: 2026-08-12T20:16:36.832Z
+  - kind: team_name
+    name: 玉衡-r2
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-docs-opt
+    seat: null
+    first_used_at: 2026-08-12T21:06:04.339Z
+  - kind: codename
+    name: 破军-r3
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-docs-opt
+    seat: squad-lead
+    first_used_at: 2026-08-12T21:06:04.339Z
+  - kind: codename
+    name: 鲲鹏-r5
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-docs-opt
+    seat: engineer
+    first_used_at: 2026-08-12T21:06:04.339Z
+  - kind: codename
+    name: 朱雀-r3
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-docs-opt
+    seat: sdet
+    first_used_at: 2026-08-12T21:06:04.339Z
+  - kind: team_name
+    name: 天玑
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-intake
+    seat: null
+    first_used_at: 2026-08-12T21:06:04.442Z
+  - kind: codename
+    name: 麒麟-r2
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-intake
+    seat: squad-lead
+    first_used_at: 2026-08-12T21:06:04.442Z
+  - kind: codename
+    name: 朱雀-r4
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-intake
+    seat: engineer
+    first_used_at: 2026-08-12T21:06:04.442Z
+  - kind: codename
+    name: 腾蛇-r2
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-intake
+    seat: sdet
+    first_used_at: 2026-08-12T21:06:04.442Z
