@@ -120,7 +120,7 @@ export class OpencodeSpawner {
     // long-running model turn would abort the spawn (120s timeout, observed in
     // dogfood E2E). The agent processes the ready message in its own loop.
     const parts: Array<{ type: string; text: string }> = [
-      { type: "text", text: "你已就绪。按角色 prompt 工作;如需联网/查询按 picode 信息控制流程申请,不要私自 web。文件写入必须在你的 task worktree（.picode/worktrees/<run>/<task>）内，禁止修改仓库根目录文件。" },
+      { type: "text", text: "你已就绪。按角色 prompt 工作;如需联网/查询按 picode 信息控制流程申请,不要私自 web。文件写入必须在你的 task worktree（.picode/worktrees/<run>/<task>）内，禁止修改仓库根目录文件。提交信息遵循 docs/standards/commit.md：type(scope): 中文摘要 + body 根因 + Reviewed-by footer。" },
     ];
     const model =
       this.config.opencode.provider_id && this.config.opencode.model_id

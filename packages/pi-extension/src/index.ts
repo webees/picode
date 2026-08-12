@@ -520,7 +520,7 @@ export default function picodeExtension(pi: PiApi): void {
   pi.registerTool({
     name: "git_commit",
     label: "Picode Git Commit",
-    description: "Stage all changes in the worktree and commit (engineer/squad-lead)",
+    description: "Stage all changes in the worktree and commit (engineer/squad-lead). Message MUST follow docs/standards/commit.md: <type>(<scope>): <中文摘要> + Reviewed-by footer (C5).",
     parameters: {
       type: "object",
       properties: { message: { type: "string" } },
