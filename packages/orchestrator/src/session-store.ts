@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   ErrorCode,
+  HUMAN_ONLY_ROLES,
   PicodeError,
   assertTransition,
   ensureDir,
@@ -35,8 +36,6 @@ export const PLATFORM_ROLES: readonly string[] = [
   "release-eng",
   "sec-eng",
 ] as const;
-
-const HUMAN_ONLY_ROLES: readonly string[] = ["sponsor"] as const;
 
 export class SessionStore {
   constructor(private runDir: string) {}

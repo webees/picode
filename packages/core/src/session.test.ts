@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  NON_SESSION_ROLES,
+  HUMAN_ONLY_ROLES,
   assertTransition,
   canConsumeModel,
   canTransition,
@@ -71,6 +71,6 @@ test("only awake sessions may consume model calls (17 §4 MUST / T21)", () => {
 });
 
 test("sponsor is the only non-session role", () => {
-  // NON_SESSION_ROLES is the single source of truth for the human channel
-  assert.deepEqual([...NON_SESSION_ROLES], ["sponsor"]);
+  // HUMAN_ONLY_ROLES is the single source of truth for the human channel (C8)
+  assert.deepEqual([...HUMAN_ONLY_ROLES], ["sponsor"]);
 });
