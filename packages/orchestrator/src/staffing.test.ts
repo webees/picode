@@ -1,7 +1,7 @@
 import { test } from "node:test";
+import { gitInit } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import YAML from "yaml";
@@ -18,11 +18,8 @@ import {
 } from "./staffing.js";
 
 function tmpGitRepo(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-test-"));
-  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
+  const dir = gitInit({ email: "test@picode", name: "picode-test" });
   // seed an initial commit so `git worktree add -b <branch> <path> main` works
-  execFileSync("git", ["config", "user.email", "test@picode"], { cwd: dir });
-  execFileSync("git", ["config", "user.name", "picode-test"], { cwd: dir });
   fs.writeFileSync(path.join(dir, "README.md"), "# test\n");
   execFileSync("git", ["add", "."], { cwd: dir });
   execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });

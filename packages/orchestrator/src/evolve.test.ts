@@ -1,7 +1,7 @@
 import { test } from "node:test";
+import { gitInit } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import YAML from "yaml";
@@ -21,10 +21,7 @@ import { writeEvolveKnowledgeLog } from "./evolve-run.js";
 import { checkPersonas } from "./staffing.js";
 
 function tmpGitRepo(name = "picode"): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-test-"));
-  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
-  execFileSync("git", ["config", "user.email", "t@p"], { cwd: dir });
-  execFileSync("git", ["config", "user.name", "t"], { cwd: dir });
+  const dir = gitInit({ prefix: "picode-test-", email: "t@p" });
   fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name, version: "0.0.0" }));
   fs.mkdirSync(path.join(dir, "packages", "core"), { recursive: true });
   fs.writeFileSync(path.join(dir, "packages", "core", "package.json"), "{}");

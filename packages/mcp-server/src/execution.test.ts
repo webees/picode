@@ -4,9 +4,9 @@
  * write-path globs, sess-mgr command queue.
  */
 import { test } from "node:test";
+import { gitInit } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { allTools } from "./registry.js";
@@ -14,10 +14,7 @@ import { toMcpError } from "./errors.js";
 import type { ServerEnv } from "./context.js";
 
 function tmpGitRepo(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-mcp-exec-"));
-  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
-  execFileSync("git", ["config", "user.email", "t@picode"], { cwd: dir });
-  execFileSync("git", ["config", "user.name", "t"], { cwd: dir });
+  const dir = gitInit({ prefix: "picode-mcp-exec-" });
   fs.mkdirSync(path.join(dir, "src"), { recursive: true });
   fs.writeFileSync(path.join(dir, "src", "a.ts"), "export const a = 1;\n");
   execFileSync("git", ["add", "-A"], { cwd: dir });

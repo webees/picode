@@ -1,7 +1,7 @@
 import { test } from "node:test";
+import { gitInit } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { getDefaultConfig, type PicodeConfig } from "@picode/core";
@@ -11,10 +11,7 @@ import { sleepAgent, terminateAgent } from "./pi-adapter.js";
 import { applyEvent } from "./rules-engine.js";
 
 function tmpGitRepo(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-ocrule-"));
-  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
-  execFileSync("git", ["config", "user.email", "t@picode"], { cwd: dir });
-  execFileSync("git", ["config", "user.name", "t"], { cwd: dir });
+  const dir = gitInit({ prefix: "picode-ocrule-" });
   fs.writeFileSync(path.join(dir, "README.md"), "# t\n");
   execFileSync("git", ["add", "."], { cwd: dir });
   execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });

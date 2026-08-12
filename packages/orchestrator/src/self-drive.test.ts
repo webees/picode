@@ -1,9 +1,8 @@
 import { test } from "node:test";
+import { gitInit } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { createRun, resolveRunDir } from "./run-store.js";
 import { addChunkAndTask, approveBrief, draftBrief } from "./task.js";
 import { SessionStore } from "./session-store.js";
@@ -17,8 +16,7 @@ import {
 } from "./self-drive.js";
 
 function tmpGitRepo(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-selfdrive-"));
-  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
+  const dir = gitInit({ prefix: "picode-selfdrive-" });
   return dir;
 }
 
