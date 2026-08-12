@@ -170,6 +170,9 @@ registered → sleeping ⇄ awake → terminated
 |记忆|`must_read_refs[]`|packet / brief 路径|
 |检查|`check_rubric`（仅 check 席）|打回标准|
 
+**人设模板（文件形状定稿）：** [standards/persona-template.md](../standards/persona-template.md) 是 `.picode/agents/*.md` 与实例人设的**文件形状唯一正文**。  
+模板 = frontmatter（必填 `name` / `description` / `tool_profile` / `role_id`；可选 `vibe` / `success_metrics`）+ 正文四节（`Identity` / `Core Mission` / `Critical Rules` / `Success Metrics`）。维度 ↔ 四节映射见模板 §4；本节维度表与 `@picode/core/src/persona.ts` 字段仍是维度**唯一正文**，模板只钉文件形状、不另列维度。
+
 `recruiter` 起草 → `people-qa` 校验维度齐全 → `people-lead` 呈报 → **`run-lead` 批准** → 落盘 `tasks/<id>/staffing.yaml` + `personas/*.md` → 方可 spawn。
 
 ---
