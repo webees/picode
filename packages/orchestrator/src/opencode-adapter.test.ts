@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { getDefaultConfig, type PicodeConfig } from "@picode/core";
-import { OpencodeSpawner, opencodeSessionIdOf } from "./opencode-adapter.js";
+import { gitInit } from "./test-utils.js";
+import { createRun, resolveRunDir } from "./run-store.js";
+import { TranscriptStore } from "./transcript-store.js";
+import { OpencodeSpawner, opencodeSessionIdOf, wakeWithOpencode } from "./opencode-adapter.js";
 
 /** Capture every fetch() call for assertion. */
 function mockFetch(
@@ -147,6 +150,70 @@ test("TC-01: HTTP-level failure (5xx) is NOT retried — fails fast, behavior un
       1,
       "HTTP errors must fail fast without retrying",
     );
+  } finally {
+    restore();
+  }
+});
+
+test("sendReady: 向既有会话重投喂 ready 消息（D061 noReply，P1 恢复用）", async () => {
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const restore = mockFetch(calls);
+  try {
+    const res = await new OpencodeSpawner(cfg()).sendReady("oc-ses_mock123", "engineer@task-a", {
+      PICODE_PERSONA: "role: engineer",
+    });
+    assert.ok(Array.isArray(res.parts));
+    const post = calls.find((c) => c.url.includes("/session/ses_mock123/message"));
+    assert.ok(post, "必须向既有会话 POST 消息");
+    const msg = post.body as { noReply: boolean; parts: Array<{ type: string; text: string }>; system: string };
+    assert.equal(msg.noReply, true);
+    assert.ok(msg.parts.length >= 1);
+    assert.match(msg.system, /role: engineer/);
+    const postUrls = calls.filter((c) => c.url.includes("/message"));
+    assert.equal(postUrls.length, 1, "sendReady 单次投喂，退避由恢复方负责");
+  } finally {
+    restore();
+  }
+});
+
+test("P4: wakeWithOpencode 重 spawn 读取转录，历史要点摘要追加进 ready 消息", async () => {
+  const repo = gitInit({ prefix: "picode-wake-oc-" });
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir } = resolveRunDir(repo, runId);
+  const transcript = new TranscriptStore(dir);
+  await transcript.recordOutgoing("pm", "第一轮任务：实现模块 A");
+
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const restore = mockFetch(calls);
+  try {
+    const r = await wakeWithOpencode(dir, cfg(), "pm", "re-wake", {});
+    assert.ok(r.pi_session_id?.startsWith("oc-"));
+    const msg = calls.find((c) => c.url.includes("/message"))?.body as {
+      parts: Array<{ type: string; text: string }>;
+      noReply: boolean;
+    };
+    assert.equal(msg.noReply, true);
+    const texts = msg.parts.map((p) => p.text).join("\n");
+    assert.match(texts, /历史要点摘要/);
+    assert.match(texts, /第一轮任务：实现模块 A/);
+  } finally {
+    restore();
+  }
+});
+
+test("P4: wakeWithOpencode 空转录不追加摘要（首次 spawn）", async () => {
+  const repo = gitInit({ prefix: "picode-wake-oc-" });
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir } = resolveRunDir(repo, runId);
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const restore = mockFetch(calls);
+  try {
+    await wakeWithOpencode(dir, cfg(), "pm", "wake", {});
+    const msg = calls.find((c) => c.url.includes("/message"))?.body as {
+      parts: Array<{ type: string; text: string }>;
+    };
+    assert.equal(msg.parts.length, 1, "无历史转录时只投喂基础 ready 消息");
+    assert.ok(!JSON.stringify(msg.parts).includes("历史要点摘要"));
   } finally {
     restore();
   }
