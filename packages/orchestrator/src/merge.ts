@@ -10,6 +10,7 @@ import {
   type PicodeConfig,
 } from "@picode/core";
 import { isEvolveRun, runVerifyCommands } from "./evolve-run.js";
+import { SessionStore } from "./session-store.js";
 
 /**
  * Serial merge queue (18 phase F): runs/<id>/merge_queue.jsonl + merge.lock.
@@ -149,14 +150,9 @@ export async function mergeNext(
     const req = queue[idx];
     const branch = branchName(config, path.basename(dir), req.task_id);
     // never merge while the squad is still awake on that task
-    const squadDir = path.join(dir, "sessions");
+    const store = new SessionStore(dir);
     const agents = [`squad-lead@${req.task_id}`, `engineer@${req.task_id}`, `sdet@${req.task_id}`];
-    const awake = agents.some((a) => {
-      const p = path.join(squadDir, `${a}.yaml`);
-      if (!fs.existsSync(p)) return false;
-      const y = fs.readFileSync(p, "utf8");
-      return /^state: awake$/m.test(y);
-    });
+    const awake = agents.some((a) => store.get(a)?.state === "awake");
     if (awake) {
       return { merged: null, remaining: remaining(), skipped_due_to_active: true, skipped_due_to_deps: false };
     }

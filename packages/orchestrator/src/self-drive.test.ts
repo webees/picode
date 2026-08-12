@@ -11,6 +11,7 @@ import { appendSessionCommand } from "./rules-engine.js";
 import {
   deriveEvents,
   guardianTick,
+  probeServeHealth,
   runGuardian,
   sleepIdleSessions,
 } from "./self-drive.js";
@@ -111,6 +112,12 @@ test("deriveEvents: completed goal dissolves any task still in flight", async ()
   const dissolved = events.filter((e) => e.event === "task_dissolved");
   assert.equal(dissolved.length, 1);
   assert.equal(dissolved[0].taskId, taskId);
+});
+
+test("probeServeHealth: opencode 未启用时直接通过（ERR-01 watchdog）", async () => {
+  const { dir, config } = setupRun();
+  const r = await probeServeHealth(dir, config);
+  assert.deepEqual(r, { ok: true, failed: [] });
 });
 
 test("guardianTick: drains the sess-mgr command queue and applies derived events", async () => {

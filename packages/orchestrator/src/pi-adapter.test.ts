@@ -75,6 +75,16 @@ test("buildPiEnv carries token/profile/room/persona/transcript (18 phase C)", ()
   assert.ok(env.PICODE_TRANSCRIPT_DIR.endsWith(path.join("runs", path.basename(dir), "transcripts")) || env.PICODE_TRANSCRIPT_DIR.includes("transcripts"));
   assert.ok(env.PICODE_PERSONA.endsWith(path.join(".picode", "agents", "pm.md")));
   assert.equal(env.PICODE_AGENT_ID, "pm");
+  assert.equal(env.PICODE_RUN_ALLOWLIST, JSON.stringify(config.run_allowlist), "ERR-05: allowlist 注入");
+});
+
+test("buildPiEnv: task seat cwd falls back to repo root before prepare (ERR-03)", () => {
+  const { dir, config } = setup({});
+  const store = new SessionStore(dir);
+  const seat = store.register("engineer", { agentId: "engineer@task-x", initialState: "sleeping" });
+  // 未 prepare：回退克隆根
+  const env = buildPiEnv(dir, config, seat);
+  assert.equal(env.PICODE_CWD, path.resolve(dir, "../.."));
 });
 
 test("DoD: wake spawns a live Pi process; sleep exits it and returns to sleeping", async () => {

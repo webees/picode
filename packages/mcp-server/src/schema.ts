@@ -11,12 +11,13 @@ type JsonSchema = Record<string, unknown>;
 export function toZodShape(inputSchema: Record<string, unknown>): z.ZodRawShape {
   const props = (inputSchema.properties ?? {}) as Record<string, JsonSchema>;
   const required = (inputSchema.required ?? []) as string[];
-  const shape: z.ZodRawShape = {};
+  // zod 4 的 ZodRawShape 是 Readonly：用可变 Record 构造再转换
+  const shape: Record<string, z.ZodTypeAny> = {};
   for (const [k, v] of Object.entries(props)) {
     const def = toZodType(v);
     shape[k] = required.includes(k) ? def : def.optional();
   }
-  return shape;
+  return shape as unknown as z.ZodRawShape;
 }
 
 function toZodType(s: JsonSchema): z.ZodTypeAny {

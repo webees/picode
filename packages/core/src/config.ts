@@ -389,7 +389,7 @@ export const DEFAULTS: PicodeConfig = {
     enabled: true,
     default_kind: "delivery",
     allowed_layers: ["knowledge", "prompts", "docs", "tests"],
-    verify_commands: ["npm test"],
+    verify_commands: ["npm run build && npm test"],
     require_sponsor_merge: true,
     require_code_review_on_code_layer: true,
     knowledge_log_glob: "docs/knowledge/evolve/",

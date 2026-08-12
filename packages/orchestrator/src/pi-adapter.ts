@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { ErrorCode, PicodeError, readRunSecret, type PicodeConfig, type SessionRecord } from "@picode/core";
+import { ErrorCode, PicodeError, readRunSecret, worktreePath, type PicodeConfig, type SessionRecord } from "@picode/core";
 import { issueToken } from "@picode/bus";
 import { SessionStore } from "./session-store.js";
 import { OpencodeSpawner, wakeWithOpencode } from "./opencode-adapter.js";
@@ -108,6 +108,17 @@ const ROLE_PRIMARY_ROOM: Record<string, string> = {
   "sess-mgr": "leadership",
 };
 
+/**
+ * ERR-03 (run-lead 决策): task 三角的 cwd 指向其 worktree（存在时）；
+ * 平台席与未 prepare 的 task 回退克隆根。
+ */
+function taskWorktreeCwd(dir: string, config: PicodeConfig, agentId: string): string {
+  const m = /@task-(.+)$/.exec(agentId);
+  if (!m) return path.resolve(dir, "../..");
+  const wt = worktreePath(path.resolve(dir, "../../.."), config, path.basename(dir), `task-${m[1]}`);
+  return fs.existsSync(wt) ? wt : path.resolve(dir, "../..");
+}
+
 /** Build the Pi session env (18 phase C: token, profile, cwd, room, persona). */
 export function buildPiEnv(
   dir: string,
@@ -129,8 +140,9 @@ export function buildPiEnv(
     PICODE_TOOL_PROFILE: profile,
     PICODE_ROOM: room,
     PICODE_PERSONA: persona,
-    PICODE_CWD: path.resolve(dir, "../.."),
+    PICODE_CWD: taskWorktreeCwd(dir, config, session.agent_id),
     PICODE_TRANSCRIPT_DIR: path.join(dir, "transcripts"),
+    PICODE_RUN_ALLOWLIST: JSON.stringify(config.run_allowlist),
   };
 }
 
