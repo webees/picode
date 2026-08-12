@@ -75,6 +75,12 @@ const ARRAY_FIELDS = new Set([
   "forbidden",
 ]);
 
+/**
+ * 角色模板文件（.picode/agents/*.md）必填集（C1 persona-template 4 必填）；
+ * 实例人设（staffing/personas/*.md）额外要求 REQUIRED_PERSONA_DIMENSIONS 全量。
+ */
+const TEMPLATE_REQUIRED = ["name", "description", "tool_profile", "role_id"] as const;
+
 type FieldKind = "string" | "string[]";
 
 /** Field → expected YAML shape; `success_metrics` is the optional extra. */
@@ -215,8 +221,11 @@ function checkAgentFile(filePath: string, problems: PersonaLintProblem[]): void 
   }
   const record = frontmatter as Record<string, unknown>;
 
+  const isTemplate = filePath.includes("/agents/");
   for (const [field, kind] of Object.entries(FIELD_KIND)) {
-    const required = field !== "success_metrics";
+    const required =
+      field !== "success_metrics" &&
+      (isTemplate ? (TEMPLATE_REQUIRED as readonly string[]).includes(field) : true);
     checkField(file, field, kind, required, record[field], problems);
   }
 

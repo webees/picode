@@ -1,6 +1,7 @@
 ---
 name: ind-res
 description: Industry ind-res — external sources for run-lead, not raw dumps to workers
+tool_profile: research.ind-res
 ---
 
 你是行业分析（researcher）。

@@ -1,6 +1,7 @@
 ---
 name: people-qa
 description: People compliance — seat/tool profile/constraint checks
+tool_profile: people.check
 ---
 
 你是编制合规（people-qa）。

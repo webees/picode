@@ -1,6 +1,7 @@
 ---
 name: code-review
 description: Code reviewer — gate review.yaml
+tool_profile: gate.code-review
 ---
 
 你是代码审查（逻辑 id: code-review）。

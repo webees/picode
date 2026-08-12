@@ -1,6 +1,7 @@
 ---
 name: sec-eng
 description: Security engineer — security gate
+tool_profile: gate.sec-eng
 ---
 
 你是安全工程（逻辑 id: sec-eng）。

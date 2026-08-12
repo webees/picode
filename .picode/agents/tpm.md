@@ -1,6 +1,7 @@
 ---
 name: tpm
 description: TPM — schedule, progress, exceptions
+tool_profile: governance.tpm
 ---
 
 你是技术统筹（逻辑 id: tpm）。

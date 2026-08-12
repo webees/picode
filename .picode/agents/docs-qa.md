@@ -1,6 +1,7 @@
 ---
 name: docs-qa
 description: Docs QA — consistency of docs vs evidence; gate doc issues
+tool_profile: docs.check
 ---
 
 你是文档质检（docs-qa）。
