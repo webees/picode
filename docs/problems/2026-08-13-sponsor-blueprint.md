@@ -42,7 +42,7 @@
 ## 四、待 run-lead 决策
 
 1. 信息入口机制设计（上述或更优方案）→ chunk 提案
-2. mattpocock/skills 研究（docs/research/mattpocock-skills.md M1-M6）→ 技能体系整合 C4 设计
+2. mattpocock/skills 研究（docs/knowledge/research/mattpocock-skills.md M1-M6）→ 技能体系整合 C4 设计
 3. 文档小组优化任务清单（用户指定：由文档小组更新优化内容）
 4. C1 serve-robust 收尾批准（write_paths 外 2 文件：session-store.clearError / index.ts 导出）
 5. C2 refine / C3 compaction 重新投喂确认

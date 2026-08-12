@@ -1,6 +1,6 @@
 # prime-agent 源码深挖（第二轮 · 2026-08-13）
 
-> 对照 docs/research/prime-agent-deep.md（第一轮，P1-P5 已融合：serve 自动恢复/refine/转录/语义压缩/技能包）。本轮深挖实现层，找**剩余未融合特性**。
+> 对照 docs/knowledge/research/prime-agent-deep.md（第一轮，P1-P5 已融合：serve 自动恢复/refine/转录/语义压缩/技能包）。本轮深挖实现层，找**剩余未融合特性**。
 
 ## 深挖发现
 

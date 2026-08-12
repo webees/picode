@@ -7,18 +7,18 @@
 ---
 
 ### chunk-01 `research-prime-agent`（ind-res 席）
-- **write_paths**: `["docs/research/**", "docs/knowledge/prime-agent/**"]`
+- **write_paths**: `["docs/knowledge/research/**", "docs/knowledge/prime-agent/**"]`
 - **read_paths**: `["docs/problems/2026-08-13-intake.md", ".picode/runs/**/goal.yaml"]`
 - **depends_on**: `[]`
 - **目标**: 联网取证 prime-agent 五大机制（Continual Harness /refine 快照回滚、daemon-worker-kernel 进程隔离与会话持久、子 agent 递归=rlm()、自主模式 turn/token/time 预算+质量门、技能=可导入包 + skill creator）；每机制记录 URL+retrieved_at；对照 intake §二 核实/纠偏 sponsor 预研摘要。
 - **验收要点**:
-  - 证据文件存在（file_exists：`docs/research/2026-08-13-prime-agent.md`）
+  - 证据文件存在（file_exists：`docs/knowledge/research/2026-08-13-prime-agent.md`）
   - 每机制 ≥1 主源 URL + retrieved_at（manual 抽查）
   - 与 intake §二 差异逐条标注（确认/纠正/补充）
 
 ### chunk-02 `plan-disposition`（run-lead + docs 三角）
 - **write_paths**: `["docs/plans/**", "docs/DECISIONS.md", "docs/problems/**", "docs/errors/**"]`
-- **read_paths**: `["docs/research/**", "docs/problems/2026-08-13-intake.md", "docs/errors/2026-08-12.md", "docs/DECISIONS.md"]`
+- **read_paths**: `["docs/knowledge/research/**", "docs/problems/2026-08-13-intake.md", "docs/errors/2026-08-12.md", "docs/DECISIONS.md"]`
 - **depends_on**: `["chunk-01"]`
 - **目标**: 产出 机制映射表（prime-agent↔picode 逐项）+ 优化方案（优先级+风险+责任人）；对台账 A/B/C/D 全部 20 项给结论（修/缓/拒 + 理由）；明确本 run 落地边界 = docs/tests 层。
 - **验收要点**:
