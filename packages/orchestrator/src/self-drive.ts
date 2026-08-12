@@ -133,6 +133,34 @@ export function deriveEvents(dir: string, config: PicodeConfig): DerivedEvent[] 
   return events;
 }
 
+/**
+ * ERR-01 watchdog (run-lead 决策): opencode 后端启用时健康探测；
+ * serve 失联的 awake opencode 会话标记 error（可观测，不自动重 spawn 防风暴）。
+ */
+export async function probeServeHealth(
+  dir: string,
+  config: PicodeConfig,
+): Promise<{ ok: boolean; failed: string[] }> {
+  if (!config.opencode.enabled) return { ok: true, failed: [] };
+  const url = config.opencode.base_url.replace(/\/+$/, "");
+  let ok = true;
+  try {
+    await fetch(url, { signal: AbortSignal.timeout(5_000) });
+  } catch {
+    ok = false;
+  }
+  if (ok) return { ok: true, failed: [] };
+  const store = new SessionStore(dir);
+  const failed: string[] = [];
+  for (const s of store.awake()) {
+    if (s.pi_session_id?.startsWith("oc-")) {
+      await store.setError(s.agent_id, "serve 健康探测失败（ERR-01 watchdog）");
+      failed.push(s.agent_id);
+    }
+  }
+  return { ok: false, failed };
+}
+
 /** Result of one guardian tick (one pass over the run). */
 export interface GuardianTickResult {
   ticked_at: string;
@@ -141,6 +169,7 @@ export interface GuardianTickResult {
   progress: SweepResult;
   events: ApplyResult[];
   slept: string[];
+  serve: { ok: boolean; failed: string[] };
   halt: boolean;
 }
 
@@ -190,6 +219,7 @@ export async function guardianTick(
   const progress = await sweepProgress(dir, config);
 
   const slept = opts.idleSleep ? await sleepIdleSessions(dir, config) : [];
+  const serve = await probeServeHealth(dir, config);
 
   const runState = readRunState(dir);
   return {
@@ -199,6 +229,7 @@ export async function guardianTick(
     progress,
     events,
     slept,
+    serve,
     halt: runState?.halt ?? false,
   };
 }
