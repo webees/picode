@@ -1,6 +1,7 @@
 import { evolveWritePaths } from "@picode/core";
 import { readGoal } from "../run-store.js";
 import { writeEvolveKnowledgeLog } from "../evolve-run.js";
+import { refineEvolveKnowledge } from "../evolve-refine.js";
 import type { Command, CommandContext } from "./types.js";
 import { need } from "./util.js";
 
@@ -28,6 +29,18 @@ export const evolveCommands: Command[] = [
       const summary = need(ctx, "--summary");
       const written = writeEvolveKnowledgeLog(ctx.repo, ctx.dir!, ctx.config!, { summary });
       console.log(JSON.stringify({ written }, null, 2));
+    },
+  },
+  {
+    domain: "evolve",
+    path: ["evolve", "refine"],
+    summary: "从任务证据自动提炼 lesson 草稿，--approve 才落盘（E6 升级）",
+    usage: "picode evolve refine --repo <path> --run <id> [--approve]",
+    run: async (ctx: CommandContext) => {
+      const result = refineEvolveKnowledge(ctx.repo, ctx.dir!, ctx.config!, {
+        approve: ctx.has("--approve"),
+      });
+      console.log(JSON.stringify(result, null, 2));
     },
   },
 ];

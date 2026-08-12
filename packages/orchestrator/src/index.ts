@@ -35,6 +35,7 @@ export * from "./docs-memory.js";
 export * from "./rules-engine.js";
 export * from "./self-drive.js";
 export * from "./evolve-run.js";
+export * from "./evolve-refine.js";
 export * from "./board.js";
 export * from "./status.js";
 export * from "./progress.js";
