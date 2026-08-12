@@ -19,10 +19,18 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 
 const DOGFOOD = process.env.PICODE_REPO;
-const CLI = process.env.PICODE_CLI ?? path.resolve("packages/mcp-server/dist/index.js");
 if (!DOGFOOD) throw new Error("PICODE_REPO required (dogfood clone)");
+// 自举：每轮先 build 克隆仓（含上一轮合并产物），server 用克隆仓自己的 dist——
+// 本轮代码 = 下轮执行器。PICODE_CLI 可覆盖（如主仓 dist）。
+const CLI =
+  process.env.PICODE_CLI ??
+  (() => {
+    execFileSync("npm", ["run", "build"], { cwd: DOGFOOD, stdio: "pipe" });
+    return path.resolve(DOGFOOD, "packages/mcp-server/dist/index.js");
+  })();
 
 /** Round-1 manifest: file → { remove: [exact blocks] } (verified zero refs). */
 const MANIFEST = [
