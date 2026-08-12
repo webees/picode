@@ -86,6 +86,35 @@ test("board: render includes all columns in order", () => {
   }
 });
 
+test("board: intake/ feed with status=open lands in Backlog; triaged/done excluded", () => {
+  const run = tmpRun();
+  const intake = path.join(run, "intake");
+  fs.mkdirSync(intake, { recursive: true });
+  fs.writeFileSync(
+    path.join(intake, "feed-open.yaml"),
+    "id: feed-open\nfrom: sponsor\nts: 2026-08-13T00:00:00Z\ntype: 需求\nbody: 随时投喂需求\nstatus: open\n",
+  );
+  fs.writeFileSync(
+    path.join(intake, "feed-triaged.yaml"),
+    "id: feed-triaged\nfrom: sponsor\nts: 2026-08-13T00:00:01Z\ntype: 研究\nbody: 已分诊\nstatus: triaged\nassigned_to: ind-res\n",
+  );
+  fs.writeFileSync(
+    path.join(intake, "feed-done.yaml"),
+    "id: feed-done\nfrom: sponsor\nts: 2026-08-13T00:00:02Z\ntype: 文档\nbody: 已完成\nstatus: done\n",
+  );
+  const b = buildBoard(run);
+
+  const open = b.cards.find((c) => c.id === "feed-open");
+  assert.equal(open?.column, "Backlog");
+  assert.equal(open?.kind, "intake");
+  assert.equal(open?.owner, "sponsor");
+  assert.equal(open?.blocked, false);
+  assert.ok(open?.title.startsWith("需求"), "title prefixes the feed type");
+
+  assert.equal(b.cards.some((c) => c.id === "feed-triaged"), false);
+  assert.equal(b.cards.some((c) => c.id === "feed-done"), false);
+});
+
 const WRITE_APIS = [
   "writeFileSync",
   "writeFile",

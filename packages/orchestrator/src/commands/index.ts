@@ -15,6 +15,7 @@ import { memoryCommands } from "./memory.js";
 import { evolveCommands } from "./evolve.js";
 import { windowCommands } from "./window.js";
 import { statusCommands } from "./status.js";
+import { intakeCommands } from "./intake.js";
 import { selfDriveCommands, selfDriveFallback } from "./self-drive.js";
 
 export type { Command, CommandContext } from "./types.js";
@@ -31,6 +32,7 @@ export const COMMANDS: Command[] = [
   ...evolveCommands,
   ...windowCommands,
   ...statusCommands,
+  ...intakeCommands,
   ...selfDriveCommands,
 ];
 
@@ -46,6 +48,7 @@ export const DOMAIN_ORDER = [
   "memory",
   "evolve",
   "window",
+  "intake",
   "self-drive",
 ];
 

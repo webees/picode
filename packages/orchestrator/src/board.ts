@@ -3,6 +3,7 @@
  *
  * 数据全部派生自现有状态文件（不新增状态）:
  *   - requests/intake/*.yaml          → Backlog（甲方待办需求卡）
+ *   - intake/feed-*.yaml              → Backlog（sponsor 随时投喂，status=open）
  *   - chunks.yaml                     → 分块状态
  *   - tasks/<id>/task.yaml            → 卡片、triad（负责人）、brief/staffing 双门闩
  *   - sessions/<agent>.yaml           → 各席 awake/sleeping（"人在岗"）
@@ -108,6 +109,31 @@ export function buildBoard(dir: string): { run: string; cards: BoardCard[] } {
           owner: "甲方",
           blocked: false,
           detail: `decision: ${r.decision ?? "待决策"}`,
+        });
+      }
+    }
+  }
+
+  // Backlog: sponsor 投喂 feed（intake/）still open
+  const feedsDir = path.join(dir, "intake");
+  if (fs.existsSync(feedsDir)) {
+    for (const f of fs.readdirSync(feedsDir).filter((x) => x.endsWith(".yaml"))) {
+      const r = readYamlFile<{
+        id?: string;
+        from?: string;
+        type?: string;
+        body?: string;
+        status?: string;
+      }>(path.join(feedsDir, f));
+      if (r && r.status === "open") {
+        cards.push({
+          id: r.id ?? f.replace(/\.yaml$/, ""),
+          kind: "intake",
+          title: `${r.type ?? "需求"} ${(r.body ?? f).slice(0, 56)}`,
+          column: "Backlog",
+          owner: r.from ?? "sponsor",
+          blocked: false,
+          detail: `status: ${r.status} | type: ${r.type ?? "-"} | ${r.body ?? ""}`.slice(0, 120),
         });
       }
     }

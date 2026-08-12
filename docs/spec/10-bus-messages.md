@@ -39,6 +39,7 @@ body 宜短；大内容用 `refs[]`。
 |`research_brief`|ind-res|research, leadership|brief_path|调研简报|
 |`drift` / `alert`|proc-audit|leadership|severity|红灯|
 |`ingest`|knowledge|knowledge|skill_path|知识入库候选|
+|`intake_triaged`|run-lead|leadership|feed_id, assigned_to|内部分诊已指派（sponsor 投喂 feed）|
 |`doc_issue`|docs-qa|docs|severity|文档矛盾|
 |`change_order`|run-lead|leadership, program|co_id|需求变更已下发|
 |`work_brief_ready`|docs/run-lead|task, squad|brief_path, version|工作提示词已批准可 spawn|
