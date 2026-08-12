@@ -1,5 +1,5 @@
 schema_version: "1"
-updated_at: 2026-08-12T22:43:21.466Z
+updated_at: 2026-08-12T22:47:01.609Z
 entries:
   - kind: team_name
     name: 春山
@@ -505,3 +505,51 @@ entries:
     task_id: task-review-gate
     seat: sdet
     first_used_at: 2026-08-12T22:43:21.466Z
+  - kind: team_name
+    name: 长庚
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-agents-persona
+    seat: null
+    first_used_at: 2026-08-12T22:47:01.254Z
+  - kind: codename
+    name: 玄甲
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-agents-persona
+    seat: squad-lead
+    first_used_at: 2026-08-12T22:47:01.254Z
+  - kind: codename
+    name: 白虎
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-agents-persona
+    seat: engineer
+    first_used_at: 2026-08-12T22:47:01.254Z
+  - kind: codename
+    name: 孤鸿-r2
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-agents-persona
+    seat: sdet
+    first_used_at: 2026-08-12T22:47:01.254Z
+  - kind: team_name
+    name: 春山
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-agent-lint
+    seat: null
+    first_used_at: 2026-08-12T22:47:01.609Z
+  - kind: codename
+    name: 腾蛇-r3
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-agent-lint
+    seat: squad-lead
+    first_used_at: 2026-08-12T22:47:01.609Z
+  - kind: codename
+    name: 伏虎-r2
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-agent-lint
+    seat: engineer
+    first_used_at: 2026-08-12T22:47:01.609Z
+  - kind: codename
+    name: 磐石-r3
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-agent-lint
+    seat: sdet
+    first_used_at: 2026-08-12T22:47:01.609Z
