@@ -38,6 +38,8 @@ export interface Persona {
   must_read_refs: string[];
   /** 检查 — check seats only (sdet). */
   check_rubric?: string | null;
+  /** 质量 — 可选验收指标（persona-lint 校验：可选字段，须为非空 string[]）。 */
+  success_metrics?: string[];
 }
 
 /** Dimensions required by people-qa for every seat (16 §5.1 minimum checklist). */
