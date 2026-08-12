@@ -1,5 +1,5 @@
 schema_version: "1"
-updated_at: 2026-08-12T21:06:04.442Z
+updated_at: 2026-08-12T22:43:21.466Z
 entries:
   - kind: team_name
     name: 春山
@@ -457,3 +457,51 @@ entries:
     task_id: task-intake
     seat: sdet
     first_used_at: 2026-08-12T21:06:04.442Z
+  - kind: team_name
+    name: 星野-r2
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-ponytail-seed
+    seat: null
+    first_used_at: 2026-08-12T22:43:21.084Z
+  - kind: codename
+    name: 白泽
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-ponytail-seed
+    seat: squad-lead
+    first_used_at: 2026-08-12T22:43:21.084Z
+  - kind: codename
+    name: 磐石-r2
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-ponytail-seed
+    seat: engineer
+    first_used_at: 2026-08-12T22:43:21.084Z
+  - kind: codename
+    name: 鲲鹏-r6
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-ponytail-seed
+    seat: sdet
+    first_used_at: 2026-08-12T22:43:21.084Z
+  - kind: team_name
+    name: 沧浪
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-review-gate
+    seat: null
+    first_used_at: 2026-08-12T22:43:21.466Z
+  - kind: codename
+    name: 朱雀-r5
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-review-gate
+    seat: squad-lead
+    first_used_at: 2026-08-12T22:43:21.466Z
+  - kind: codename
+    name: 九尾-r3
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-review-gate
+    seat: engineer
+    first_used_at: 2026-08-12T22:43:21.466Z
+  - kind: codename
+    name: 应龙-r2
+    run_id: run-2026-08-12T18-50-35-123Z
+    task_id: task-review-gate
+    seat: sdet
+    first_used_at: 2026-08-12T22:43:21.466Z
