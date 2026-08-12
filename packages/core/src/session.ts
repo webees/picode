@@ -49,8 +49,9 @@ export function canConsumeModel(session: Pick<SessionRecord, "state">): boolean 
   return session.state === "awake";
 }
 
-/** Human sponsor must never be registered as a session (17 §3.1 / T26). */
-export const NON_SESSION_ROLES: readonly string[] = ["sponsor"] as const;
+/** Human sponsor must never be registered as a session (17 §3.1 / T26).
+ * 生产消费方：orchestrator session-store（C8 收敛；原 orchestrator 本地 HUMAN_ONLY_ROLES 删除）。 */
+export const HUMAN_ONLY_ROLES: readonly string[] = ["sponsor"] as const;
 
 /**
  * Deterministic scheduler events (17 §5.3 / D026). Single source of truth for
