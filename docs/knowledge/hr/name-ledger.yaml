@@ -1,0 +1,123 @@
+schema_version: "1"
+updated_at: 2026-08-12T17:35:59.448Z
+entries:
+  - kind: team_name
+    name: 春山
+    run_id: run-2026-08-12T17-12-45-305Z
+    task_id: task-dead-code-cleanup
+    seat: null
+    first_used_at: 2026-08-12T17:12:45.359Z
+  - kind: codename
+    name: 腾蛇
+    run_id: run-2026-08-12T17-12-45-305Z
+    task_id: task-dead-code-cleanup
+    seat: squad-lead
+    first_used_at: 2026-08-12T17:12:45.359Z
+  - kind: codename
+    name: 伏虎
+    run_id: run-2026-08-12T17-12-45-305Z
+    task_id: task-dead-code-cleanup
+    seat: engineer
+    first_used_at: 2026-08-12T17:12:45.359Z
+  - kind: codename
+    name: 青龙
+    run_id: run-2026-08-12T17-12-45-305Z
+    task_id: task-dead-code-cleanup
+    seat: sdet
+    first_used_at: 2026-08-12T17:12:45.359Z
+  - kind: team_name
+    name: 春山
+    run_id: run-2026-08-12T17-29-50-878Z
+    task_id: task-dead-code-cleanup
+    seat: null
+    first_used_at: 2026-08-12T17:29:50.931Z
+  - kind: codename
+    name: 腾蛇
+    run_id: run-2026-08-12T17-29-50-878Z
+    task_id: task-dead-code-cleanup
+    seat: squad-lead
+    first_used_at: 2026-08-12T17:29:50.931Z
+  - kind: codename
+    name: 伏虎
+    run_id: run-2026-08-12T17-29-50-878Z
+    task_id: task-dead-code-cleanup
+    seat: engineer
+    first_used_at: 2026-08-12T17:29:50.931Z
+  - kind: codename
+    name: 青龙
+    run_id: run-2026-08-12T17-29-50-878Z
+    task_id: task-dead-code-cleanup
+    seat: sdet
+    first_used_at: 2026-08-12T17:29:50.931Z
+  - kind: team_name
+    name: 春山
+    run_id: run-2026-08-12T17-31-46-214Z
+    task_id: task-dead-code-cleanup
+    seat: null
+    first_used_at: 2026-08-12T17:31:46.261Z
+  - kind: codename
+    name: 腾蛇
+    run_id: run-2026-08-12T17-31-46-214Z
+    task_id: task-dead-code-cleanup
+    seat: squad-lead
+    first_used_at: 2026-08-12T17:31:46.261Z
+  - kind: codename
+    name: 伏虎
+    run_id: run-2026-08-12T17-31-46-214Z
+    task_id: task-dead-code-cleanup
+    seat: engineer
+    first_used_at: 2026-08-12T17:31:46.261Z
+  - kind: codename
+    name: 青龙
+    run_id: run-2026-08-12T17-31-46-214Z
+    task_id: task-dead-code-cleanup
+    seat: sdet
+    first_used_at: 2026-08-12T17:31:46.261Z
+  - kind: team_name
+    name: 春山
+    run_id: run-2026-08-12T17-35-24-331Z
+    task_id: task-dead-code-cleanup
+    seat: null
+    first_used_at: 2026-08-12T17:35:24.378Z
+  - kind: codename
+    name: 腾蛇
+    run_id: run-2026-08-12T17-35-24-331Z
+    task_id: task-dead-code-cleanup
+    seat: squad-lead
+    first_used_at: 2026-08-12T17:35:24.378Z
+  - kind: codename
+    name: 伏虎
+    run_id: run-2026-08-12T17-35-24-331Z
+    task_id: task-dead-code-cleanup
+    seat: engineer
+    first_used_at: 2026-08-12T17:35:24.378Z
+  - kind: codename
+    name: 青龙
+    run_id: run-2026-08-12T17-35-24-331Z
+    task_id: task-dead-code-cleanup
+    seat: sdet
+    first_used_at: 2026-08-12T17:35:24.378Z
+  - kind: team_name
+    name: 春山
+    run_id: run-2026-08-12T17-35-59-399Z
+    task_id: task-dead-code-cleanup
+    seat: null
+    first_used_at: 2026-08-12T17:35:59.448Z
+  - kind: codename
+    name: 腾蛇
+    run_id: run-2026-08-12T17-35-59-399Z
+    task_id: task-dead-code-cleanup
+    seat: squad-lead
+    first_used_at: 2026-08-12T17:35:59.448Z
+  - kind: codename
+    name: 伏虎
+    run_id: run-2026-08-12T17-35-59-399Z
+    task_id: task-dead-code-cleanup
+    seat: engineer
+    first_used_at: 2026-08-12T17:35:59.448Z
+  - kind: codename
+    name: 青龙
+    run_id: run-2026-08-12T17-35-59-399Z
+    task_id: task-dead-code-cleanup
+    seat: sdet
+    first_used_at: 2026-08-12T17:35:59.448Z
