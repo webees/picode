@@ -10,7 +10,8 @@ import {
   type AcceptanceState,
   type EvidenceState,
 } from "./closure.js";
-import { parsePersonaFile, readStaffing } from "./staffing.js";
+import { parsePersonaFile, readStaffing, readStaffingRequest, type Seat } from "./staffing.js";
+import { appendTalentRecords, gradeFor, type TalentRecord } from "./hr-talent.js";
 
 /**
  * HR scoring (16-hr-cell §9 评分).
@@ -38,7 +39,7 @@ export interface ScoreBreakdown {
 }
 
 export interface PersonaScore {
-  seat: string;
+  seat: Seat;
   codename: string;
   score: number;
   breakdown: ScoreBreakdown;
@@ -244,6 +245,24 @@ export function scoreTask(
       records: [{ ...recordBase, score: teamScore }],
     },
   );
+
+  // Talent pool (16 §9.3 / talent.md): one record per (task, seat) with the
+  // score, quality grade and the skills wanted from the staffing request —
+  // the "产出质量等级由评分流程回写" promise of the 人才库主档 (TC-11).
+  const request = readStaffingRequest(dir, taskId);
+  const records: TalentRecord[] = personaScores.map((ps) => ({
+    at: scores.scored_at,
+    run_id: runId,
+    task_id: taskId,
+    team_name: staffing.team_name,
+    seat: ps.seat,
+    codename: ps.codename,
+    skills: request?.skills_wanted ?? [],
+    score: ps.score,
+    grade: gradeFor(ps.score),
+    result: task.status,
+  }));
+  appendTalentRecords(repoRoot, config, records);
   return scores;
 }
 

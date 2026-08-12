@@ -46,7 +46,7 @@ function setup() {
 async function fullHire(repo: string, dir: string, config: ReturnType<typeof resolveRunDir>["config"], taskId: string) {
   await createStaffingRequest(dir, config, taskId, { skills: ["typescript", "testing"] });
   draftPersonas(repo, dir, config, taskId);
-  const { staffing, wokeSquad } = await approveStaffing(dir, config, taskId);
+  const { staffing, wokeSquad } = await approveStaffing(repo, dir, config, taskId);
   return { staffing, wokeSquad };
 }
 
@@ -87,7 +87,7 @@ test("T19: people-qa fails when a persona seat is missing", async () => {
   const sdetIssue = issues.find((i) => i.seat === "sdet");
   assert.ok(sdetIssue, "sdet should have an issue");
   assert.match(sdetIssue.problems[0], /missing/);
-  await assert.rejects(() => approveStaffing(dir, config, taskId), /people-qa failed/);
+  await assert.rejects(() => approveStaffing(repo, dir, config, taskId), /people-qa failed/);
 });
 
 test("T25: people-qa fails when persona lacks mission", async () => {
@@ -200,7 +200,7 @@ test("naming: personas get a deterministic codename and triad a team name (16 §
     path.join(dir, "tasks", taskId, "staffing", "personas", "engineer.md"),
   ).frontmatter;
   assert.equal(eng.codename, eng2.codename);
-  const { staffing } = await approveStaffing(dir, config, taskId);
+  const { staffing } = await approveStaffing(repo, dir, config, taskId);
   assert.ok(staffing.team_name && staffing.team_name.length > 0, "triad needs a team name");
 });
 
@@ -216,7 +216,7 @@ test("naming: request overrides win over deterministic generation (16 §8)", asy
     path.join(dir, "tasks", taskId, "staffing", "personas", "engineer.md"),
   ).frontmatter;
   assert.equal(eng.codename, "白泽");
-  const { staffing } = await approveStaffing(dir, config, taskId);
+  const { staffing } = await approveStaffing(repo, dir, config, taskId);
   assert.equal(staffing.team_name, "北辰");
 });
 
@@ -229,7 +229,7 @@ test("naming: unsafe codename/team_name overrides are rejected (16 §8 file-name
     skills: ["typescript", "testing"],
   });
   draftPersonas(repo, dir, config, taskId);
-  await assert.rejects(() => approveStaffing(dir, config, taskId), /not a safe name/);
+  await assert.rejects(() => approveStaffing(repo, dir, config, taskId), /not a safe name/);
   // unsafe codename → people-qa check must flag it
   const { dir: dir2, config: config2, taskId: taskId2, repo: repo2 } = setup();
   await createStaffingRequest(dir2, config2, taskId2, {
@@ -268,7 +268,7 @@ test("D058: wake rejections surface as woke_errors (max_awake=0), event engine s
   // max_awake=0 ⇒ every wake in the task_ready event is rejected
   const cfg = structuredClone(config) as typeof config;
   cfg.sess_mgr.max_awake = 0;
-  const r = await approveStaffing(dir, cfg, taskId);
+  const r = await approveStaffing(repo, dir, cfg, taskId);
   assert.equal(r.wokeSquad, true, "event fired");
   assert.equal(r.wokeErrors.length, 3, "all three triad wakes rejected");
   for (const e of r.wokeErrors) {
@@ -291,7 +291,7 @@ test("D058: no wake errors when max_awake allows the triad", async () => {
   approveBrief(dir, taskId, "run-lead");
   await createStaffingRequest(dir, config, taskId, { skills: ["typescript", "testing"] });
   draftPersonas(repo, dir, config, taskId);
-  const r = await approveStaffing(dir, config, taskId);
+  const r = await approveStaffing(repo, dir, config, taskId);
   assert.equal(r.wokeSquad, true);
   assert.deepEqual(r.wokeErrors, []);
 });

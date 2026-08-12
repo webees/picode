@@ -77,7 +77,7 @@ export const staffingCommands: Command[] = [
     usage: "picode staffing approve --repo <path> --run <id> --task <task_id> [--by run-lead]",
     run: async (ctx: CommandContext) => {
       const taskId = need(ctx, "--task");
-      const r = await approveStaffing(ctx.dir!, ctx.config!, taskId, ctx.arg("--by") ?? "run-lead");
+      const r = await approveStaffing(ctx.repo, ctx.dir!, ctx.config!, taskId, ctx.arg("--by") ?? "run-lead");
       console.log(JSON.stringify(r, null, 2));
       // D058: wake failures are visible, not silent — the event engine is
       // best-effort, but the operator must see rejections at the call site.

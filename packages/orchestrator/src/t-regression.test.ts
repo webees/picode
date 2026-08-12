@@ -138,7 +138,7 @@ test("T17: engineer spawn env never embeds unapproved research text", async () =
   approveBrief(dir, taskId, "run-lead");
   await createStaffingRequest(dir, config, taskId, { skills: ["ts"] });
   draftPersonas(repo, dir, config, taskId);
-  await approveStaffing(dir, config, taskId, "run-lead");
+  await approveStaffing(repo, dir, config, taskId, "run-lead");
   prepareTask(repo, dir, config, taskId);
 
   // put an unapproved research brief on disk — it must not leak into spawn env

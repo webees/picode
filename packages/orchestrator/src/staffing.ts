@@ -18,6 +18,11 @@ import { readGoal } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
 import { sleepAgent } from "./pi-adapter.js";
 import { applyEvent } from "./rules-engine.js";
+import {
+  appendLedgerEntries,
+  disambiguateName,
+  namesUsedInRun,
+} from "./hr-talent.js";
 
 export interface StaffingRequest {
   id: string;
@@ -143,7 +148,7 @@ export function parsePersonaFile(filePath: string): { frontmatter: Persona; body
   return { frontmatter, body: m[2] ?? "" };
 }
 
-function serializePersona(p: Persona, body: string): string {
+export function serializePersona(p: Persona, body: string): string {
   return `---\n${YAML.stringify(p).trimEnd()}\n---\n${body}\n`;
 }
 
@@ -165,6 +170,10 @@ export function draftPersonas(
 
   const roles = new Map(config.roles.map((r) => [r.id, r]));
   const overrides = request.codename_overrides ?? {};
+  // 16 §8 + codename-ledger: draft already avoids names taken by earlier
+  // approved tasks in this run (auto -rN suffix); the task's own records are
+  // excluded so re-drafting stays deterministic. approve re-checks authoritatively.
+  const used = namesUsedInRun(repoRoot, config, path.basename(dir), { excludeTask: taskId });
   const written: string[] = [];
   for (const seat of SEATS) {
     const instanceId = `${seat}@${taskId}`;
@@ -178,7 +187,7 @@ export function draftPersonas(
       schema_version: "1",
       seat,
       instance_id: instanceId,
-      codename: overrides[seat] ?? generateCodename(instanceId),
+      codename: disambiguateName(overrides[seat] ?? generateCodename(instanceId), used.codenames),
       display_name: role?.display_name ?? seat,
       mission: `完成 ${taskId} 的职责(见 brief 与 acceptance)`,
       scope_in: task.write_paths,
@@ -313,6 +322,7 @@ function briefApproved(dir: string, taskId: string, config: PicodeConfig): boole
  * sessions → if work brief already approved, fire task_ready (both latches).
  */
 export async function approveStaffing(
+  repoRoot: string,
   dir: string,
   config: PicodeConfig,
   taskId: string,
@@ -333,20 +343,34 @@ export async function approveStaffing(
   const request = readStaffingRequest(dir, taskId);
   if (!request) throw new Error(`no staffing request for ${taskId}`);
 
-  const teamName = request.team_name ?? generateTeamName(taskId);
+  const runId = path.basename(dir);
+  // 16 §8 + codename-ledger: same-run names must be unique. The name ledger
+  // records every locked codename/team_name; a collision (deterministic hash
+  // repeat, or a duplicate override) is auto-suffixed `-rN`. The task's own
+  // records are excluded so re-approval is idempotent.
+  const used = namesUsedInRun(repoRoot, config, runId, { excludeTask: taskId });
+  const teamName = disambiguateName(request.team_name ?? generateTeamName(taskId), used.team_names);
   // 16 §8: team_name doubles as an archive file name — unsafe overrides must fail
   assertSafeName(teamName, "team_name");
   const triad: Record<string, StaffingSeat> = {};
+  const personaDir = path.join(staffingDir(dir, taskId), "personas");
+  const codenames: Array<{ seat: Seat; codename: string }> = [];
   for (const seat of SEATS) {
-    const persona = parsePersonaFile(
-      path.join(staffingDir(dir, taskId), "personas", `${seat}.md`),
-    ).frontmatter;
+    const personaFile = path.join(personaDir, `${seat}.md`);
+    const { frontmatter, body } = parsePersonaFile(personaFile);
+    const codename = disambiguateName(frontmatter.codename, used.codenames);
+    if (codename !== frontmatter.codename) {
+      // disambiguation changed the identity → rewrite the persona frontmatter
+      // so the locked files and the archived scores stay consistent.
+      writeAtomic(personaFile, serializePersona({ ...frontmatter, codename }, body));
+    }
+    codenames.push({ seat, codename });
     triad[seat] = {
       role_template: seat,
-      agent_id: persona.instance_id,
-      tool_profile: persona.tool_profile,
+      agent_id: frontmatter.instance_id,
+      tool_profile: frontmatter.tool_profile,
       persona_file: `personas/${seat}.md`,
-      display_name: persona.display_name,
+      display_name: frontmatter.display_name,
     };
   }
   const staffing: StaffingState = {
@@ -360,6 +384,19 @@ export async function approveStaffing(
     triad,
   };
   writeAtomic(path.join(staffingDir(dir, taskId), "staffing.yaml"), YAML.stringify(staffing));
+
+  // Identity registry (16 §9.3): record every locked codename/team_name in the
+  // name ledger so future same-run hires never reuse a name (TC-03/TC-12).
+  appendLedgerEntries(repoRoot, config, [
+    { kind: "team_name", name: teamName, run_id: runId, task_id: taskId, seat: null },
+    ...codenames.map((c) => ({
+      kind: "codename" as const,
+      name: c.codename,
+      run_id: runId,
+      task_id: taskId,
+      seat: c.seat,
+    })),
+  ]);
 
   // recruiter builds the group: register triad sessions as sleeping (17 §3.4)
   const sessions = new SessionStore(dir);

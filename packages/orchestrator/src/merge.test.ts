@@ -42,7 +42,7 @@ async function setupPreparedTask(opts: { scale?: "S" | "M" | "L" } = {}) {
   approveBrief(dir, taskId, "run-lead");
   await createStaffingRequest(dir, config, taskId, { skills: ["typescript"] });
   draftPersonas(repo, dir, config, taskId);
-  await approveStaffing(dir, config, taskId, "run-lead");
+  await approveStaffing(repo, dir, config, taskId, "run-lead");
   const { worktree, branch } = prepareTask(repo, dir, config, taskId);
   return { repo, runId, dir, config, taskId, worktree, branch };
 }

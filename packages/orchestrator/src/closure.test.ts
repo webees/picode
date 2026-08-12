@@ -47,7 +47,7 @@ async function setupPreparedTask(opts: { writePaths?: string[] } = {}) {
   approveBrief(dir, taskId, "run-lead");
   await createStaffingRequest(dir, config, taskId, { skills: ["typescript"] });
   draftPersonas(repo, dir, config, taskId);
-  await approveStaffing(dir, config, taskId, "run-lead");
+  await approveStaffing(repo, dir, config, taskId, "run-lead");
   const { worktree, branch } = prepareTask(repo, dir, config, taskId);
   return { repo, runId, dir, config, taskId, worktree, branch };
 }
@@ -203,7 +203,7 @@ test("gc reclaims failed tasks past TTL, keeps fresh ones", async () => {
   approveBrief(ctx.dir, task2, "run-lead");
   await createStaffingRequest(ctx.dir, ctx.config, task2, { skills: ["typescript"] });
   draftPersonas(ctx.repo, ctx.dir, ctx.config, task2);
-  await approveStaffing(ctx.dir, ctx.config, task2, "run-lead");
+  await approveStaffing(ctx.repo, ctx.dir, ctx.config, task2, "run-lead");
   const { worktree: wt2 } = prepareTask(ctx.repo, ctx.dir, ctx.config, task2);
   void wt2;
   await dissolveTask(ctx.repo, ctx.dir, ctx.config, task2, { force: true, status: "failed" });

@@ -38,7 +38,7 @@ function setup() {
 async function hire(repo: string, dir: string, config: ReturnType<typeof resolveRunDir>["config"], taskId: string) {
   await createStaffingRequest(dir, config, taskId, { skills: ["typescript", "testing"] });
   draftPersonas(repo, dir, config, taskId);
-  const { staffing } = await approveStaffing(dir, config, taskId);
+  const { staffing } = await approveStaffing(repo, dir, config, taskId);
   return staffing;
 }
 
