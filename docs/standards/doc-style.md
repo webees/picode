@@ -52,4 +52,16 @@
 ## 5. 版本
 
 - 状态与配置：`schema_version: "1"`。  
-- 破坏性变更：升版本 + DECISIONS 一行。  
+- 破坏性变更：升版本 + DECISIONS 一行。
+
+## 6. 技能维护纪律
+
+技能存放 `skills/`（engineering / productivity 两 bucket，M1）；SKILL.md frontmatter 声明调用边界（M3）。
+
+**任何增 / 改 / 删技能，MUST 同步以下三处后合并：**
+
+1. **docs 页**：`docs/<bucket>/<skill>.md`（四节：What it does / When to reach for it / Common questions / It's working if，M2），由文档小组维护；
+2. **router 索引**：顶层 `skills/README.md` + 所属 bucket `skills/{engineering,productivity}/README.md` 的技能表逐行同步（名称 / 描述 / 调用方式），防「会撒谎的 router」（M4）；
+3. **跑校验**：`markdownlint-cli2` 全仓 md 检查，须零 issue。
+
+删除技能同样 MUST 三处同步（docs 页删除 / 索引删除 / 校验）。未同步的增删改视为未完成，不得 merge。  
