@@ -45,6 +45,9 @@ import {
   wakeAgent,
   writeEvolveKnowledgeLog,
   writeMemoryBrief,
+  addFeed,
+  triageFeed,
+  closeFeed,
 } from "@picode/orchestrator";
 import { evolveWritePaths, type EvolveLayer, type GoalKind } from "@picode/core";
 import type { ToolDef } from "./registry.js";
@@ -460,6 +463,45 @@ export function managementTools(): ToolDef[] {
       async (p, env) => {
         const { repo, dir, config } = requireRun(env, str(p, "run_id"));
         return { ok: true, outcome: await mergeNext(repo, dir, config) };
+      },
+    ),
+    withRun(
+      "intake_add",
+      "sponsor 随时投喂 feed（内部分诊入口）：写 runs/<id>/intake/feed-<ts>.yaml，status=open。type ∈ 需求|研究|文档|问题。",
+      {
+        type: { type: "string" },
+        body: { type: "string" },
+        from: { type: "string", description: "投喂人（默认 sponsor）" },
+      },
+      ["type", "body"],
+      (p, env) => {
+        const { dir } = requireRun(env, str(p, "run_id"));
+        const feed = addFeed(dir, {
+          type: String(p.type),
+          body: String(p.body),
+          from: str(p, "from"),
+        });
+        return { ok: true, feed };
+      },
+    ),
+    withRun(
+      "intake_triage",
+      "run-lead 内部分诊：指派 agent，status→triaged + assigned_to，bus 通知 leadership（intake_triaged）。",
+      { id: { type: "string" }, to: { type: "string" } },
+      ["id", "to"],
+      async (p, env) => {
+        const { dir } = requireRun(env, str(p, "run_id"));
+        return { ok: true, feed: await triageFeed(dir, String(p.id), String(p.to)) };
+      },
+    ),
+    withRun(
+      "intake_close",
+      "关闭 feed（→ done）。",
+      { id: { type: "string" } },
+      ["id"],
+      (p, env) => {
+        const { dir } = requireRun(env, str(p, "run_id"));
+        return { ok: true, feed: closeFeed(dir, String(p.id)) };
       },
     ),
     withRun(

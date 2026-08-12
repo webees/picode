@@ -36,7 +36,7 @@ function tmpGitRepo(): string {
 test("E2: --help groups commands by domain and lists every registered command", () => {
   const { status, stdout } = runCli(["--help"]);
   assert.equal(status, 0);
-  for (const domain of ["run:", "goal:", "session:", "staffing:", "task:", "merge:", "memory:", "evolve:", "window:", "status:", "self-drive:"]) {
+  for (const domain of ["run:", "goal:", "session:", "staffing:", "task:", "merge:", "memory:", "evolve:", "window:", "status:", "intake:", "self-drive:"]) {
     assert.ok(stdout.includes(domain), `help shows ${domain} group`);
   }
   for (const cmd of [
@@ -47,6 +47,7 @@ test("E2: --help groups commands by domain and lists every registered command", 
     "picode merge process",
     "picode window compress",
     "picode status --repo",
+    "picode intake add --repo",
     "picode self-drive tick",
   ]) {
     assert.ok(stdout.includes(cmd), `help lists ${cmd}`);
@@ -90,4 +91,36 @@ test("E3: run-level errors carry the originating code (config validation)", () =
   const { status, stderr } = runCli(["init", "--repo", repo, "--goal-title", "x"]);
   assert.equal(status, 1);
   assert.match(stderr, /^\[picode\] ERROR: CONFIG_INVALID: sponsor\.human_only must be true/);
+});
+
+test("intake E2E: add(open, board Backlog) → triage(triaged+bus, leaves board) → close(done)", () => {
+  const repo = tmpGitRepo();
+  const init = runCli(["init", "--repo", repo, "--goal-title", "t"]);
+  assert.equal(init.status, 0);
+  const { runId } = JSON.parse(init.stdout) as { runId: string };
+  const runDir = path.join(repo, ".picode", "runs", runId);
+
+  const added = runCli(["intake", "add", "--repo", repo, "--run", runId, "--type", "需求", "--body", "随时投喂需求"]);
+  assert.equal(added.status, 0, added.stderr);
+  const feed = JSON.parse(added.stdout) as { id: string; status: string };
+  assert.equal(feed.status, "open");
+  assert.ok(fs.existsSync(path.join(runDir, "intake", `${feed.id}.yaml`)));
+
+  let board = runCli(["board", "--repo", repo, "--run", runId]);
+  assert.equal(board.status, 0);
+  assert.ok(board.stdout.includes(feed.id), "open feed visible on board");
+
+  const triaged = runCli(["intake", "triage", "--repo", repo, "--run", runId, "--id", feed.id, "--to", "pm"]);
+  assert.equal(triaged.status, 0, triaged.stderr);
+  const tfeed = JSON.parse(triaged.stdout) as { status: string; assigned_to: string };
+  assert.equal(tfeed.status, "triaged");
+  assert.equal(tfeed.assigned_to, "pm");
+
+  board = runCli(["board", "--repo", repo, "--run", runId]);
+  assert.equal(board.status, 0);
+  assert.ok(!board.stdout.includes(feed.id), "triaged feed leaves Backlog");
+
+  const closed = runCli(["intake", "close", "--repo", repo, "--run", runId, "--id", feed.id]);
+  assert.equal(closed.status, 0, closed.stderr);
+  assert.equal((JSON.parse(closed.stdout) as { status: string }).status, "done");
 });

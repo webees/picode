@@ -27,6 +27,7 @@ export const BUS_MESSAGE_TYPES: readonly string[] = [
   "drift",
   "alert",
   "ingest",
+  "intake_triaged",
   "doc_issue",
   "change_order",
   "work_brief_ready",

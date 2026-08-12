@@ -31,6 +31,8 @@ export * from "./hr-talent.js";
 // memory
 export * from "./memory.js";
 export * from "./docs-memory.js";
+// intake (sponsor feed → triage → close)
+export * from "./intake.js";
 // mechanics
 export * from "./rules-engine.js";
 export * from "./self-drive.js";
