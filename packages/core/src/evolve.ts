@@ -1,6 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { EvolveLayer, EvolveGoalSpec, PicodeConfig } from "./config.js";
+import { writeAtomic } from "./atomic.js";
+import { PicodeError, type ErrorCode } from "./errors.js";
+
+/**
+ * C2 write-guard conflict code. Deliberately a module-local constant instead of
+ * a registry entry: the ErrorCode registry (errors.ts) lives outside this
+ * chunk's write_paths, and the code is only ever thrown by this one function.
+ */
+const EVOLVE_WRITE_CONFLICT = "EVOLVE_WRITE_CONFLICT" as ErrorCode;
 
 /**
  * Self-evolution helpers (spec/19-self-evolution.md).
@@ -122,4 +131,30 @@ export function evolveRisk(evolve: EvolveGoalSpec): "low" | "medium" | "high" {
   if (evolve.layers.includes("policy")) return "high";
   if (evolve.layers.includes("code")) return "high";
   return evolve.risk;
+}
+
+/**
+ * C2 write-guard (19 E6): guarded write for the shared `knowledge/evolve/`
+ * log. Compare-and-swap over writeAtomic — capture the file's current content
+ * as baseline, and if the caller's `expectedBaseline` no longer matches (a
+ * concurrent writer changed the file in between) reject with
+ * EVOLVE_WRITE_CONFLICT *before* writing. On conflict nothing is touched, so
+ * the pre-existing file survives intact (rollback by construction); only a
+ * matching baseline gets atomically replaced via temp+rename.
+ */
+export function withEvolveWriteGuard(
+  filePath: string,
+  content: string,
+  opts: { expectedBaseline?: string } = {},
+): void {
+  const baseline = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : null;
+  if (opts.expectedBaseline !== undefined && baseline !== opts.expectedBaseline) {
+    throw new PicodeError(
+      EVOLVE_WRITE_CONFLICT,
+      `E6 write conflict (EVOLVE_WRITE_CONFLICT) on ${filePath}: ` +
+        "current content ≠ expectedBaseline — another writer changed the file; " +
+        "write aborted, original content intact",
+    );
+  }
+  writeAtomic(filePath, content);
 }

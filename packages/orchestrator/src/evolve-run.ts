@@ -2,7 +2,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import {
   ensureDir,
-  writeAtomic,
+  withEvolveWriteGuard,
   type EvolveLayer,
   type PicodeConfig,
 } from "@picode/core";
@@ -51,12 +51,23 @@ export function runVerifyCommands(
   return { ok: true, output: chunks.join("\n") };
 }
 
-/** E6: knowledge/evolve/<run_id>.md — intent, diff summary, tests, risks. */
+/**
+ * E6: knowledge/evolve/<run_id>.md — intent, diff summary, tests, risks.
+ * Written through withEvolveWriteGuard (C2 write-guard): pass `expectedBaseline`
+ * to abort with EVOLVE_WRITE_CONFLICT if a concurrent writer changed the file
+ * since you last read it — otherwise the last writer silently clobbers the log.
+ */
 export function writeEvolveKnowledgeLog(
   repoRoot: string,
   dir: string,
   config: PicodeConfig,
-  opts: { summary: string; diffSummary?: string; tests?: string; risks?: string },
+  opts: {
+    summary: string;
+    diffSummary?: string;
+    tests?: string;
+    risks?: string;
+    expectedBaseline?: string;
+  },
 ): string {
   const goal = readGoal(dir);
   const outDir = path.join(
@@ -79,6 +90,6 @@ export function writeEvolveKnowledgeLog(
     (opts.diffSummary ? `## Diff summary\n\n${opts.diffSummary}\n\n` : "") +
     (opts.tests ? `## Verification\n\n${opts.tests}\n\n` : "") +
     (opts.risks ? `## Remaining risks\n\n${opts.risks}\n` : "");
-  writeAtomic(out, md);
+  withEvolveWriteGuard(out, md, { expectedBaseline: opts.expectedBaseline });
   return out;
 }

@@ -14,6 +14,8 @@ import {
   evolveWritePaths,
   getDefaultConfig,
   simpleGlobMatch,
+  PicodeError,
+  type ErrorCode,
   type EvolveGoalSpec,
 } from "@picode/core";
 import { createRun, resolveRunDir, readGoal } from "./run-store.js";
@@ -136,6 +138,26 @@ test("E6: writeEvolveKnowledgeLog writes knowledge/evolve/<run_id>.md", () => {
   const md = fs.readFileSync(out, "utf8");
   assert.match(md, /# Evolve run-/);
   assert.match(md, /fixed docs/);
+});
+
+test("C2 write-guard: stale expectedBaseline → EVOLVE_WRITE_CONFLICT, original log intact", () => {
+  const repo = tmpGitRepo("picode");
+  const { runId } = createRun(repo, { title: "evolve", kind: "self_evolve", evolveLayers: ["docs"] });
+  const { dir, config } = resolveRunDir(repo, runId);
+  // writer A creates the log and remembers its content as the baseline
+  const out = writeEvolveKnowledgeLog(repo, dir, config, { summary: "v1" });
+  const baseline = fs.readFileSync(out, "utf8");
+  // writer B saw the same baseline and lands its update — no conflict
+  writeEvolveKnowledgeLog(repo, dir, config, { summary: "v2", expectedBaseline: baseline });
+  // writer C still holds A's baseline → the file changed under it → rejected
+  assert.throws(
+    () => writeEvolveKnowledgeLog(repo, dir, config, { summary: "v3", expectedBaseline: baseline }),
+    (e: unknown) => e instanceof PicodeError && e.code === ("EVOLVE_WRITE_CONFLICT" as ErrorCode),
+  );
+  // rollback: the rejected write must not clobber B's version
+  const md = fs.readFileSync(out, "utf8");
+  assert.match(md, /v2/);
+  assert.ok(!md.includes("v3"), "conflicted write must not leak into the log");
 });
 
 test("E7: people-qa fails evolve persona missing forbidden[]", async () => {
