@@ -309,6 +309,7 @@ export interface GuardianTickResult {
   events: ApplyResult[];
   slept: string[];
   serve: { ok: boolean; failed: string[] };
+  budgets: BudgetCheckResult;
   halt: boolean;
 }
 
@@ -332,6 +333,77 @@ export async function sleepIdleSessions(
   return slept;
 }
 
+/** One over-limit session: which budget field was hit and its usage. */
+export interface BudgetExceeded {
+  agent_id: string;
+  field: "maxTurns" | "maxTokens" | "timeoutMs";
+  limit: number;
+  used: number;
+}
+
+/** Result of one budget sweep over the awake roster. */
+export interface BudgetCheckResult {
+  /** Agent ids stopped this pass (setError "budget exceeded" + sleep). */
+  stopped: string[];
+  /** Over-limit sessions with the limiting field, for audit. */
+  exceeded: BudgetExceeded[];
+  /** Configured gate verification commands (C1): 达到限额 ≠ 成功, never success. */
+  gate_commands: string[];
+}
+
+/**
+ * C1-run-budgets: runaway protection for awake sessions.
+ *
+ * Checks every awake session against `self_evolve.budgets` and stops the ones
+ * over a limit: `setError("budget exceeded")` + sleep. Gate stopping is NOT
+ * success — the error marker makes the budget hit observable (prime-agent
+ * autonomous.ts: "达到限额 ≠ 任务成功").
+ *
+ *  - maxTurns      — per-session wake-turn counter (`session.budget.turns`); >0 enforced
+ *  - timeoutMs     — continuous awake wall-clock since last_wake_at; >0 enforced
+ *  - maxTokens     — declared but v1 has no token meter (0 = unlimited, never fires)
+ *  - gate_commands — declared/returned for observers; execution is out of scope
+ */
+export async function checkBudgets(
+  dir: string,
+  config: PicodeConfig,
+  nowMs: number = Date.now(),
+): Promise<BudgetCheckResult> {
+  const b = config.self_evolve.budgets;
+  const store = new SessionStore(dir);
+  const exceeded: BudgetExceeded[] = [];
+  for (const s of store.awake()) {
+    const used = s.budget?.turns ?? 0;
+    if (b.maxTurns > 0 && used >= b.maxTurns) {
+      exceeded.push({
+        agent_id: s.agent_id,
+        field: "maxTurns",
+        limit: b.maxTurns,
+        used,
+      });
+      continue;
+    }
+    if (b.timeoutMs > 0 && s.last_wake_at) {
+      const awakeMs = nowMs - Date.parse(s.last_wake_at);
+      if (awakeMs > b.timeoutMs) {
+        exceeded.push({
+          agent_id: s.agent_id,
+          field: "timeoutMs",
+          limit: b.timeoutMs,
+          used: awakeMs,
+        });
+      }
+    }
+  }
+  const stopped: string[] = [];
+  for (const ex of exceeded) {
+    await store.setError(ex.agent_id, `budget exceeded (${ex.field}: ${ex.used}/${ex.limit})`);
+    await sleepAgent(dir, config, ex.agent_id, "guardian:budget");
+    stopped.push(ex.agent_id);
+  }
+  return { stopped, exceeded, gate_commands: b.gate_commands };
+}
+
 /**
  * One guardian pass. Order matters for determinism:
  *   1. park idle drafts
@@ -340,7 +412,8 @@ export async function sleepIdleSessions(
  *      (run_created / goal_active / task_ready) fire BEFORE progress nudges,
  *      so a freshly-queued task is woken as a triad, not split by progress_due
  *   4. sweep stale progress → progress_due (nudge for tasks already running)
- *   5. optionally sleep idle sessions (opt-in)
+ *   5. enforce per-session budgets (C1): stop over-limit awake sessions
+ *   6. optionally sleep idle sessions (opt-in)
  */
 export async function guardianTick(
   dir: string,
@@ -357,6 +430,8 @@ export async function guardianTick(
 
   const progress = await sweepProgress(dir, config);
 
+  const budgets = await checkBudgets(dir, config);
+
   const slept = opts.idleSleep ? await sleepIdleSessions(dir, config) : [];
   const serve = await probeServeHealth(dir, config);
 
@@ -369,6 +444,7 @@ export async function guardianTick(
     events,
     slept,
     serve,
+    budgets,
     halt: runState?.halt ?? false,
   };
 }

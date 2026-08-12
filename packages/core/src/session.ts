@@ -10,6 +10,12 @@ import { ErrorCode, PicodeError } from "./errors.js";
 
 export type SessionState = "registered" | "sleeping" | "awake" | "terminated";
 
+/** Per-session runaway budget meter (C1-run-budgets / 19 §10 budgets). */
+export interface SessionBudgetUsed {
+  /** Wake-turn counter: incremented once per sleeping→awake transition. */
+  turns: number;
+}
+
 export interface SessionRecord {
   schema_version: "1";
   agent_id: string;
@@ -21,6 +27,8 @@ export interface SessionRecord {
   wake_reason: string | null;
   persona_path: string | null;
   error: string | null;
+  /** Optional (C1): present on sessions registered after the budget rollout. */
+  budget?: SessionBudgetUsed;
 }
 
 /** Legal transitions per 17 §4. Any other pair is rejected. */
