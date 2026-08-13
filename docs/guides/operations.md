@@ -1,7 +1,7 @@
-# 运维规程（serve/会话/续跑/guardian 重启/真相关于文件）
+# 运维规程（serve/会话/续跑/guardian 重启/会话生命周期/真相关于文件）
 
-> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）。
-> 遵循本规程可避免已知的 serve 类故障人工踩坑，并正确观察/调整续跑、重启守护热载。
+> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）+ D072/D073（run 收尾自动休眠 + session audit 跨 run 残留审计）。
+> 遵循本规程可避免已知的 serve 类故障人工踩坑，并正确观察/调整续跑、重启守护热载、管理 run 收尾与跨 run 会话残留。
 
 ## serve 重启规程（ERR-04 缓解）
 
@@ -184,3 +184,60 @@ cd packages/dashboard && pnpm install && pnpm dev   # Vite 5173，dev proxy /api
 2. 前端页面空态/报错？`pnpm dev` 是否在跑；proxy 是否指向 8788（vite.config.ts）；CORS 兜底已开
 3. tokens 列为空？serve 未在线或该会话无 `oc-` serve 会话（D044）；`/api/live` 返回 `{ok:false,error}` 即说明
 4. 端口冲突？server 换 `--port` 后需同步改 `packages/dashboard/vite.config.ts` 的 proxy target
+
+## 会话生命周期：run 收尾自动休眠 + 跨 run 残留审计（D072/D073）
+
+### run 收尾自动休眠（D072）
+
+goal 进入终态（`completed`/`cancelled`）后，平台席（无 task 绑定的 scout/sys-arch/run-lead/pm 等）会被**自动休眠**，不残留 awake 占 `max_awake`。触发点有二：
+
+- `goal set-status --status completed|cancelled`：状态迁移后立即 `closeRun`（补发 TASK_DISSOLVED + 休眠平台席，best-effort 幂等）
+- guardian tick：终态 goal 分支调用 `sleepPlatformSeats`，结果入 `slept_platform`（`picode status` 的 continuation 段旁可见）
+
+行为要点：
+
+- 平台席 = `taskIdOfAgent === null` 的 awake 会话；**非终态 goal 不会触发**
+- 幂等：任务已 dissolved / 席位已休眠均自然跳过，重复调用零副作用
+- best-effort：单席/单任务失败不阻断整体；失败残留由下方 `session audit --clean` 兜底回收
+
+### 跨 run 残留审计（session audit，D073）
+
+`picode session audit` 只读审计 runsRoot 下**全部 run**（含 goal.yaml 的目录），输出逐 run
+残留标记与跨 run 汇总 vs `max_awake`。**`noRun` 命令，不需要 `--run <id>`**。
+
+```bash
+picode session audit --repo /private/tmp/picode-dogfood          # 纯读审计
+picode session audit --repo <path> --run <runId>                 # 只看指定 run
+picode session audit --repo <path> --clean                       # 清理终态 run 残留
+```
+
+输出关键字段：
+
+| 字段 | 含义 |
+|---|---|
+| `runs[].run_id / goal_status / terminal` | 逐 run 状态与是否终态（completed/cancelled） |
+| `runs[].awake[] / residual` | 当前 awake 会话；终态且 awake 非空 = 残留 |
+| `summary.residual_awake` | 全部终态 run 的残留 awake 总数 |
+| `summary.max_awake_exhausted` | `residual_awake >= max_awake`：残留已占满唤醒预算 |
+| `clean.cleaned[] / clean.skipped[]` | `--clean` 实际清理的 run / 跳过（非终态或无残留）或失败的 run |
+| `clean.close_run_connected` | C1 closeRun 原语是否已接通（`--clean` 前置依赖） |
+
+### 何时需要 audit / clean
+
+1. **新 run 前例行检查**：`picode session audit --repo <path>`，看 `max_awake_exhausted`
+2. 若 `true`（或存在残留）：`picode session audit --repo <path> --clean` 清理终态 run 残留，再跑一次确认 `residual_awake=0`、非终态 run 不受影响
+3. 清理失败（`skipped[].reason`）：手动 `session sleep --run <id> --agent <agent>` 或重试
+
+### 新 run 前清理规程（minimal）
+
+```
+1. picode session audit --repo <repo>            # 审计（只读）
+2. picode session audit --repo <repo> --clean     # 清理终态 run 残留
+3. picode session audit --repo <repo>             # 复检：residual_awake=0
+4. 若仍有残留 → 逐个 session sleep / 人工研判（失败原因见 skipped[].reason）
+```
+
+- 说明：C1/C2 已使「正常收尾的 run」自动不残留（D072 自动休眠 + D073 兜底清理）；
+  上述规程是**开新 run 前的快速闸门**，防止历史 run 的僵尸 awake 会话占满 `max_awake` 阻塞唤醒
+- 非终态 run 不会被清理（`not-terminal` 跳过）；`--clean` 只处理终态 run 的残留
+- `close_run_connected: false` 时 `--clean` 不可用（C1 未合并），先合并 C1 或只用审计

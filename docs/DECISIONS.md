@@ -74,6 +74,10 @@
 |D069|**续跑遥测三面可观测**（R3-C3）：status/CLI/MCP 三面一致暴露逐会话续跑列——`continuations_used`（`session.budget.continuations` 持久化）/ `last_continuation_at`（最近 outgoing 转录 ts）/ `max_per_session`（配置值）/ `in_flight`（末条 outgoing 无响应=回合进行中）/ `platform_seat`（未绑定任务）。`picode status` 快照含 `continuation` 段；`self-drive continuation --status` 与 MCP `continuation_status` 复用同一派生（`status.ts` `continuationTelemetry`），三面口径一致、纯读零写|
 |D070|**监控面板（Dashboard）**：`packages/dashboard-server`（npm workspace 成员 · `node:http` 只读 HTTP · 复用 orchestrator 纯读投影 9 端点 + serve tokens 代理）+ `packages/dashboard`（自包含 pnpm 项目 · Vue3+Vite+shadcn-vue · 从根 workspaces 显式排除）。后端并入根 build/test、前端 E4 用 `pnpm -C packages/dashboard build` 显式验收；只读、无写、无 daemon（D002/D057 延续）；`--repo` 定位任意真实 run 仓|
 |D071|**Dashboard 视觉检修**：语义状态色 token（绿/琥珀/红/蓝，浅深色均 WCAG AA ≥4.5:1）+ 边框阴影层级 token + 域组件层（StatCard/StatusBadge/SectionCard/EmptyState/ErrorState/Skeleton 系）+ 布局壳精修。总览页中文通俗文案/统计条/状态色点（labels 单一事实源）；详情页 9 视图 TabsList + 进度/房间/人员三视图。**零端点改动约束**：三视图由既有 9 端点派生纯函数（`views.data.ts`）+ 静态知识常量（`role-meta.data.ts`），`dashboard-server` 零改动|
+|D072|**run 收尾自动休眠平台席**（C1）：goal 终态（completed/cancelled）自动休眠所有 awake 平台席（无 task 绑定），不残留 awake 占 max_awake。`sleepPlatformSeats` + `closeRun`（补发 TASK_DISSOLVED + 休眠平台席，幂等 best-effort）；guardianTick 终态分支回报 `slept_platform`，`goal set-status` 终态分支联动 closeRun|
+|D073|**session audit 跨 run 会话残留审计与清理**（C2）：`deriveAuditReport` 纯派生（逐 run 读 goal.status + SessionStore，输出 residual 标记 + 跨 run 汇总 vs max_awake）+ `cleanResidual` 执行器（对终态 run 残留调 C1 closeRun 原语，动态 import 延迟接通，best-effort 单 run 失败不阻断）；CLI `session audit [--clean] [--run]`（noRun 跨 run）|
+|D074|**C2 验收 test 目标修正（处置记录）**：chunk acceptance `<project-test-command>` 占位符在 QA 阶段具体化为 `cli.test` 注册断言（`picode session audit` 入 --help 命令表）+ `session-audit.test` 派生/执行/失败容错断言，371 测试全绿；验收口径由占位符修正为具体断言，实现据此补齐 test 目标|
+|D075|**`session audit --clean` 端到端实测延后（处置记录）**：C2 验收仅单测覆盖派生 + cleanResidual 注入 closeRun 失败容错；`--clean` 对真实终态 run 的端到端清理延后至 C3 后由监督者执行（证据注明），不改变 C1/C2 语义|
 
 ## 开放
 
@@ -156,3 +160,38 @@
   - **零端点改动约束（硬约束）**：三视图全部由既有 9 端点响应派生——`views.data.ts` 导出 `derivePersonnel/deriveRooms/deriveProgress` 纯函数 + `views.test.ts` fixture 断言；角色/房间/阶段静态知识落 `role-meta.data.ts`（ROLE_META 取自人设 frontmatter description + ROLE_PRIMARY_ROOM 约定，ROOM_META 取自 terminology §3）；面板只读不读 `members.json` 避免文件系统耦合；`dashboard-server` 与 9 端点零改动
 - 实现：C1 设计系统（5e8b3ec）；C2 总览（7fe32ba + 文案 labels 收敛 4ab9ee7）；C3 运行详情三视图（73abe11）；C4 本文档（docs 层）
 - 边界：仅视觉/文案/派生展示层，不改任何 API 契约；数据仍源 = 文件真相（D002）+ serve 实时 tokens（D058）；后续页面继续复用 token 与域组件，新增数据需先经 D071-4 派生纯函数或静态知识常量
+
+## D072 — run 收尾自动休眠平台席（sleepPlatformSeats + closeRun，C1）
+- 2026-08-14 · 来源：会话生命周期 run（run-2026-08-13T17-25-34-974Z）product_acceptance：run 收尾（goal completed/cancelled）时平台席自动休眠，不残留 awake 占 max_awake
+- 问题：goal 进入终态后平台席（无 task 绑定的 scout/sys-arch/run-lead/pm 等）仍保持 awake，残留会话占满 `max_awake`，后续 run 无法唤醒新席位（实测 product acceptance 1/3 未满足）
+- 决定：
+  - `sleepPlatformSeats(dir, config)`：遍历 SessionStore.list() 中 awake 且无 task 绑定（`taskIdOfAgent===null`）的平台席逐个 `sleepAgent`；幂等，重复调用零副作用
+  - `closeRun(dir, config)`：① applyEvent 补发 TASK_DISSOLVED（幂等：已 dissolved 的 applyEvent 无副作用）② sleepPlatformSeats；导出供 CLI/guardian 共用
+  - 双触发点：guardianTick 终态 goal 分支（回报 `slept_platform` 于 GuardianTickResult）+ `goal set-status` 终态分支（completed/cancelled → best-effort closeRun）
+  - best-effort：单席/单任务失败不阻断整体（guardian 与 CLI 共用，收尾不可因单席失败中断）；`run-store.setGoalStatus` 保持纯净未改
+- 实现：`packages/orchestrator/src/self-drive.ts`（sleepPlatformSeats/closeRun/guardianTick 终态分支 + slept_platform）、`commands/goal.ts`（set-status 终态联动）、对应测试（幂等/非终态不触发/CLI 冒烟）
+- 边界：不做规则表新事件；残留会话清理失败不抛（幂等跳过），由 C2 `session audit --clean` 兜底回收
+- commit: bacbe04 / e251a65（main）
+
+## D073 — session audit 跨 run 会话残留审计与清理（C2）
+- 2026-08-14 · 来源：product_acceptance：提供会话残留检查/清理手段（CLI 可审计跨 run 残留）+ max_awake 不被已完成 run 残留占满
+- 问题：C1 自动休眠是 best-effort，失败/遗漏的残留会话仍会占满 max_awake；需跨 run 可审计、可清理的手段
+- 决定：
+  - `deriveAuditReport` 纯派生（只读零写）：逐 run 读 `goal.status` + `SessionStore.list()`，输出 run_id/goal_status/awake[]/terminal/residual + 跨 run 汇总（runs_total/terminal/residual/awake_total/residual_awake vs max_awake，`max_awake_exhausted`）；数据源 = runsRoot 下含 goal.yaml 的 run 目录（与 dashboard listRuns 同口径）
+  - `cleanResidual` 执行器：对终态 run 的残留会话调 C1 `closeRun` 原语；**动态 import 延迟接通**（C1 未合并时本模块仍可审计，--clean 报 NOT_FOUND 提示）；best-effort 单 run 失败仅记 skipped 不阻断整体
+  - CLI `session audit --repo <path> [--clean] [--run <id>]`（noRun:true，跨 run）；--clean 输出 `{...deriveAuditReport, clean}`
+- 实现：`packages/orchestrator/src/session-audit.ts`（TERMINAL_GOAL_STATUSES/isTerminalGoal/auditRun/listRunIds/filterRunIds/deriveAuditReport/cleanResidual）、`commands/session.ts`（audit 子命令）、`cli.test.ts`（命令注册断言）、`session-audit.test.ts`（派生/执行/失败容错）
+- 边界：审计纯读零写（D039 延续）；清理是 C1 收尾的兜底，不替代 C1 自动休眠
+- commit: acbed71 / b9cafd8（main）
+
+## D074 — C2 验收 test 目标修正（处置记录）
+- 2026-08-14 · 来源：task-session-audit QA 阶段（C2 commit body「修正 test 目标」）
+- 事实：chunk acceptance 的 `<project-test-command>` 为占位符；C2 将其具体化为 `cli.test` 注册断言（`picode session audit` 出现在 --help 命令表）+ `session-audit.test` 覆盖派生/执行/失败容错，371 测试全绿
+- 处置：验收口径由占位符修正为具体断言，实现据此补齐 test 目标；未改产品语义
+- 纪律强化：acceptance 占位符须在 brief 阶段具体化为可执行命令，避免 QA 阶段才发现 test 目标缺失
+
+## D075 — `session audit --clean` 端到端实测延后（处置记录）
+- 2026-08-14 · 来源：task-session-audit evidence（`--clean 实测待 C3 后跑（监督者执行）`）
+- 事实：C2 单测覆盖 deriveAuditReport 派生 + cleanResidual 注入 closeRun 失败容错，但未对真实终态 run 做 `--clean` 端到端实测；延后至 C3（lifecycle-docs）合并后由监督者执行
+- 处置：端到端验证列入 C3 收尾清单；行为语义不受影响（cleanResidual 依赖 C1 closeRun 原语）
+- 纪律强化：跨 chunk 延后的验收动作须在收尾 task（docs/knowledge）显式列明执行人与时机，避免残留检查缺位
