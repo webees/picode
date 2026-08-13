@@ -72,6 +72,7 @@
 |D067|**续跑 idle 时钟 = 回合完成时间，非投喂时间**（R3-C1 修监督者实测缺陷）：idle 判定取 `max(last_wake_at, 最近一条 transcript **incoming（响应）记录** ts)`，续跑投喂记录为 outgoing **不重置 idle 时钟**；转录末条为 outgoing 且其后无 incoming（长回合进行中）视为 **in-flight，不进入候选、不投喂**。根因：原 `lastActivityMs` 取 `max(last_wake_at, 最近转录 ts)` 而转录含 outgoing，每次投喂立即重置 idle 时钟，noReply 长回合被误判空闲连投打断（实测 run-lead 被连投 4 次排队）。实现 `continuation.ts`（`lastRoundCompletedMs` / `isRoundInFlight`），纯函数不变|
 |D068|**平台席策略 + 续跑 gate 可选接入**（R3-C1/C2）：`self_evolve.continuation.platform_seats` 默认 `"skip"`——无 task 绑定会话（scout/sys-arch/run-lead 等平台席）不进续跑候选，根治 E6「平台席无界空转」gap（R2-C2 仅 `max_per_session` 有界缓解）；`"allow"` 显式逃生仍受预算闸约束。`self_evolve.continuation.gate_commands` 默认 `[]`（不启用）——启用时续跑投喂前跑 gate（有界超时，借鉴 prime-agent `captureGitWorktreeSnapshot`：git status + diff HEAD + untracked 聚合）；**上次失败快照与当前一致 → 不重跑不投喂**（防没改代码反复重跑），gate 通过 → 停靠不投喂；失败快照按 agent 持久化 run 目录 `continuation-gate.jsonl`。不引入 LLM 决策/daemon，默认关闭不改既有行为|
 |D069|**续跑遥测三面可观测**（R3-C3）：status/CLI/MCP 三面一致暴露逐会话续跑列——`continuations_used`（`session.budget.continuations` 持久化）/ `last_continuation_at`（最近 outgoing 转录 ts）/ `max_per_session`（配置值）/ `in_flight`（末条 outgoing 无响应=回合进行中）/ `platform_seat`（未绑定任务）。`picode status` 快照含 `continuation` 段；`self-drive continuation --status` 与 MCP `continuation_status` 复用同一派生（`status.ts` `continuationTelemetry`），三面口径一致、纯读零写|
+|D070|**监控面板（Dashboard）**：`packages/dashboard-server`（npm workspace 成员 · `node:http` 只读 HTTP · 复用 orchestrator 纯读投影 9 端点 + serve tokens 代理）+ `packages/dashboard`（自包含 pnpm 项目 · Vue3+Vite+shadcn-vue · 从根 workspaces 显式排除）。后端并入根 build/test、前端 E4 用 `pnpm -C packages/dashboard build` 显式验收；只读、无写、无 daemon（D002/D057 延续）；`--repo` 定位任意真实 run 仓|
 
 ## 开放
 
@@ -128,3 +129,17 @@
 - 问题：`picode status` 无续跑列；`self-drive continuation --status` 只给候选数；MCP `continuation_status` 同缺——运营无法查看每会话续跑预算、上次投喂时间、进行中回合与平台席停靠
 - 决定：`status.ts` 新增 `ContinuationTelemetry` 段（每会话 `continuations_used` / `last_continuation_at` / `max_per_session` / `in_flight` / `platform_seat`），`statusSnapshot` / CLI `continuation --status` / MCP `continuation_status` 三面共用同一 `continuationTelemetry` 派生，口径一致、纯读零写（D039 status 快照扩展，不改状态）
 - 实现：`packages/orchestrator/src/status.ts`（`continuationTelemetry`）、`commands/self-drive.ts`、`packages/mcp-server/src/management.ts`
+
+## D070 — 监控面板（Dashboard）架构
+- 2026-08-13 · 来源：sponsor 指令「先做监控面板」+ run-lead 自治规划 run-2026-08-13T12-16-26-548Z（D1–D10）
+- 问题：sponsor 需直观展示 run 工作细节（goal/chunks/任务/会话+tokens 活跃度/merge 列车/门禁 evidence·E4），数据源为 `.picode/runs` YAML + opencode serve API，且可本地运行并接入真实 run 数据
+- 决定（要点）：
+  - **两包分置**：`packages/dashboard`（前端 UI，Vue3+Vite+TS+shadcn-vue）+ `packages/dashboard-server`（后端只读 HTTP，`node:http` 零框架依赖）。不合并单包——前端依赖重、后端零 UI 依赖可独立 build/test
+  - **包管理器分离**：dashboard-server 为 **npm workspace 成员**（tsc 构建，进根 build/test）；dashboard 前端为**自包含 pnpm 项目**（vendor 模板自带 pnpm-workspace/lock，保留），根 `workspaces` 从 `packages/*` 改显式五包+server 排除前端（npm 不支持 `!` 排除）；E4 gate 对前端 chunk 用 `pnpm -C packages/dashboard build` 显式验收
+  - **无 daemon 只读**：后端全部 GET、无写、无锁、无副作用（遵守 sys-arch「无 daemon、状态文件化」不变量，D002/D057）；复用 orchestrator 纯读投影（statusSnapshot/buildBoard/readMergeQueue/readProgress/readGoal）+ `@picode/core`（loadConfig/readYamlFile/runsRoot/runDir），面板 = 薄 HTTP 包装，避免第二份解析逻辑
+  - **9 端点投影复用**：`GET /api/runs`、`/api/runs/:id`、`/api/runs/:id/{board,chunks,tasks,sessions,merge,gates}`、`/api/live/:runId/:agent`（代理 serve `GET /session/{id}/message` 取 `info.tokens.total`，`oc-` 前缀剥离（D044），ERR-01 有界超时 5s 降级 `{error}` 不挂死）
+  - **联调**：Vite dev proxy `/api` → `127.0.0.1:8788`（免 CORS）；server 亦开 CORS 兜底；前端 tanstack/vue-query 轮询（tokens 实时页 `refetchInterval` 2–5s），不做 WebSocket/SSE（serve 无推送契约，D058）
+  - **运行**：server `node packages/dashboard-server/dist/index.js --repo <path>`（`--repo` 默认 cwd，读 `.picode/config.yaml` 的 `runs_root` 与 `opencode.base_url`）；前端 `cd packages/dashboard && pnpm dev`（Vite 5173）
+  - **非目标（范围外）**：无写操作（无 POST 编排/唤醒/合并按钮）、无鉴权（本地 localhost 工具）、无部署打包；鉴权/写面列第二轮
+- 实现：C1 server（`packages/dashboard-server`，9 端点 + live 代理 + 根 workspace 接线，1af542e）；C2 scaffold（`packages/dashboard` vendor 模板裁剪 + proxy + 骨架页，7cd3aa5）；C3 pages（API hooks + 6 面板，chunk-dashboard-pages）；C4 本文档（docs 层）
+- 边界：面板只读不改状态、不持锁；serve 失联降级显示不白屏（C3 降级提示）；数据源 = 文件真相（D002）+ serve 实时 tokens
