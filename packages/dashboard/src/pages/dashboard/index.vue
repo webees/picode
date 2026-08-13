@@ -32,6 +32,15 @@ const statCards = computed(() => [
   { label: '受阻', value: stats.value.blocked, accent: 'text-rose-600 dark:text-rose-400' },
 ])
 
+const runCards = computed(() => runs.value.map(run => ({
+  run,
+  status: statusMeta(run.status),
+  kind: kindLabel(run.kind),
+  scale: scaleLabel(run.scale),
+  date: formatRunDate(run.created_at),
+  meta: `验收 ${run.acceptance} 项 · 产品要求 ${run.product_acceptance} 项`,
+})))
+
 function openRun(runId: string) {
   router.push({ path: `/dashboard/runs/${runId}` })
 }
@@ -40,7 +49,7 @@ function openRun(runId: string) {
 <template>
   <BasicPage
     title="运行总览"
-    description="查看本次工作目录下的所有运行（run），点击卡片进入详情。数据只读，来自 .picode/runs。"
+    description="查看当前工作目录下的全部运行，点击任意卡片可进入详情。数据只读，不会改动任何内容。"
   >
     <template #actions>
       <Button
@@ -56,7 +65,7 @@ function openRun(runId: string) {
 
     <Alert v-if="isError" variant="destructive" class="mb-6">
       <AlertTriangleIcon />
-      <AlertTitle>暂时连不上后端服务</AlertTitle>
+      <AlertTitle>暂时连不上数据服务</AlertTitle>
       <AlertDescription>
         请先启动数据服务：npm run dev -w @picode/dashboard-server（默认 127.0.0.1:8788），再点「刷新」。
         {{ error instanceof Error ? error.message : String(error) }}
@@ -97,7 +106,7 @@ function openRun(runId: string) {
               </EmptyMedia>
               <EmptyTitle>还没有运行记录</EmptyTitle>
               <EmptyDescription>
-                在数据服务指向的仓库里创建 run 后，这里会自动出现运行列表。
+                在数据服务指向的仓库里创建运行后，这里会自动出现列表。
               </EmptyDescription>
             </EmptyContent>
           </Empty>
@@ -107,35 +116,35 @@ function openRun(runId: string) {
 
     <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       <Card
-        v-for="run in runs"
-        :key="run.run_id"
+        v-for="card in runCards"
+        :key="card.run.run_id"
         class="group cursor-pointer transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
-        @click="openRun(run.run_id)"
+        @click="openRun(card.run.run_id)"
       >
         <CardHeader>
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
-              <span class="size-2 shrink-0 rounded-full" :class="statusMeta(run.status).dot" />
-              <Badge :variant="statusMeta(run.status).badge">
-                {{ statusMeta(run.status).label }}
+              <span class="size-2 shrink-0 rounded-full" :class="card.status.dot" />
+              <Badge :variant="card.status.badge">
+                {{ card.status.label }}
               </Badge>
             </div>
             <Badge variant="secondary" class="shrink-0">
-              {{ scaleLabel(run.scale) }}
+              {{ card.scale }}
             </Badge>
           </div>
           <CardTitle class="break-all text-base leading-snug">
-            {{ run.title || run.run_id }}
+            {{ card.run.title || card.run.run_id }}
           </CardTitle>
         </CardHeader>
         <CardContent class="space-y-3 text-xs text-muted-foreground">
-          <p v-if="statusMeta(run.status).description" class="text-muted-foreground/90">
-            {{ statusMeta(run.status).description }}
+          <p v-if="card.status.description" class="text-muted-foreground/90">
+            {{ card.status.description }}
           </p>
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span>{{ kindLabel(run.kind) }}</span>
-            <span>{{ formatRunDate(run.created_at) }}</span>
-            <span>{{ run.acceptance + run.product_acceptance }} 项验收</span>
+            <span>{{ card.kind }}</span>
+            <span>{{ card.date }}</span>
+            <span>{{ card.meta }}</span>
             <span
               class="ml-auto inline-flex items-center gap-1 text-foreground/70 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
             >
