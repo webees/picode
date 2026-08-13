@@ -66,7 +66,9 @@
 ### 何时需要重启
 
 - guardian 日志出现 `[guardian] 检测到仓库 HEAD 前移` 警告（含 base/head SHA）
-- 或通过 `picode self-drive tick --repo <repo> --run <id>` 看到 `code_updated.detected: true`
+- 或通过 `picode self-drive run` 退出 summary 的 `ticksRun[].code_updated.detected: true` 确认（runGuardian 面）
+
+> 注：`picode self-drive tick` 为单次调用、无启动基线（不传 baseSha），其输出 `code_updated` 恒为 `null`，不能用于观测代码更新信号；观测须走 runGuardian 面（日志警告 / summary.ticksRun）。
 
 ### 合并后重启步骤
 
