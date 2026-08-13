@@ -297,6 +297,46 @@ test("C1-c: 任务终态（dissolved）永不投喂", async () => {
   }
 });
 
+test("R2-C1-c: 任务终态（merged）不再被选中且 sweep 不投喂", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_cont_merged");
+  fs.mkdirSync(path.join(dir, "tasks", "task-x"), { recursive: true });
+  writeYamlFile(path.join(dir, "tasks", "task-x", "task.yaml"), {
+    id: "task-x",
+    chunk_id: "chunk-x",
+    goal_id: "goal-1",
+    kind: "implement",
+    status: "merged",
+    write_paths: ["packages/**"],
+    read_paths: [],
+    acceptance: [],
+    triad: {
+      "squad-lead": "squad-lead@task-x",
+      engineer: "engineer@task-x",
+      sdet: "sdet@task-x",
+    },
+    work_room: "squad-task-x",
+    retries: 0,
+    max_retries: 3,
+  });
+
+  const targets = deriveContinuationTargets(dir, config, new Date());
+  assert.deepEqual(targets, [], "merged 任务不得被选为续跑候选");
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    const res = await sweepContinuations(dir, config);
+    assert.deepEqual(res.fed, []);
+    assert.equal(messagePosts(calls).length, 0, "merged 任务会话不得投喂");
+  } finally {
+    restore();
+  }
+});
+
 // ---------------------------------------------------------------------------
 // C1-d：纯函数（同输入同输出，无网络副作用）
 // ---------------------------------------------------------------------------
