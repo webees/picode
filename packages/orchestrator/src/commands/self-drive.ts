@@ -1,5 +1,6 @@
 import { guardianTick, runGuardian, deriveEvents } from "../self-drive.js";
 import { deriveContinuationTargets, feedContinuation } from "../continuation.js";
+import { continuationTelemetry } from "../status.js";
 import { ErrorCode, PicodeError } from "@picode/core";
 import type { Command, CommandContext } from "./types.js";
 import { unknownSub } from "./util.js";
@@ -94,9 +95,17 @@ export const selfDriveCommands: Command[] = [
         console.log(JSON.stringify({ fed: true, ...res }, null, 2));
         return;
       }
-      // 默认 / --status：只读派生候选，不投喂、不写状态
+      // 默认 / --status：只读派生候选 + 续跑遥测列（预算/上次投喂/in-flight/平台席），
+      // 不投喂、不写状态。
       const targets = deriveContinuationTargets(ctx.dir!, ctx.config!);
-      console.log(JSON.stringify({ count: targets.length, targets }, null, 2));
+      const telemetry = continuationTelemetry(ctx.dir!, ctx.config!);
+      console.log(
+        JSON.stringify(
+          { count: targets.length, targets, ...telemetry },
+          null,
+          2,
+        ),
+      );
     },
   },
 ];

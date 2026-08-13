@@ -12,6 +12,7 @@ import { execFileSync } from "node:child_process";
 import { allTools } from "./registry.js";
 import { toMcpError } from "./errors.js";
 import type { ServerEnv } from "./context.js";
+import { resolveRunDir, SessionStore, TranscriptStore } from "@picode/orchestrator";
 
 function tmpGitRepo(): string {
   const dir = gitInit({ prefix: "picode-mcp-" });
@@ -158,4 +159,46 @@ test("session_wake_direct/sleep_direct with pure state machine (no backend)", as
   assert.equal(sleep.ok, true);
   const roster2 = await call("session_roster", { run_id: runId }, env);
   assert.equal(roster2.awake_count, 0);
+});
+
+test("R3-C3: continuation_status 返回全会话续跑遥测列（预算/上次投喂/in-flight/平台席）", async () => {
+  const repo = tmpGitRepo();
+  const env: ServerEnv = { repo };
+  const init = await call("init_run", { title: "telemetry" }, env);
+  const runId = String(init.runId);
+  const { dir } = resolveRunDir(repo, runId);
+  const store = new SessionStore(dir);
+  const agentId = "engineer@task-telemetry";
+
+  store.register("engineer", { agentId, initialState: "sleeping" });
+  await store.wake(agentId, "test");
+  await store.attachPiSession(agentId, "oc-ses_tel");
+  await store.recordContinuation(agentId);
+  await new TranscriptStore(dir).recordOutgoing(agentId, "续跑 prompt");
+
+  const res = await call("continuation_status", { run_id: runId }, env);
+  assert.equal(res.ok, true);
+  const sessions = res.sessions as Array<{
+    agent_id: string;
+    state: string;
+    continuations_used: number;
+    max_per_session: number;
+    last_continuation_at: string | null;
+    in_flight: boolean;
+    platform_seat: boolean;
+  }>;
+  const row = sessions.find((x) => x.agent_id === agentId);
+  assert.ok(row, "sessions column must include the agent");
+  assert.equal(row!.continuations_used, 1);
+  assert.ok(row!.last_continuation_at, "last feed ts must be exposed");
+  assert.equal(row!.in_flight, true, "outgoing without response → in-flight");
+  assert.equal(row!.platform_seat, false, "task-bound agent is not a platform seat");
+  assert.ok((res.max_per_session as number) >= 0, "top-level budget column present");
+  assert.ok(Array.isArray(res.targets), "candidates still exposed");
+
+  const pm = sessions.find((x) => x.agent_id === "pm");
+  assert.ok(pm, "platform sessions listed");
+  assert.equal(pm!.platform_seat, true, "pm is a platform seat");
+  // 纯读：continuation_status 不得写任何状态
+  assert.equal(store.get(agentId)!.budget?.continuations, 1);
 });

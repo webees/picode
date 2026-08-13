@@ -3,6 +3,8 @@ import path from "node:path";
 import { readYamlFile, type PicodeConfig } from "@picode/core";
 import { readGoal } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
+import { TranscriptStore } from "./transcript-store.js";
+import { taskIdOfAgent } from "./continuation.js";
 import { readMergeQueue } from "./merge.js";
 import { readProgress } from "./progress.js";
 
@@ -34,6 +36,40 @@ export interface StatusSnapshot {
     progress_phase: string | null;
   }>;
   merge_queue: { queued: number; merged: number; failed: number };
+  /**
+   * R3-C3 continuation telemetry (D069): 续跑面只读观测。每会话暴露
+   * 续跑计数 / 上次投喂时间 / in-flight（投喂后未响应）/ 平台席标记。
+   */
+  continuation: ContinuationTelemetry;
+}
+
+/**
+ * R3-C3: 单会话续跑遥测（纯读）。`last_continuation_at` = 最近一条
+ * outgoing（投喂）转录 ts；`in_flight` = 末条转录为 outgoing 且其后无
+ * incoming（回合进行中）。`platform_seat` = 会话未绑定任务（平台席）。
+ */
+export interface ContinuationSessionTelemetry {
+  agent_id: string;
+  state: string;
+  /** 累计自动续跑投喂次数（session.budget.continuations，持久化）。 */
+  continuations_used: number;
+  /** 每会话续跑上限（config self_evolve.continuation.max_per_session，0=不限）。 */
+  max_per_session: number;
+  /** 上次投喂时间（最近 outgoing 转录 ts）；无转录 → null。 */
+  last_continuation_at: string | null;
+  /** 投喂后尚无 incoming 响应（进行中回合）。 */
+  in_flight: boolean;
+  /** 平台席（未绑定 task）默认不进续跑候选（R3-C1 platform_seats=skip）。 */
+  platform_seat: boolean;
+}
+
+/** R3-C3: status/CLI/MCP 三面一致的续跑观测段（纯读零写）。 */
+export interface ContinuationTelemetry {
+  /** 每会话续跑上限（配置值，所有会话同源）。 */
+  max_per_session: number;
+  /** 空闲触发间隔（秒，配置值）。 */
+  idle_sec: number;
+  sessions: ContinuationSessionTelemetry[];
 }
 
 function briefStatus(dir: string, taskId: string): string {
@@ -48,6 +84,57 @@ function staffingStatus(dir: string, taskId: string): string {
   if (!fs.existsSync(p)) return "missing";
   const s = readYamlFile<{ status?: string }>(p)!;
   return s.status ?? "missing";
+}
+
+/** R3-C3: 单会话续跑遥测派生（纯读转录 + session.budget，无写无网络）。 */
+function sessionContinuationTelemetry(
+  dir: string,
+  agentId: string,
+  state: string,
+  budget: { continuations?: number } | undefined,
+  maxPerSession: number,
+): ContinuationSessionTelemetry {
+  let lastContinuationAt: string | null = null;
+  let inFlight = false;
+  try {
+    const entries = new TranscriptStore(dir).read(agentId);
+    if (entries.length > 0) {
+      // 末条为 outgoing 且其后无 incoming → 投喂后未响应（进行中回合）。
+      inFlight = entries[entries.length - 1].type === "outgoing";
+      for (let i = entries.length - 1; i >= 0; i--) {
+        if (entries[i].type === "outgoing") {
+          lastContinuationAt = entries[i].ts;
+          break;
+        }
+      }
+    }
+  } catch {
+    /* 转录损坏视为无遥测 */
+  }
+  return {
+    agent_id: agentId,
+    state,
+    continuations_used: budget?.continuations ?? 0,
+    max_per_session: maxPerSession,
+    last_continuation_at: lastContinuationAt,
+    in_flight: inFlight,
+    platform_seat: taskIdOfAgent(agentId) === null,
+  };
+}
+
+/**
+ * R3-C3: 续跑观测段（D069）。statusSnapshot / `continuation --status` /
+ * MCP `continuation_status` 三面共用同一派生，保证口径一致；纯读零写。
+ */
+export function continuationTelemetry(dir: string, config: PicodeConfig): ContinuationTelemetry {
+  const cont = config.self_evolve.continuation;
+  const sessions = new SessionStore(dir)
+    .list()
+    .map((s) =>
+      sessionContinuationTelemetry(dir, s.agent_id, s.state, s.budget, cont.max_per_session),
+    )
+    .sort((a, b) => a.agent_id.localeCompare(b.agent_id));
+  return { max_per_session: cont.max_per_session, idle_sec: cont.idle_sec, sessions };
 }
 
 export function statusSnapshot(dir: string, config: PicodeConfig): StatusSnapshot {
@@ -111,5 +198,6 @@ export function statusSnapshot(dir: string, config: PicodeConfig): StatusSnapsho
       merged: queue.filter((q) => q.status === "merged").length,
       failed: queue.filter((q) => q.status === "failed").length,
     },
+    continuation: continuationTelemetry(dir, config),
   };
 }
