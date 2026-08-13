@@ -552,6 +552,74 @@ test("R3-C1-d: deriveContinuationTargets 纯函数 — 平台席 + in-flight 场
 });
 
 // ---------------------------------------------------------------------------
+// C2（D078）：平台席独立预算 max_per_session_platform —— 预算门按 taskId 分流
+// ---------------------------------------------------------------------------
+
+test("C2: platform_seats=allow 时平台席受 max_per_session_platform 独立有界", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.platform_seats = "allow";
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.max_per_session_platform = 2;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakePlatformSession(dir, store, "scout", "ses_c2_b1");
+
+  assert.deepEqual(
+    deriveContinuationTargets(dir, config, new Date()),
+    [{ agent_id: "scout", session_id: "oc-ses_c2_b1" }],
+    "平台席预算未耗尽（0 < 2）→ 候选",
+  );
+
+  patchSession(dir, "scout", { budget: { turns: 1, continuations: 2 } });
+  assert.deepEqual(
+    deriveContinuationTargets(dir, config, new Date()),
+    [],
+    "平台席续跑次数 >= max_per_session_platform → 不再候选",
+  );
+});
+
+test("C2: 两 cap 互不影响 — 平台席耗尽时 task 席仍可续跑，task 席受 max_per_session 有界", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.platform_seats = "allow";
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.max_per_session_platform = 1;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakePlatformSession(dir, store, "scout", "ses_c2_b2");
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_c2_b3");
+
+  patchSession(dir, "scout", { budget: { turns: 1, continuations: 2 } });
+  assert.deepEqual(
+    deriveContinuationTargets(dir, config, new Date()),
+    [{ agent_id: "engineer@task-x", session_id: "oc-ses_c2_b3" }],
+    "平台席耗尽（2 >= 1）不阻断 task 席（0 < 5）续跑",
+  );
+
+  patchSession(dir, "engineer@task-x", { budget: { turns: 1, continuations: 5 } });
+  assert.deepEqual(
+    deriveContinuationTargets(dir, config, new Date()),
+    [],
+    "task 席续跑次数 >= max_per_session → 不再候选",
+  );
+});
+
+test("C2: max_per_session_platform 0 = 平台席不限（预算门放行，0=不限语义保留）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.platform_seats = "allow";
+  config.self_evolve.continuation.max_per_session_platform = 0;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakePlatformSession(dir, store, "scout", "ses_c2_b4");
+  patchSession(dir, "scout", { budget: { turns: 1, continuations: 99 } });
+
+  assert.deepEqual(
+    deriveContinuationTargets(dir, config, new Date()),
+    [{ agent_id: "scout", session_id: "oc-ses_c2_b4" }],
+    "0 = 不限：平台席续跑计数不拦截预算门",
+  );
+});
+
+// ---------------------------------------------------------------------------
 // 语义续跑（N7 升级）：composeContinuationPrompt 纯函数 + feed 集成注入要点
 // ---------------------------------------------------------------------------
 

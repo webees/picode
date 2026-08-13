@@ -212,3 +212,36 @@ test("C1: validateConfig rejects invalid continuation values", () => {
     assert.throws(() => validateConfig(cfg as typeof base), Error, `expected rejection for ${JSON.stringify(patch)}`);
   }
 });
+
+test("C2: self_evolve.continuation.max_per_session_platform 默认 2（平台席独立预算）", () => {
+  const c = getDefaultConfig().self_evolve.continuation;
+  assert.equal(c.max_per_session_platform, 2, "D078: 平台席独立续跑上限默认 2，比 task 的 5 更紧");
+});
+
+test("C2: max_per_session_platform overridable via project yaml", () => {
+  const dir = tmpRepoWithConfig(
+    "self_evolve:\n  continuation:\n    max_per_session_platform: 7\n    platform_seats: allow\n",
+  );
+  const c = loadConfig(dir).self_evolve.continuation;
+  assert.equal(c.max_per_session_platform, 7);
+  assert.equal(c.platform_seats, "allow");
+  // untouched defaults survive the merge
+  assert.equal(getDefaultConfig().self_evolve.continuation.max_per_session_platform, 2);
+});
+
+test("C2: validateConfig rejects invalid max_per_session_platform values", () => {
+  const base = getDefaultConfig();
+  const cont = base.self_evolve.continuation;
+  const patches: Array<Record<string, unknown>> = [
+    { max_per_session_platform: -1 },
+    { max_per_session_platform: 1.5 },
+    { max_per_session_platform: "many" },
+  ];
+  for (const patch of patches) {
+    const cfg = {
+      ...base,
+      self_evolve: { ...base.self_evolve, continuation: { ...cont, ...patch } },
+    };
+    assert.throws(() => validateConfig(cfg as typeof base), Error, `expected rejection for ${JSON.stringify(patch)}`);
+  }
+});

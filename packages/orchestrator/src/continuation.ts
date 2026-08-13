@@ -129,7 +129,8 @@ function isRoundInFlight(dir: string, agentId: string): boolean {
  *   1. awake 且 pi_session_id 为 oc-（opencode 会话）
  *   2. 无 error（出错会话由 serve 恢复路径处理，不叠投）
  *   3. 任务未终态（有 task 文件且 status ∈ TERMINAL_TASK_STATUSES 的跳过）
- *   4. 续跑预算未耗尽（continuations < max_per_session，0 = 不限）
+ *   4. 续跑预算未耗尽（D078：task 绑定会话 < max_per_session；平台席 <
+ *      max_per_session_platform，0 = 不限）
  *   5. 平台席（无 task 绑定会话）默认 skip（platform_seats="allow" 才进候选）
  *   6. 无 in-flight 长回合（末条 outgoing 无响应 → 不投喂）
  *   7. 空闲超过 idle_sec（最近回合完成在 now - idle_sec 之前，idle 时钟=响应时间）
@@ -144,10 +145,13 @@ export function deriveContinuationTargets(
   for (const s of new SessionStore(dir).awake()) {
     if (!s.pi_session_id?.startsWith("oc-")) continue;
     if (s.error) continue;
-    if (cont.max_per_session > 0 && (s.budget?.continuations ?? 0) >= cont.max_per_session) {
+    // D078: 预算门按 taskId 分流——task 绑定会话用 max_per_session，
+    // 平台席（无 task 绑定）用 max_per_session_platform（0 = 不限保留）。
+    const taskId = taskIdOfAgent(s.agent_id);
+    const cap = taskId ? cont.max_per_session : cont.max_per_session_platform;
+    if (cap > 0 && (s.budget?.continuations ?? 0) >= cap) {
       continue;
     }
-    const taskId = taskIdOfAgent(s.agent_id);
     if (taskId) {
       const status = readTaskStatus(dir, taskId);
       if (status && TERMINAL_TASK_STATUSES.has(status)) continue;

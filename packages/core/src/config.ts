@@ -167,6 +167,11 @@ export interface EvolveBudgetsConfig {
 export interface ContinuationConfig {
   /** 每会话最大自动续跑次数；0 = 不限（保守默认有界，续跑耗尽即停）。 */
   max_per_session: number;
+  /**
+   * 平台席（无 task 绑定会话）独立续跑上限（D078）；0 = 不限。
+   * 平台席为监测/调研型角色，续跑需求轻，默认 2 比 task 的 5 更紧。
+   */
+  max_per_session_platform: number;
   /** 会话空闲超过 idle_sec 秒才投喂续跑（sweep 节流，防连发）。 */
   idle_sec: number;
   /**
@@ -482,8 +487,11 @@ export const DEFAULTS: PicodeConfig = {
     // window. 0 = unlimited must be declared explicitly.
     // R3-C1: platform_seats default "skip"（无 task 会话不进候选，防空转）；
     // gate_commands 默认空（C2 预留，不启用 gate）。
+    // D078: max_per_session_platform 默认 2 —— 平台席独立更紧预算（监测/调研型
+    // 续跑需求轻，防烧 token）。
     continuation: {
       max_per_session: 5,
+      max_per_session_platform: 2,
       idle_sec: 300,
       summary_entries: 8,
       platform_seats: "skip",
@@ -697,6 +705,7 @@ export function validateConfig(config: PicodeConfig): void {
   const cont = config.self_evolve.continuation;
   for (const [key, val] of [
     ["max_per_session", cont.max_per_session],
+    ["max_per_session_platform", cont.max_per_session_platform],
     ["idle_sec", cont.idle_sec],
     ["summary_entries", cont.summary_entries],
   ] as const) {

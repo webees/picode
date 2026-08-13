@@ -53,7 +53,11 @@ export interface ContinuationSessionTelemetry {
   state: string;
   /** 累计自动续跑投喂次数（session.budget.continuations，持久化）。 */
   continuations_used: number;
-  /** 每会话续跑上限（config self_evolve.continuation.max_per_session，0=不限）。 */
+  /**
+   * 该会话适用续跑上限（D078 差异化预算：task 绑定会话 →
+   * self_evolve.continuation.max_per_session，平台席 →
+   * max_per_session_platform，0=不限）。
+   */
   max_per_session: number;
   /** 上次投喂时间（最近 outgoing 转录 ts）；无转录 → null。 */
   last_continuation_at: string | null;
@@ -65,8 +69,10 @@ export interface ContinuationSessionTelemetry {
 
 /** R3-C3: status/CLI/MCP 三面一致的续跑观测段（纯读零写）。 */
 export interface ContinuationTelemetry {
-  /** 每会话续跑上限（配置值，所有会话同源）。 */
+  /** 每会话续跑上限（task 绑定会话，配置值，0=不限）。 */
   max_per_session: number;
+  /** 平台席（无 task 绑定会话）独立续跑上限（D078，配置值，0=不限）。 */
+  max_per_session_platform: number;
   /** 空闲触发间隔（秒，配置值）。 */
   idle_sec: number;
   sessions: ContinuationSessionTelemetry[];
@@ -130,11 +136,20 @@ export function continuationTelemetry(dir: string, config: PicodeConfig): Contin
   const cont = config.self_evolve.continuation;
   const sessions = new SessionStore(dir)
     .list()
-    .map((s) =>
-      sessionContinuationTelemetry(dir, s.agent_id, s.state, s.budget, cont.max_per_session),
-    )
+    .map((s) => {
+      // D078: 该会话适用 cap——task 绑定用 max_per_session，平台席用
+      // max_per_session_platform（遥测反映实际预算，便于定位平台席预算耗尽）。
+      const cap =
+        taskIdOfAgent(s.agent_id) === null ? cont.max_per_session_platform : cont.max_per_session;
+      return sessionContinuationTelemetry(dir, s.agent_id, s.state, s.budget, cap);
+    })
     .sort((a, b) => a.agent_id.localeCompare(b.agent_id));
-  return { max_per_session: cont.max_per_session, idle_sec: cont.idle_sec, sessions };
+  return {
+    max_per_session: cont.max_per_session,
+    max_per_session_platform: cont.max_per_session_platform,
+    idle_sec: cont.idle_sec,
+    sessions,
+  };
 }
 
 export function statusSnapshot(dir: string, config: PicodeConfig): StatusSnapshot {

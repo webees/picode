@@ -90,3 +90,30 @@ test("R3-C3: in-flight = 末条转录为 outgoing（投喂后无响应）", asyn
   assert.ok(row!.last_continuation_at, "last feed ts recorded");
   assert.equal(row!.continuations_used, 0, "recordOutgoing alone does not bump budget");
 });
+
+test("C2: 平台席 row 反映 max_per_session_platform，task 席反映 max_per_session", () => {
+  const repo = tmpGitRepo();
+  const { runId } = createRun(repo, { title: "goal-cap", scale: "S" });
+  const { dir, config } = resolveRunDir(repo, runId);
+  config.self_evolve = structuredClone(config.self_evolve);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.max_per_session_platform = 2;
+  const store = new SessionStore(dir);
+  store.register("engineer", { agentId: "engineer@task-cap", initialState: "sleeping" });
+  void store.wake("engineer@task-cap", "test");
+  void store.wake("scout", "test");
+
+  const s = statusSnapshot(dir, config);
+  assert.equal(s.continuation.max_per_session, 5, "顶层 max_per_session 为 task cap");
+  assert.equal(
+    s.continuation.max_per_session_platform,
+    2,
+    "顶层增 max_per_session_platform 字段（D078）",
+  );
+  const pm = s.continuation.sessions.find((x) => x.agent_id === "scout")!;
+  assert.equal(pm.platform_seat, true);
+  assert.equal(pm.max_per_session, 2, "平台席 row 反映 max_per_session_platform");
+  const task = s.continuation.sessions.find((x) => x.agent_id === "engineer@task-cap")!;
+  assert.equal(task.platform_seat, false);
+  assert.equal(task.max_per_session, 5, "task 绑定 row 反映 max_per_session");
+});
