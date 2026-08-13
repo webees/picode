@@ -7,6 +7,8 @@ import { readYamlFile, writeYamlFile } from "@picode/core";
 import { createRun, resolveRunDir } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
 import {
+  CONTINUATION_PROMPT,
+  composeContinuationPrompt,
   deriveContinuationTargets,
   feedContinuation,
   sweepContinuations,
@@ -545,6 +547,92 @@ test("R3-C1-d: deriveContinuationTargets 纯函数 — 平台席 + in-flight 场
   } finally {
     restore();
   }
+});
+
+// ---------------------------------------------------------------------------
+// 语义续跑（N7 升级）：composeContinuationPrompt 纯函数 + feed 集成注入要点
+// ---------------------------------------------------------------------------
+
+test("C1: composeContinuationPrompt(null) 逐字节等于 CONTINUATION_PROMPT", () => {
+  assert.equal(composeContinuationPrompt(null), CONTINUATION_PROMPT);
+  assert.equal(composeContinuationPrompt(null).length, CONTINUATION_PROMPT.length);
+});
+
+test("C1: composeContinuationPrompt(summary) 含模板 + 转录要点段", () => {
+  const summary = "历史转录共 2 条（outgoing 1 / incoming 1），最近 2 条要点：\n- [t1] 投喂: xxx\n- [t2] 响应: yyy";
+  const out = composeContinuationPrompt(summary);
+  assert.ok(out.startsWith(CONTINUATION_PROMPT), "模板必须原样置于开头");
+  assert.ok(out.includes("\n\n## 上一回合要点（转录摘要）\n"), "必须含摘要段标题分隔");
+  assert.ok(out.includes(summary), "摘要全文必须追加在摘要段内");
+  assert.equal(out.indexOf(summary) > out.indexOf("## 上一回合要点"), true);
+});
+
+test("C1: 空转录（historySummary 返回 null）→ feed 投喂文本与现版 CONTINUATION_PROMPT 逐字节一致", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_sem_empty");
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    await feedContinuation(dir, config, "engineer@task-x");
+    const posts = messagePosts(calls);
+    assert.equal(posts.length, 1);
+    const msg = posts[0].body as {
+      parts: Array<{ type: string; text: string }>;
+    };
+    assert.equal(msg.parts.length, 2, "ready 消息 = READY_MESSAGE + 续跑模板两个 part");
+    assert.equal(msg.parts[1].text, CONTINUATION_PROMPT, "空转录时续跑 part 逐字节一致，不得注入摘要段");
+  } finally {
+    restore();
+  }
+});
+
+test("C1: 有转录 → feed 投喂消息含「上一回合要点」摘要段（maxEntries 8）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_sem_feed");
+
+  const now = Date.now();
+  appendTranscript(dir, "engineer@task-x", {
+    type: "incoming",
+    ts: new Date(now - 120_000).toISOString(),
+    parts: [{ type: "text", text: "完成模块 A 实现，验收通过" }],
+  });
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    const res = await feedContinuation(dir, config, "engineer@task-x");
+    assert.ok(res, "feed 必须成功");
+    const posts = messagePosts(calls);
+    assert.equal(posts.length, 1);
+    const msg = posts[0].body as {
+      parts: Array<{ type: string; text: string }>;
+    };
+    const text = msg.parts.map((p) => p.text).join("\n");
+    assert.ok(text.includes("## 上一回合要点（转录摘要）"), "必须含摘要段标题");
+    assert.ok(text.includes("完成模块 A 实现，验收通过"), "必须含上一回合转录要点");
+  } finally {
+    restore();
+  }
+});
+
+test("C1-e 核查: deriveContinuationTargets 未改动（语义续跑不触碰候选派生）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_sem_targets");
+
+  const now = new Date();
+  assert.deepEqual(deriveContinuationTargets(dir, config, now), [
+    { agent_id: "engineer@task-x", session_id: "oc-ses_sem_targets" },
+  ], "deriveContinuationTargets 行为必须与现版一致（零改动）");
 });
 
 // ---------------------------------------------------------------------------
