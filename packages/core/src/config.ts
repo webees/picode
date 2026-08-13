@@ -460,11 +460,12 @@ export const DEFAULTS: PicodeConfig = {
       require_evidence: true,
       reject_noise: true,
     },
-    // C1 continuation conservative defaults (N2): 0 = unlimited, relying on
-    // the existing idle-sleep/budgets to dock; idle_sec (5 min) spaces feeds so
-    // a session is never spammed within a window.
+    // C1 continuation conservative defaults (N2): bounded 5 per session so a
+    // taskless/mis-assigned seat cannot burn tokens unboundedly (R2-C2);
+    // idle_sec (5 min) spaces feeds so a session is never spammed within a
+    // window. 0 = unlimited must be declared explicitly.
     continuation: {
-      max_per_session: 0,
+      max_per_session: 5,
       idle_sec: 300,
     },
   },
