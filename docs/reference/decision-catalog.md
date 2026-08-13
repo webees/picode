@@ -408,3 +408,43 @@
 |多 goal|不做 v1|后续版本|
 |成本预算 profile|无|可选扩展|
 |self_evolve.allowed_layers|knowledge,prompts,docs,tests|+code / +policy|
+
+---
+
+## 12. 会话续跑（continuation，D066）
+
+权威正文：[spec/19-self-evolution.md](../spec/19-self-evolution.md)；机制实现 `packages/orchestrator/src/continuation.ts`。
+
+### 12.1 每会话续跑上限
+
+|选项|说明|
+|------|------|
+|**`max_per_session` 有界正数（保守默认）** ★|每会话累计续跑次数上限；耗尽即停（耗尽 ≠ 成功），靠既有 idle-sleep/budgets 停靠|
+|0 = 不限|关掉续跑预算闸（风险自担）|
+
+**已定：保守有界默认**（具体默认值见 `config.ts` `self_evolve.continuation.max_per_session`）。
+
+### 12.2 续跑空闲间隔
+
+|选项|说明|
+|------|------|
+|**`idle_sec` 触发间隔（保守默认）** ★|会话空闲超过该间隔才投喂续跑 prompt；须小于 `idle_sleep_sec` 否则先被休眠|
+|过小|续跑频繁、挤占回合|
+|过大|空等恢复（回到无 continuation 老问题）|
+
+**已定：保守间隔默认**（具体默认值见 `config.ts` `self_evolve.continuation.idle_sec`）。
+
+### 12.3 续跑内容语义
+
+|选项|说明|
+|------|------|
+|**固定模板 + 现有任务上下文** ★|复用 ready 消息角色/任务上下文 + 固定「继续推进或报告完成」模板；不 LLM 生成指令（编排器无 LLM）|
+|transcript 摘要注入（P4 historySummary）|语义续跑，第二轮候选|
+|LLM 动态生成指令|违背「编排器无 LLM」，不采用|
+
+### 12.4 进程形态
+
+|选项|说明|
+|------|------|
+|**guardian 周期性 sweep（无 daemon）** ★|续跑 sweep 内嵌 guardianTick（checkBudgets 之后、probeServeHealth 之前）；无常驻进程|
+|daemon/worker 常驻|违背「无 daemon、状态文件化」（sys-arch 评估），不采用|

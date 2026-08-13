@@ -43,3 +43,17 @@ picode = 公司仿真 + 机械编排 + 文件真相。取其解决已知痛点�
 - **自主模式替代双门闩/人类终裁**：sponsor 永远人类+run-lead 终裁是产品不变量，不可让位。
 
 **优先级**：① 心跳重附（修 ERR-01 后）→ ② 会话 checkpoint → ③ 技能包 → ④ 预算细化。风险最高为 ①② 触及「文件真相」与 serve 单点，需先定义快照只读边界。
+
+## continuation 落地（run-2026-08-13T01-15-17-073Z，D066）
+
+本轮把 prime-agent `autonomous.ts` 的 **Q1 budgets 续跑侧**（maxContinuations/turns/timeout + gates）落地为 picode continuation：guardian 对「已 awake ∧ 无 error ∧ 任务未终态 ∧ 预算未耗尽 ∧ 空闲超 `idle_sec`」的 opencode 会话，按 D061 noReply 语义投喂固定续跑 prompt，计数持久化，耗尽即停。
+
+**与 Q1 预算的关系**：Q1 budgets（`maxTurns/timeoutMs`，C1 已落地）是「防失控上限」——守护失控循环；continuation 预算（`self_evolve.continuation.max_per_session` + `budget.continuations` 计数）是「续跑配额」——限定一次 awake 内自动续跑次数。两者正交：前者管「这一回合跑多久」，后者管「回合结束空等后还能自动接着跑几次」。共享同一哲学：**达到限额 ≠ 任务成功**（耗尽即 setError 停靠，可观测），0 = 不限。
+
+**落地边界（承接 sys-arch 评估）**：
+- **不引入 daemon/常驻进程**（N4 缓）：prime-agent 的进程隔离重附，以 guardian 周期性 sweep + probeServeHealth 心跳重附替代——维持「无 daemon、状态文件化」不变量
+- **不 LLM 生成续跑指令**（N7 缓）：编排器无 LLM 不变量；续跑 prompt 复用 ready 消息角色/任务上下文 + 固定「继续推进或报告完成」模板，agent 依人设与任务文件自判。语义续跑（P4 `historySummary` 摘要注入）列第二轮
+- **checkpoint 快照**（N5 缓）：维持「快照只读、文件为准」前不引入，列第二轮
+- **计数可恢复**（N3）：续跑计数持久化 session.yaml（文件真相 D002）；serve 重启 → P1 恢复重投喂 ready → 清 error → 续跑 sweep 从持久化计数续发，不重算不超发（幂等）
+
+**验证载体**：本轮 run 自身即验证（acceptance 3）——无人干预下由续跑驱动实现三角持续推进至至少 2 个任务合并。
