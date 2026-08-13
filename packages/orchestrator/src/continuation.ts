@@ -4,6 +4,7 @@ import { readYamlFile, type PicodeConfig } from "@picode/core";
 import { SessionStore } from "./session-store.js";
 import {
   OpencodeSpawner,
+  READY_MESSAGE_TEXT,
   opencodeSessionIdOf,
   type OpencodeRetryPolicy,
 } from "./opencode-adapter.js";
@@ -27,6 +28,9 @@ import { buildPiEnv } from "./pi-adapter.js";
 export const CONTINUATION_PROMPT =
   "检测到本会话已空闲一段时间。若你负责的任务尚未完成，请继续推进：按你的角色 prompt、任务 work brief 与 write_paths 约束工作，持续推进到可交付状态。若任务已完成或你无法继续，请整理证据/交接并明确回报完成情况。不要等待下一次投喂，直接行动。";
 
+/** 语义续跑摘要段的固定标题（与 composeContinuationPrompt 同源，供测试/引用）。 */
+export const CONTINUATION_SUMMARY_HEADER = "## 上一回合要点（转录摘要）";
+
 /**
  * 语义续跑（N7 升级）：组合续跑 prompt 的纯函数——null（无摘要/空转录）
  * 原样返回 CONTINUATION_PROMPT；有摘要则在其后追加转录要点段，
@@ -34,7 +38,7 @@ export const CONTINUATION_PROMPT =
  */
 export function composeContinuationPrompt(summary: string | null): string {
   if (summary === null) return CONTINUATION_PROMPT;
-  return `${CONTINUATION_PROMPT}\n\n## 上一回合要点（转录摘要）\n${summary}`;
+  return `${CONTINUATION_PROMPT}\n\n${CONTINUATION_SUMMARY_HEADER}\n${summary}`;
 }
 
 /** POST /message 有界重试（C2：断连退避复用 requestWithRetry；成功才计数）。 */
@@ -179,7 +183,11 @@ export async function feedContinuation(
   const env = buildPiEnv(dir, config, session);
   const transcript = new TranscriptStore(dir);
   const spawner = new OpencodeSpawner(config);
-  const summary = transcript.historySummary(agentId, { maxEntries: 8 });
+  const cont = config.self_evolve.continuation;
+  const summary = transcript.historySummary(agentId, {
+    maxEntries: cont.summary_entries,
+    stripNoise: [READY_MESSAGE_TEXT, CONTINUATION_PROMPT],
+  });
   const message = spawner.buildReadyMessage(env, composeContinuationPrompt(summary));
   const res = await spawner.postMessage(sessionId, message, CONTINUATION_RETRY);
   await transcript.recordOutgoing(agentId, message.parts.map((p) => p.text).join("\n"));

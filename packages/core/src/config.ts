@@ -170,6 +170,11 @@ export interface ContinuationConfig {
   /** 会话空闲超过 idle_sec 秒才投喂续跑（sweep 节流，防连发）。 */
   idle_sec: number;
   /**
+   * 语义续跑摘要窗口：historySummary 生成的最近转录要点条数（D077）。
+   * 喂入续跑 prompt 的「上一回合要点」条数；0 = 不生成摘要（回退固定模板）。
+   */
+  summary_entries: number;
+  /**
    * 平台席（无 task 绑定会话，如 scout/sys-arch/run-lead）策略（R3-C1）：
    * "skip"（默认）→ 不进候选（防无界空转烧 token）；"allow" → 进入但
    * 仍受 max_per_session 有界（显式逃生）。
@@ -480,6 +485,7 @@ export const DEFAULTS: PicodeConfig = {
     continuation: {
       max_per_session: 5,
       idle_sec: 300,
+      summary_entries: 8,
       platform_seats: "skip",
       gate_commands: [],
     },
@@ -692,6 +698,7 @@ export function validateConfig(config: PicodeConfig): void {
   for (const [key, val] of [
     ["max_per_session", cont.max_per_session],
     ["idle_sec", cont.idle_sec],
+    ["summary_entries", cont.summary_entries],
   ] as const) {
     if (!Number.isInteger(val) || val < 0) {
       configError(

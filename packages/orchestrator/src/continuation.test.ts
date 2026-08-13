@@ -6,8 +6,10 @@ import path from "node:path";
 import { readYamlFile, writeYamlFile } from "@picode/core";
 import { createRun, resolveRunDir } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
+import { READY_MESSAGE_TEXT } from "./opencode-adapter.js";
 import {
   CONTINUATION_PROMPT,
+  CONTINUATION_SUMMARY_HEADER,
   composeContinuationPrompt,
   deriveContinuationTargets,
   feedContinuation,
@@ -562,7 +564,7 @@ test("C1: composeContinuationPrompt(summary) 含模板 + 转录要点段", () =>
   const summary = "历史转录共 2 条（outgoing 1 / incoming 1），最近 2 条要点：\n- [t1] 投喂: xxx\n- [t2] 响应: yyy";
   const out = composeContinuationPrompt(summary);
   assert.ok(out.startsWith(CONTINUATION_PROMPT), "模板必须原样置于开头");
-  assert.ok(out.includes("\n\n## 上一回合要点（转录摘要）\n"), "必须含摘要段标题分隔");
+  assert.ok(out.includes(`\n\n${CONTINUATION_SUMMARY_HEADER}\n`), "必须含摘要段标题分隔");
   assert.ok(out.includes(summary), "摘要全文必须追加在摘要段内");
   assert.equal(out.indexOf(summary) > out.indexOf("## 上一回合要点"), true);
 });
@@ -617,6 +619,91 @@ test("C1: 有转录 → feed 投喂消息含「上一回合要点」摘要段（
     const text = msg.parts.map((p) => p.text).join("\n");
     assert.ok(text.includes("## 上一回合要点（转录摘要）"), "必须含摘要段标题");
     assert.ok(text.includes("完成模块 A 实现，验收通过"), "必须含上一回合转录要点");
+  } finally {
+    restore();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// D077 语义续跑：summary_entries 配置驱动摘要窗口 + stripNoise 去噪
+// ---------------------------------------------------------------------------
+
+test("D077: feedContinuation 用 cont.summary_entries 作摘要窗口 + stripNoise 去噪（机械投喂噪音不入摘要）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  config.self_evolve.continuation.summary_entries = 3;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_d077_win");
+
+  const now = Date.now();
+  // 一条「自动续跑投喂」（outgoing，机械模板文本 = READY_MESSAGE_TEXT + CONTINUATION_PROMPT）
+  appendTranscript(dir, "engineer@task-x", {
+    type: "outgoing",
+    ts: new Date(now - 180_000).toISOString(),
+    text: `${READY_MESSAGE_TEXT}\n${CONTINUATION_PROMPT}`,
+  });
+  // 两条真实响应
+  appendTranscript(dir, "engineer@task-x", {
+    type: "incoming",
+    ts: new Date(now - 120_000).toISOString(),
+    parts: [{ type: "text", text: "模块 A 完成" }],
+  });
+  appendTranscript(dir, "engineer@task-x", {
+    type: "incoming",
+    ts: new Date(now - 60_000).toISOString(),
+    parts: [{ type: "text", text: "模块 B 完成" }],
+  });
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    await feedContinuation(dir, config, "engineer@task-x");
+    const msg = messagePosts(calls)[0].body as {
+      parts: Array<{ type: string; text: string }>;
+    };
+    // parts[0] 恒为 READY_MESSAGE_TEXT；摘要段在 parts[1]（composeContinuationPrompt 输出）
+    assert.equal(msg.parts[0].text, READY_MESSAGE_TEXT);
+    const composed = msg.parts[1].text;
+    // 摘要段 = header 之后的正文（header 之前是 CONTINUATION_PROMPT 模板本身）
+    const summary = composed.slice(composed.indexOf(CONTINUATION_SUMMARY_HEADER));
+    // 窗口 = summary_entries 3：最近 3 条都在窗口内（含 1 outgoing + 2 incoming）
+    assert.match(summary, /历史转录共 3 条（outgoing 1 \/ incoming 2），最近 3 条要点：/, "条数统计必须基于原始转录");
+    // stripNoise：outgoing 命中 READY_MESSAGE_TEXT / CONTINUATION_PROMPT 后整条删空 → 不生成要点行
+    assert.ok(!summary.includes("你已就绪。按角色 prompt 工作"), "READY_MESSAGE_TEXT 噪音必须被 strip 并跳过");
+    assert.ok(!summary.includes("检测到本会话已空闲"), "CONTINUATION_PROMPT 噪音必须被 strip 并跳过");
+    assert.ok(summary.includes("模块 A 完成"), "窗口内真实响应要点必须保留");
+    assert.ok(summary.includes("模块 B 完成"), "窗口内真实响应要点必须保留");
+    assert.ok(!summary.includes("投喂:"), "机械投喂噪音被 strip 后不得出现投喂要点行");
+  } finally {
+    restore();
+  }
+});
+
+test("D077: summary_entries=0 时不注入摘要（回退固定模板，行为同空转录）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  config.self_evolve.continuation.summary_entries = 0;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_d077_zero");
+
+  appendTranscript(dir, "engineer@task-x", {
+    type: "incoming",
+    ts: new Date(Date.now() - 60_000).toISOString(),
+    parts: [{ type: "text", text: "有转录但摘要窗口关闭" }],
+  });
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    await feedContinuation(dir, config, "engineer@task-x");
+    const msg = messagePosts(calls)[0].body as {
+      parts: Array<{ type: string; text: string }>;
+    };
+    const text = msg.parts.map((p) => p.text).join("\n");
+    assert.ok(!text.includes("上一回合要点"), "summary_entries=0 不得注入摘要段");
+    assert.equal(msg.parts[1].text, CONTINUATION_PROMPT, "必须回退固定模板");
   } finally {
     restore();
   }

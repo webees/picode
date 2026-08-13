@@ -95,11 +95,17 @@ export class TranscriptStore {
 
   /**
    * 生成历史要点摘要（确定性启发式，无 LLM）：给出条数统计 + 最近
-   * maxEntries 条的可读要点。空转录 / 文件损坏返回 null（best-effort）。
+   * maxEntries 条的可读要点。空转录 / 文件损坏 / maxEntries<=0 返回 null
+   * （best-effort，摘要窗口关闭时不生成）。
+   *
+   * stripNoise：生成 outgoing 要点前，从文本中删去所有命中子串（如固定的
+   * ready/续跑模板文本），避免摘要被重复的机械投喂噪音淹没；删除后文本为空
+   * 的 outgoing 条目整条跳过（不生成要点行）。条数统计（outgoing/incoming）
+   * 仍基于原始转录，不受 stripNoise 影响。纯函数：同输入同输出，无副作用。
    */
   historySummary(
     agentId: string,
-    opts: { maxEntries?: number } = {},
+    opts: { maxEntries?: number; stripNoise?: string[] } = {},
   ): string | null {
     let entries: TranscriptEntry[];
     try {
@@ -109,6 +115,8 @@ export class TranscriptStore {
     }
     if (entries.length === 0) return null;
     const max = opts.maxEntries ?? 20;
+    if (max <= 0) return null;
+    const strip = (opts.stripNoise ?? []).filter((s) => s.length > 0);
     const recent = entries.slice(-max);
     const outgoing = entries.filter((e) => e.type === "outgoing").length;
     const incoming = entries.filter((e) => e.type === "incoming").length;
@@ -117,7 +125,12 @@ export class TranscriptStore {
     ];
     for (const e of recent) {
       if (e.type === "outgoing") {
-        lines.push(`- [${e.ts}] 投喂: ${truncate(e.text ?? "", 120)}`);
+        let text = e.text ?? "";
+        for (const noise of strip) {
+          text = text.split(noise).join("");
+        }
+        if (text.trim().length === 0) continue;
+        lines.push(`- [${e.ts}] 投喂: ${truncate(text, 120)}`);
       } else {
         const texts = (e.parts ?? [])
           .filter((p) => typeof p.text === "string" && p.text.trim().length > 0)

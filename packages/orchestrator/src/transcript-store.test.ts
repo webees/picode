@@ -59,3 +59,39 @@ test("transcript: historySummary 空转录返回 null，有内容生成可读要
   assert.match(summary, /投喂: ready 提示：实现模块 A/);
   assert.match(summary, /响应: 模块 A 已实现/);
 });
+
+test("transcript: historySummary stripNoise 删除 outgoing 命中子串、删空跳过、条数统计不变（纯函数）", async () => {
+  const { dir } = setupRun();
+  const t = new TranscriptStore(dir);
+  await t.recordOutgoing("pm", "你已就绪。按角色 prompt 工作；实现模块 A");
+  await t.recordOutgoing("pm", "你已就绪。按角色 prompt 工作；实现模块 B");
+  await t.recordOutgoing("pm", "实现模块 C");
+  await t.recordResponse("pm", [{ type: "text", text: "模块 C 已实现" }]);
+
+  const summary = t.historySummary("pm", {
+    maxEntries: 20,
+    stripNoise: ["你已就绪。按角色 prompt 工作；"],
+  })!;
+  // 条数统计基于原始转录（3 outgoing + 1 incoming），不受 stripNoise 影响
+  assert.match(summary, /历史转录共 4 条（outgoing 3 \/ incoming 1）/);
+  assert.match(summary, /投喂: 实现模块 A/);
+  assert.match(summary, /投喂: 实现模块 B/);
+  assert.match(summary, /投喂: 实现模块 C/);
+  assert.match(summary, /响应: 模块 C 已实现/);
+  assert.ok(!summary.includes("你已就绪"), "stripNoise 命中子串必须从 outgoing 要点中删除");
+
+  // 删除后整条为空 → 该 outgoing 条目跳过（不生成要点行）
+  const stripped = t.historySummary("pm", {
+    maxEntries: 20,
+    stripNoise: ["实现模块"],
+  })!;
+  assert.match(stripped, /历史转录共 4 条（outgoing 3 \/ incoming 1）/, "统计行仍保留");
+  assert.ok(!stripped.includes("投喂: 实现模块"), "删空条目不得生成要点行");
+  assert.match(stripped, /响应: 模块 C 已实现/);
+
+  // 纯函数：同输入同输出
+  const a = t.historySummary("pm", { stripNoise: ["你已就绪"] });
+  const b = t.historySummary("pm", { stripNoise: ["你已就绪"] });
+  assert.equal(a, b);
+  assert.equal(a, t.historySummary("pm", { stripNoise: ["你已就绪"] }));
+});

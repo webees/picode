@@ -273,7 +273,7 @@ export async function wakeWithOpencode(
   });
   try {
     await store.wake(agentId, reason, opts);
-    const summary = transcript.historySummary(agentId);
+    const summary = transcript.historySummary(agentId, { stripNoise: [READY_MESSAGE_TEXT] });
     const extraText = summary ? `\n\n## 历史要点摘要（转录恢复）\n${summary}` : undefined;
     const handle = await spawner.spawn(agentId, env, extraText);
     const updated = await store.attachPiSession(agentId, handle.pi_session_id);
