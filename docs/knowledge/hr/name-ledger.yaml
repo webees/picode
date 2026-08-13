@@ -1,5 +1,5 @@
 schema_version: "1"
-updated_at: 2026-08-12T23:19:50.438Z
+updated_at: 2026-08-12T23:39:14.036Z
 entries:
   - kind: team_name
     name: 春山
@@ -601,3 +601,99 @@ entries:
     task_id: task-write-guard
     seat: sdet
     first_used_at: 2026-08-12T23:19:50.438Z
+  - kind: team_name
+    name: 开阳
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-auto-refine-gate
+    seat: null
+    first_used_at: 2026-08-12T23:39:13.147Z
+  - kind: codename
+    name: 青松
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-auto-refine-gate
+    seat: squad-lead
+    first_used_at: 2026-08-12T23:39:13.147Z
+  - kind: codename
+    name: 玄武
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-auto-refine-gate
+    seat: engineer
+    first_used_at: 2026-08-12T23:39:13.147Z
+  - kind: codename
+    name: 惊鸿
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-auto-refine-gate
+    seat: sdet
+    first_used_at: 2026-08-12T23:39:13.147Z
+  - kind: team_name
+    name: 长庚
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-write-paths-gen
+    seat: null
+    first_used_at: 2026-08-12T23:39:13.482Z
+  - kind: codename
+    name: 玄甲
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-write-paths-gen
+    seat: squad-lead
+    first_used_at: 2026-08-12T23:39:13.482Z
+  - kind: codename
+    name: 腾蛇
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-write-paths-gen
+    seat: engineer
+    first_used_at: 2026-08-12T23:39:13.482Z
+  - kind: codename
+    name: 烛龙
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-write-paths-gen
+    seat: sdet
+    first_used_at: 2026-08-12T23:39:13.482Z
+  - kind: team_name
+    name: 天璇
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-prompt-discipline
+    seat: null
+    first_used_at: 2026-08-12T23:39:13.795Z
+  - kind: codename
+    name: 白虎
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-prompt-discipline
+    seat: squad-lead
+    first_used_at: 2026-08-12T23:39:13.795Z
+  - kind: codename
+    name: 玄甲-r2
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-prompt-discipline
+    seat: engineer
+    first_used_at: 2026-08-12T23:39:13.795Z
+  - kind: codename
+    name: 貔貅
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-prompt-discipline
+    seat: sdet
+    first_used_at: 2026-08-12T23:39:13.795Z
+  - kind: team_name
+    name: 开阳-r2
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-quality-metrics
+    seat: null
+    first_used_at: 2026-08-12T23:39:14.036Z
+  - kind: codename
+    name: 天狼
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-quality-metrics
+    seat: squad-lead
+    first_used_at: 2026-08-12T23:39:14.036Z
+  - kind: codename
+    name: 玄武-r2
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-quality-metrics
+    seat: engineer
+    first_used_at: 2026-08-12T23:39:14.036Z
+  - kind: codename
+    name: 惊鸿-r2
+    run_id: run-2026-08-12T23-36-04-362Z
+    task_id: task-quality-metrics
+    seat: sdet
+    first_used_at: 2026-08-12T23:39:14.036Z
