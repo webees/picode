@@ -14,6 +14,7 @@ import { sleepAgent, buildPiEnv } from "./pi-adapter.js";
 import { OpencodeSpawner } from "./opencode-adapter.js";
 import { TranscriptStore } from "./transcript-store.js";
 import { sweepContinuationsGated } from "./continuation-gate.js";
+import { taskIdOfAgent } from "./continuation.js";
 
 // C2 (chunk-continuation-recovery): 把 continuation 机制经本模块透出到包公共面，
 // 供 mcp-server 的 continuation_status / continuation_feed 包装（index.ts 在 T06
@@ -343,6 +344,8 @@ export interface GuardianTickResult {
    * null = 基线不可得/代码未变（幂等）；非 null = detected 且含 base/head SHA。
    */
   code_updated: CodeUpdatedSignal | null;
+  /** C1-run-close: 终态 goal（completed/cancelled）后本轮休眠的平台席列表。 */
+  slept_platform: string[];
   halt: boolean;
 }
 
@@ -380,6 +383,55 @@ export async function sleepIdleSessions(
     }
   }
   return slept;
+}
+
+/**
+ * C1-run-close: 平台席休眠（product acceptance: run 收尾不残留 awake 占 max_awake）。
+ * 遍历 SessionStore.list() 中 awake 且无 task 绑定（taskIdOfAgent === null）的
+ * 平台席，逐个 sleepAgent。幂等：非 awake 或已休眠的会话自然跳过，重复调用无副作用。
+ */
+export async function sleepPlatformSeats(
+  dir: string,
+  config: PicodeConfig,
+): Promise<string[]> {
+  const store = new SessionStore(dir);
+  const slept: string[] = [];
+  for (const s of store.list()) {
+    if (s.state !== "awake") continue;
+    if (taskIdOfAgent(s.agent_id) !== null) continue;
+    await sleepAgent(dir, config, s.agent_id, "guardian:run-close");
+    slept.push(s.agent_id);
+  }
+  return slept;
+}
+
+/**
+ * C1-run-close: run 收尾（goal 终态 completed/cancelled 后）。
+ *  - applyEvent 补发 TASK_DISSOLVED（幂等：任务已 dissolved 的 applyEvent 无副作用）
+ *  - sleepPlatformSeats 休眠所有 awake 平台席
+ * best-effort：单点失败不阻断整体（guardianTick 与 CLI 共用，收尾不可因单席失败中断）。
+ */
+export async function closeRun(
+  dir: string,
+  config: PicodeConfig,
+): Promise<{ dissolved: string[]; slept_platform: string[] }> {
+  const dissolved: string[] = [];
+  for (const chunk of readChunks(dir)) {
+    if (!chunk.task_id) continue;
+    const task = readTask(dir, chunk.task_id);
+    if (task && task.status !== "dissolved") {
+      try {
+        await applyEvent(dir, config, SESSION_EVENTS.TASK_DISSOLVED, {
+          taskId: chunk.task_id,
+        });
+        dissolved.push(chunk.task_id);
+      } catch {
+        /* best-effort: 单任务失败不阻断整体 */
+      }
+    }
+  }
+  const slept_platform = await sleepPlatformSeats(dir, config);
+  return { dissolved, slept_platform };
 }
 
 /** One over-limit session: which budget field was hit and its usage. */
@@ -463,8 +515,9 @@ export async function checkBudgets(
  *   4. sweep stale progress → progress_due (nudge for tasks already running)
  *   5. enforce per-session budgets (C1): stop over-limit awake sessions
  *   6. continuation sweep (C1): feed idle awake oc- sessions a bounded prompt
- *   7. optionally sleep idle sessions (opt-in)
- *   8. probe serve health (P1): mark error on outage / bounded recovery
+ *   7. run-close (C1): 终态 goal（completed/cancelled）→ sleepPlatformSeats（平台席收尾）
+ *   8. optionally sleep idle sessions (opt-in)
+ *   9. probe serve health (P1): mark error on outage / bounded recovery
  *
  * C2 recovery-linkage contract (plan §b C2): the continuation sweep runs AFTER
  * checkBudgets and BEFORE probeServeHealth. Error sessions are therefore never
@@ -496,6 +549,14 @@ export async function guardianTick(
   // 「通过 → 停靠不投喂」「失败/快照未变 → 不投喂但保留候选（下轮可重试）」。
   const continuation = await sweepContinuationsGated(dir, config);
 
+  // C1-run-close: 终态 goal（completed/cancelled）后休眠所有 awake 平台席，
+  // 不残留 awake 占 max_awake（product acceptance：run 收尾自动休眠平台席）。
+  const goal = readGoal(dir);
+  const slept_platform =
+    goal.status === "completed" || goal.status === "cancelled"
+      ? await sleepPlatformSeats(dir, config)
+      : [];
+
   const slept = opts.idleSleep ? await sleepIdleSessions(dir, config) : [];
   const serve = await probeServeHealth(dir, config);
 
@@ -514,6 +575,7 @@ export async function guardianTick(
     budgets,
     continuation,
     code_updated,
+    slept_platform,
     halt: runState?.halt ?? false,
   };
 }

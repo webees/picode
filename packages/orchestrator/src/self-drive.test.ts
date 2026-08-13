@@ -10,11 +10,13 @@ import { SessionStore } from "./session-store.js";
 import { appendSessionCommand } from "./rules-engine.js";
 import {
   checkBudgets,
+  closeRun,
   deriveEvents,
   guardianTick,
   probeServeHealth,
   runGuardian,
   sleepIdleSessions,
+  sleepPlatformSeats,
 } from "./self-drive.js";
 import { sweepContinuations } from "./continuation.js";
 import { selfDriveCommands } from "./commands/self-drive.js";
@@ -307,6 +309,73 @@ test("sleepIdleSessions: sleeps awake sessions idle beyond idle_sleep_sec", asyn
   const slept = await sleepIdleSessions(dir, config);
   assert.deepEqual(slept, ["pm"]);
   assert.equal(store.get("pm")!.state, "sleeping");
+});
+
+test("sleepPlatformSeats: sleeps only awake platform seats (no task binding), idempotent", async () => {
+  const { dir, config, store } = setupRun();
+  // platform seat (no @task- binding) — awake
+  await store.wake("pm", "test");
+  // task-bound seat — must be left alone
+  store.register("engineer", { agentId: "engineer@task-x", initialState: "sleeping" });
+  await store.wake("engineer@task-x", "test");
+
+  const slept = await sleepPlatformSeats(dir, config);
+  assert.deepEqual(slept, ["pm"]);
+  assert.equal(store.get("pm")!.state, "sleeping");
+  assert.equal(store.get("engineer@task-x")!.state, "awake", "task 席不在此列");
+
+  // idempotent: second pass sleeps nothing new
+  const again = await sleepPlatformSeats(dir, config);
+  assert.deepEqual(again, []);
+});
+
+test("closeRun: 终态 goal 补发 TASK_DISSOLVED + 休眠平台席（best-effort，幂等）", async () => {
+  const { repo, dir, config, store } = setupRun();
+  activateGoal(dir);
+  const { taskId } = addChunkAndTask(repo, dir, config, {
+    chunkId: "chunk-a",
+    writePaths: ["src/module-a/**"],
+  });
+  registerTriad(store, taskId);
+  await store.wake(`squad-lead@${taskId}`, "test");
+  await store.wake("pm", "test");
+  fs.writeFileSync(
+    path.join(dir, "goal.yaml"),
+    fs.readFileSync(path.join(dir, "goal.yaml"), "utf8").replace("status: active", "status: completed"),
+  );
+
+  const r = await closeRun(dir, config);
+  assert.deepEqual(r.dissolved, [taskId]);
+  assert.deepEqual(r.slept_platform, ["pm"]);
+  assert.equal(store.get("pm")!.state, "sleeping");
+  // TASK_DISSOLVED → terminate_squad: awake triad seat must be terminated
+  assert.equal(store.get(`squad-lead@${taskId}`)!.state, "terminated");
+
+  // idempotent: 任务已 dissolved 的再次 closeRun 不再重复 terminate
+  const again = await closeRun(dir, config);
+  assert.deepEqual(again.slept_platform, []);
+});
+
+test("guardianTick: 终态 goal 后休眠平台席并回报 slept_platform", async () => {
+  const { dir, config, store } = setupRun();
+  await store.wake("pm", "test");
+  fs.writeFileSync(
+    path.join(dir, "goal.yaml"),
+    fs.readFileSync(path.join(dir, "goal.yaml"), "utf8").replace("status: intake", "status: completed"),
+  );
+
+  const res = await guardianTick(dir, config);
+  assert.deepEqual(res.slept_platform, ["pm"]);
+  assert.equal(store.get("pm")!.state, "sleeping");
+});
+
+test("guardianTick: 非终态 goal 不休眠平台席", async () => {
+  const { dir, config, store } = setupRun();
+  await store.wake("pm", "test");
+
+  const res = await guardianTick(dir, config);
+  assert.deepEqual(res.slept_platform, []);
+  assert.equal(store.get("pm")!.state, "awake");
 });
 
 test("checkBudgets: default config does not stop a normal session (默认不触发)", async () => {

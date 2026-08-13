@@ -6,6 +6,7 @@ import {
 } from "../run-store.js";
 import type { Command, CommandContext } from "./types.js";
 import { need } from "./util.js";
+import { closeRun } from "../self-drive.js";
 
 export const goalCommands: Command[] = [
   {
@@ -25,7 +26,15 @@ export const goalCommands: Command[] = [
         clearOpenQuestions: true,
         skipProductAcceptanceCheck: !ctx.config!.product.require_acceptance_before_active,
       });
-      console.log(JSON.stringify(goal, null, 2));
+      // C1-run-close: goal 进入终态（completed/cancelled）即收尾 —— 补发
+      // TASK_DISSOLVED + 休眠平台席（best-effort，不残留 awake 占 max_awake）。
+      const close =
+        status === "completed" || status === "cancelled"
+          ? await closeRun(ctx.dir!, ctx.config!)
+          : null;
+      console.log(
+        JSON.stringify(close ? { goal, close } : goal, null, 2),
+      );
     },
   },
   {
