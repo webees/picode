@@ -460,11 +460,11 @@ export const DEFAULTS: PicodeConfig = {
       require_evidence: true,
       reject_noise: true,
     },
-    // C1 continuation conservative defaults: bounded auto-refeed
-    // (max_per_session = 3) spaced by idle_sec (5 min) so a session gets a
-    // handful of nudges per wake, never a loop; 0 = unlimited.
+    // C1 continuation conservative defaults (N2): 0 = unlimited, relying on
+    // the existing idle-sleep/budgets to dock; idle_sec (5 min) spaces feeds so
+    // a session is never spammed within a window.
     continuation: {
-      max_per_session: 3,
+      max_per_session: 0,
       idle_sec: 300,
     },
   },
