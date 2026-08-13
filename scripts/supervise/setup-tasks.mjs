@@ -1,0 +1,150 @@
+#!/usr/bin/env node
+/**
+ * 监督者装配脚本（幂等）：chunk add → write_paths 合并 → 双门闩 → staffing → task prepare
+ * 用法: node setup-tasks.mjs
+ */
+import fs from "node:fs";
+import { execSync } from "node:child_process";
+import YAML from "yaml";
+
+const PICODE = "/Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js";
+const REPO = "/tmp/picode-dogfood";
+const RUN = "run-2026-08-13T01-15-17-073Z";
+const RUN_DIR = `${REPO}/.picode/runs/${RUN}`;
+
+const CHUNKS = {
+  "continuation-core": {
+    first: "packages/orchestrator/src/continuation.ts",
+    write: [
+      "packages/orchestrator/src/continuation.ts",
+      "packages/orchestrator/src/continuation.test.ts",
+      "packages/orchestrator/src/self-drive.ts",
+      "packages/orchestrator/src/self-drive.test.ts",
+      "packages/orchestrator/src/session-store.ts",
+      "packages/orchestrator/src/session-store.test.ts",
+      "packages/core/src/session.ts",
+      "packages/core/src/config.ts",
+      "packages/core/src/config.test.ts",
+      "packages/core/src/session.test.ts",
+    ],
+    skills: "typescript,state-machine,opencode-serve",
+  },
+  "continuation-docs": {
+    first: "docs/DECISIONS.md",
+    write: [
+      "docs/DECISIONS.md",
+      "docs/reference/decision-catalog.md",
+      "docs/guides/operations.md",
+      "docs/knowledge/prime-agent-study.md",
+      "docs/knowledge/evolve/run-2026-08-13T01-15-17-073Z.md",
+    ],
+    skills: "docs,spec",
+  },
+  "continuation-recovery": {
+    first: "packages/orchestrator/src/commands/self-drive.ts",
+    write: [
+      "packages/orchestrator/src/commands/self-drive.ts",
+      "packages/orchestrator/src/commands/self-drive.test.ts",
+      "packages/orchestrator/src/self-drive.ts",
+      "packages/orchestrator/src/self-drive.test.ts",
+      "packages/mcp-server/src/management.ts",
+      "packages/mcp-server/src/registry.test.ts",
+    ],
+    skills: "typescript,opencode-serve,mcp",
+  },
+  "merge-terminal": {
+    first: "packages/orchestrator/src/merge.ts",
+    write: [
+      "packages/orchestrator/src/merge.ts",
+      "packages/orchestrator/src/merge.test.ts",
+      "packages/orchestrator/src/continuation.ts",
+      "packages/orchestrator/src/continuation.test.ts",
+    ],
+    skills: "typescript,state-machine",
+  },
+  "continuation-bounded": {
+    first: "packages/core/src/config.ts",
+    write: [
+      "packages/core/src/config.ts",
+      "packages/core/src/config.test.ts",
+      "docs/reference/decision-catalog.md",
+    ],
+    skills: "typescript,config",
+  },
+  "guardian-reload-signal": {
+    first: "packages/orchestrator/src/self-drive.ts",
+    write: [
+      "packages/orchestrator/src/self-drive.ts",
+      "packages/orchestrator/src/self-drive.test.ts",
+      "docs/guides/operations.md",
+    ],
+    skills: "typescript,ops",
+  },
+  "round2-docs": {
+    first: "docs/knowledge/evolve/run-2026-08-13T01-15-17-073Z.md",
+    write: [
+      "docs/knowledge/evolve/run-2026-08-13T01-15-17-073Z.md",
+      "docs/knowledge/research/README.md",
+      "docs/plans/run-2026-08-13T01-15-17-073Z-plan-r2.md",
+    ],
+    skills: "docs,spec",
+  },
+};
+
+function picode(args) {
+  return execSync(`node ${PICODE} ${args}`, {
+    encoding: "utf8",
+    cwd: "/Users/x/Desktop/iOS/picode",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+}
+function tryPicode(args) {
+  try { return picode(args); } catch (e) {
+    const msg = String(e.stderr || e.message);
+    console.log(`  [skip] ${args.split(" ")[0]}: ${msg.slice(0, 100)}`);
+    return null;
+  }
+}
+
+function patchWritePaths(chunkId, paths) {
+  const chunksPath = `${RUN_DIR}/chunks.yaml`;
+  const chunks = YAML.parse(fs.readFileSync(chunksPath, "utf8"));
+  const c = chunks.chunks.find((x) => x.id === chunkId);
+  if (!c) throw new Error(`chunk ${chunkId} not found`);
+  c.write_paths = [...new Set([...(c.write_paths ?? []), ...paths])];
+  fs.writeFileSync(chunksPath, YAML.stringify(chunks));
+
+  const taskId = c.task_id;
+  const taskPath = `${RUN_DIR}/tasks/${taskId}/task.yaml`;
+  const task = YAML.parse(fs.readFileSync(taskPath, "utf8"));
+  task.write_paths = [...new Set([...(task.write_paths ?? []), ...paths])];
+  fs.writeFileSync(taskPath, YAML.stringify(task));
+  return taskId;
+}
+
+for (const [chunkId, spec] of Object.entries(CHUNKS)) {
+  console.log(`=== ${chunkId} ===`);
+  // 1. chunk add（幂等：chunks.yaml 已存在该 chunk 则跳过）
+  const chunksYaml = YAML.parse(fs.readFileSync(`${RUN_DIR}/chunks.yaml`, "utf8"));
+  if (!chunksYaml.chunks.some((x) => x.id === chunkId)) {
+    const out = tryPicode(`chunk add --repo ${REPO} --run ${RUN} --id ${chunkId} --write "${spec.first}"`);
+    if (out) console.log("  chunk add:", JSON.parse(out).taskId);
+  } else {
+    console.log("  chunk exists, skip add");
+  }
+  // 2. write_paths 合并（幂等去重）
+  const taskId = patchWritePaths(chunkId, spec.write);
+  console.log(`  write_paths: ${spec.write.length} merged → ${taskId}`);
+  // 3. 门闩一
+  tryPicode(`brief draft --repo ${REPO} --run ${RUN} --task ${taskId}`);
+  tryPicode(`brief approve --repo ${REPO} --run ${RUN} --task ${taskId} --by run-lead`);
+  // 4. 门闩二 + 会话（先用工单，再机械起草人设，最后 people-qa 校验 approve）
+  tryPicode(`staffing request --repo ${REPO} --run ${RUN} --task ${taskId} --skills ${spec.skills} --notes "run-lead 规划 (b) 分配"`);
+  tryPicode(`staffing draft-personas --repo ${REPO} --run ${RUN} --task ${taskId}`);
+  const appr = tryPicode(`staffing approve --repo ${REPO} --run ${RUN} --task ${taskId} --by run-lead`);
+  if (appr && appr.includes("wokeErrors")) console.log("  staffing:", appr.slice(0, 200));
+  // 5. prepare（worktree + token）
+  const prep = tryPicode(`task prepare --repo ${REPO} --run ${RUN} --task ${taskId}`);
+  if (prep) console.log("  prepare:", prep.slice(0, 150));
+}
+console.log("DONE");
