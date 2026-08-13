@@ -14,6 +14,11 @@ import { OpencodeSpawner } from "./opencode-adapter.js";
 import { TranscriptStore } from "./transcript-store.js";
 import { sweepContinuations } from "./continuation.js";
 
+// C2 (chunk-continuation-recovery): 把 continuation 机制经本模块透出到包公共面，
+// 供 mcp-server 的 continuation_status / continuation_feed 包装（index.ts 在 T06
+// 写集之外不可改，self-drive.ts 是 index 已 re-export 的最近可达模块）。
+export * from "./continuation.js";
+
 /**
  * Self-drive guardian (TC-02): a deterministic loop that advances a run
  * without a human pushing events.
@@ -418,6 +423,14 @@ export async function checkBudgets(
  *   5. enforce per-session budgets (C1): stop over-limit awake sessions
  *   6. continuation sweep (C1): feed idle awake oc- sessions a bounded prompt
  *   7. optionally sleep idle sessions (opt-in)
+ *   8. probe serve health (P1): mark error on outage / bounded recovery
+ *
+ * C2 recovery-linkage contract (plan §b C2): the continuation sweep runs AFTER
+ * checkBudgets and BEFORE probeServeHealth. Error sessions are therefore never
+ * feed (C1 gate) — they are recovered by P1's sendReady + clearError in step 8,
+ * and the NEXT tick's sweep resumes from the persisted budget.continuations
+ * count (N3): recovery/wake never reset the counter, so a recovered session can
+ * only ever advance toward — never exceed — self_evolve.continuation.max_per_session.
  */
 export async function guardianTick(
   dir: string,

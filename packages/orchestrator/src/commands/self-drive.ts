@@ -1,4 +1,6 @@
 import { guardianTick, runGuardian, deriveEvents } from "../self-drive.js";
+import { deriveContinuationTargets, feedContinuation } from "../continuation.js";
+import { ErrorCode, PicodeError } from "@picode/core";
 import type { Command, CommandContext } from "./types.js";
 import { unknownSub } from "./util.js";
 
@@ -59,6 +61,42 @@ export const selfDriveCommands: Command[] = [
       const fs = await import("node:fs");
       fs.writeFileSync(file, new Date().toISOString());
       console.log(JSON.stringify({ halted: true, halt_file: file }, null, 2));
+    },
+  },
+  {
+    domain: "self-drive",
+    path: ["self-drive", "continuation"],
+    summary: "续跑：--status 只读预览候选（不投喂）；--feed <agent> 手动单次投喂并计数",
+    usage:
+      "picode self-drive continuation --repo <path> --run <id> [--status] | [--feed <agent_id>]",
+    run: async (ctx: CommandContext) => {
+      if (ctx.has("--feed")) {
+        const agentId = ctx.arg("--feed");
+        // 守卫：缺值或 `--feed` 后紧跟其它 flag（如 `--feed --repo …`）时，
+        // arg("--feed") 会取到 "--repo" —— 必须拒绝而非把它当 agent 投喂。
+        if (!agentId || agentId.startsWith("--")) {
+          throw new PicodeError(
+            ErrorCode.USAGE,
+            "self-drive continuation --feed 需要 <agent_id> — see: picode self-drive continuation --help",
+          );
+        }
+        const res = await feedContinuation(ctx.dir!, ctx.config!, agentId);
+        if (!res) {
+          console.log(
+            JSON.stringify(
+              { fed: false, agent_id: agentId, reason: "not-awake-or-not-opencode-session" },
+              null,
+              2,
+            ),
+          );
+          return;
+        }
+        console.log(JSON.stringify({ fed: true, ...res }, null, 2));
+        return;
+      }
+      // 默认 / --status：只读派生候选，不投喂、不写状态
+      const targets = deriveContinuationTargets(ctx.dir!, ctx.config!);
+      console.log(JSON.stringify({ count: targets.length, targets }, null, 2));
     },
   },
 ];

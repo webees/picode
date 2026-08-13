@@ -15,6 +15,8 @@ import {
   runGuardian,
   sleepIdleSessions,
 } from "./self-drive.js";
+import { sweepContinuations } from "./continuation.js";
+import { selfDriveCommands } from "./commands/self-drive.js";
 
 function tmpGitRepo(): string {
   const dir = gitInit({ prefix: "picode-selfdrive-" });
@@ -155,6 +157,11 @@ async function errorAwakeOcSession(_dir: string, store: SessionStore, sesId: str
   await store.wake("pm", "test");
   await store.attachPiSession("pm", `oc-${sesId}`);
   await store.setError("pm", "serve 健康探测失败（ERR-01 watchdog）");
+}
+
+/** 统计 mock 捕获的 /message POST 调用。 */
+function messagePosts(calls: Array<{ url: string; method: string; body?: unknown }>) {
+  return calls.filter((c) => c.method === "POST" && c.url.includes("/message"));
 }
 
 function enableOpencode(config: ReturnType<typeof resolveRunDir>["config"]): void {
@@ -414,4 +421,115 @@ test("guardianTick: opencode 未启用时 continuation 恒空（无 oc- 会话�
   const { dir, config } = setupRun();
   const res = await guardianTick(dir, config);
   assert.deepEqual(res.continuation.fed, []);
+});
+
+// ---------------------------------------------------------------------------
+// C2-b：会话 error（serve 失联）→ P1 恢复重投喂 ready + 清 error → 续跑计数
+// 保持（不重置）、sweep 从持久化计数续发且不超 max_per_session（N3）
+// ---------------------------------------------------------------------------
+
+test("C2-b: error 会话经 P1 恢复后续跑计数保持、sweep 续发且不超 max_per_session", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve = structuredClone(config.self_evolve);
+  config.self_evolve.budgets = { maxTurns: 0, maxTokens: 0, timeoutMs: 0, gate_commands: [] };
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+
+  // awake oc- 会话，空闲 120s；持久化续跑计数已用 4 次（serve 失联前的真实值）
+  store.register("engineer", { agentId: "engineer@task-x", initialState: "sleeping" });
+  await store.wake("engineer@task-x", "test");
+  await store.attachPiSession("engineer@task-x", "oc-ses_c2b");
+  const YAML = (await import("yaml")).default;
+  const rec = store.get("engineer@task-x")!;
+  rec.budget = { turns: 1, continuations: 4 };
+  rec.last_wake_at = new Date(Date.now() - 120_000).toISOString();
+  fs.writeFileSync(path.join(dir, "sessions", "engineer@task-x.yaml"), YAML.stringify(rec));
+  await store.setError("engineer@task-x", "serve 健康探测失败（ERR-01 watchdog）");
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const state = { down: false };
+  const restore = mockServe(state, calls);
+  try {
+    // P1 恢复：重投喂 ready + 清 error（恢复本身不计数、不重置计数）
+    const r = await probeServeHealth(dir, config, { recoveryBackoffMs: [0, 0, 0] });
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.failed, []);
+    assert.equal(store.get("engineer@task-x")!.error, null, "恢复成功必须清 error");
+    assert.equal(
+      store.get("engineer@task-x")!.budget?.continuations,
+      4,
+      "恢复不得重置续跑计数（N3 持久化）",
+    );
+
+    // 恢复重投喂已写转录（idle 时钟被重置）；回拨 idle：删转录 + 回拨 last_wake_at
+    const txPath = path.join(dir, "transcripts", "engineer@task-x.jsonl");
+    if (fs.existsSync(txPath)) fs.rmSync(txPath);
+    const rec2 = store.get("engineer@task-x")!;
+    rec2.last_wake_at = new Date(Date.now() - 120_000).toISOString();
+    fs.writeFileSync(path.join(dir, "sessions", "engineer@task-x.yaml"), YAML.stringify(rec2));
+
+    // 续跑 sweep：从持久化计数（4）续发 → 5（恰达上限，不超发）
+    const postsBefore = messagePosts(calls);
+    const sweep = await sweepContinuations(dir, config);
+    assert.deepEqual(sweep.fed, ["engineer@task-x"], "恢复后 sweep 必须续发该会话");
+    assert.equal(messagePosts(calls).length - postsBefore.length, 1, "本轮恰好投喂一次");
+    assert.equal(
+      store.get("engineer@task-x")!.budget?.continuations,
+      5,
+      "计数从持久化值续发：4+1=5（不重置为 1）",
+    );
+
+    // 再 sweep：预算耗尽（5 >= max_per_session）不得投喂、不得超发
+    const next = await sweepContinuations(dir, config);
+    assert.deepEqual(next.fed, []);
+    assert.equal(store.get("engineer@task-x")!.budget?.continuations, 5, "永不超 max_per_session");
+  } finally {
+    restore();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// C2-d：`self-drive continuation` 命令表面 —— 已注册，且 --status 只读派生候选
+// （不投喂不写计数）。完整 CLI 冒烟在 commands/self-drive.test.ts（含真实
+// subprocess + 独立 serve mock）。
+// ---------------------------------------------------------------------------
+
+test("C2-d: self-drive continuation 命令已注册且 --status 只读派生候选", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve = structuredClone(config.self_evolve);
+  config.self_evolve.budgets = { maxTurns: 0, maxTokens: 0, timeoutMs: 0, gate_commands: [] };
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  store.register("engineer", { agentId: "engineer@task-x", initialState: "sleeping" });
+  await store.wake("engineer@task-x", "test");
+  await store.attachPiSession("engineer@task-x", "oc-ses_c2d_reg");
+  const YAML = (await import("yaml")).default;
+  const rec = store.get("engineer@task-x")!;
+  rec.last_wake_at = new Date(Date.now() - 120_000).toISOString();
+  fs.writeFileSync(path.join(dir, "sessions", "engineer@task-x.yaml"), YAML.stringify(rec));
+
+  const cmd = selfDriveCommands.find((c) => c.path.join(" ") === "self-drive continuation");
+  assert.ok(cmd, "self-drive continuation 子命令必须注册");
+
+  const logs: string[] = [];
+  const orig = console.log;
+  console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
+  try {
+    await cmd!.run({
+      args: ["self-drive", "continuation", "--status"],
+      has: () => false,
+      arg: () => undefined,
+      dir,
+      config,
+    } as never);
+  } finally {
+    console.log = orig;
+  }
+  assert.equal(logs.length, 1);
+  const out = JSON.parse(logs[0]) as { count: number; targets: Array<{ agent_id: string }> };
+  assert.equal(out.count, 1);
+  assert.deepEqual(out.targets, [{ agent_id: "engineer@task-x", session_id: "oc-ses_c2d_reg" }]);
+  assert.equal(store.get("engineer@task-x")!.budget?.continuations ?? 0, 0, "--status 不写计数");
 });

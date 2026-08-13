@@ -20,10 +20,12 @@ import {
   createRun,
   createStaffingRequest,
   deriveEvents,
+  deriveContinuationTargets,
   dissolveTask,
   draftBrief,
   draftPersonas,
   enqueueMerge,
+  feedContinuation,
   guardianTick,
   ingestTaskKnowledge,
   mergeNext,
@@ -616,6 +618,36 @@ export function managementTools(): ToolDef[] {
       async (p, env) => {
         const { dir, config } = requireRun(env, str(p, "run_id"));
         return { ok: true, sweep: await sweepProgress(dir, config) };
+      },
+    ),
+    withRun(
+      "continuation_status",
+      "续跑候选只读预览（C2）：派生当前可续跑的 idle awake oc- 会话（同 deriveContinuationTargets），零投喂、零写路径。",
+      {},
+      [],
+      (p, env) => {
+        const { dir, config } = requireRun(env, str(p, "run_id"));
+        const targets = deriveContinuationTargets(dir, config);
+        return { ok: true, count: targets.length, targets };
+      },
+    ),
+    withRun(
+      "continuation_feed",
+      "向单个会话手动投喂一次续跑 prompt（C2：包装 feedContinuation）。成功 → budget.continuations +1 并持久化；会话非 awake / 非 opencode 会话 → fed:false（不计数）。",
+      { agent_id: { type: "string" } },
+      ["agent_id"],
+      async (p, env) => {
+        const { dir, config } = requireRun(env, str(p, "run_id"));
+        const res = await feedContinuation(dir, config, String(p.agent_id));
+        if (!res) {
+          return {
+            ok: true,
+            fed: false,
+            agent_id: String(p.agent_id),
+            reason: "not-awake-or-not-opencode-session",
+          };
+        }
+        return { ok: true, fed: true, ...res };
       },
     ),
   ];
