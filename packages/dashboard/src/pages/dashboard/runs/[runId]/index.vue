@@ -4,6 +4,13 @@ import { useRoute } from 'vue-router'
 import { BasicPage } from '@/components/global-layout'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
+import ChunksTable from './components/chunks-table.vue'
+import GatesPanel from './components/gates-panel.vue'
+import GoalOverview from './components/goal-overview.vue'
+import MergeTrain from './components/merge-train.vue'
+import SessionsLive from './components/sessions-live.vue'
+import TasksBoard from './components/tasks-board.vue'
+
 const route = useRoute()
 const params = route.params as Record<string, string>
 const runId = computed(() => params.runId ?? '')
@@ -28,41 +35,30 @@ const defaultTab = tabs[0].value
     <Tabs :default-value="defaultTab" class="w-full">
       <TabsList>
         <TabsTrigger
-          v-for="tab in tabs" :key="tab.value"
+          v-for="tab in tabs"
+          :key="tab.value"
           :value="tab.value"
         >
           {{ tab.name }}
         </TabsTrigger>
       </TabsList>
       <TabsContent value="overview" class="space-y-4">
-        <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-          Goal 概览面板（C3 接入 GET /api/runs/:runId）
-        </div>
+        <GoalOverview :run-id="runId" />
       </TabsContent>
       <TabsContent value="chunks" class="space-y-4">
-        <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-          Chunks 表格面板（C3 接入 GET /api/runs/:runId/chunks）
-        </div>
+        <ChunksTable :run-id="runId" />
       </TabsContent>
       <TabsContent value="tasks" class="space-y-4">
-        <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-          任务看板面板（C3 接入 GET /api/runs/:runId/board）
-        </div>
+        <TasksBoard :run-id="runId" />
       </TabsContent>
       <TabsContent value="sessions" class="space-y-4">
-        <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-          会话与实时 Tokens 面板（C3 接入 GET /api/runs/:runId/sessions + /api/live/:runId/:agent）
-        </div>
+        <SessionsLive :run-id="runId" />
       </TabsContent>
       <TabsContent value="merge" class="space-y-4">
-        <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-          Merge 列车面板（C3 接入 GET /api/runs/:runId/merge）
-        </div>
+        <MergeTrain :run-id="runId" />
       </TabsContent>
       <TabsContent value="gates" class="space-y-4">
-        <div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-          门禁 Evidence 面板（C3 接入 GET /api/runs/:runId/gates）
-        </div>
+        <GatesPanel :run-id="runId" />
       </TabsContent>
     </Tabs>
   </BasicPage>
