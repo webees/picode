@@ -1,6 +1,6 @@
 # 运维规程（serve/会话/续跑/guardian 重启/会话生命周期/真相关于文件）
 
-> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）+ D072/D073（run 收尾自动休眠 + session audit 跨 run 残留审计）。
+> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）+ D072/D073（run 收尾自动休眠 + session audit 跨 run 残留审计）+ D077/D078（摘要窗口去噪 / 平台席预算分流）。
 > 遵循本规程可避免已知的 serve 类故障人工踩坑，并正确观察/调整续跑、重启守护热载、管理 run 收尾与跨 run 会话残留。
 
 ## serve 重启规程（ERR-04 缓解）
@@ -34,7 +34,7 @@
 
 续跑 = guardian 对「已 awake ∧ 无 error ∧ 任务未终态 ∧ 预算未耗尽 ∧ 空闲超 `idle_sec`」的 opencode 会话按 D061 noReply 语义投喂续跑 prompt。全部状态落盘、幂等、可恢复。
 
-续跑 prompt 含上一回合要点摘要（`transcripts/<agent>.jsonl` 启发式派生，无 LLM，D076）；摘要为 null（空/损坏转录）回退固定模板。转录归档因此也是语义续跑的唯一数据源。
+续跑 prompt 含上一回合要点摘要（`transcripts/<agent>.jsonl` 启发式派生，无 LLM，D076）。转录归档因此也是语义续跑的唯一数据源。摘要窗口可配（`summary_entries` 默认 8）且投喂时剔除固定模板文本噪音（`stripNoise`，D077），避免摘要被机械投喂记录淹没。
 
 ### 观察续跑状态
 
@@ -47,7 +47,7 @@
 | 列 | 含义 |
 |---|---|
 | `continuations_used` | 累计自动续跑投喂次数（`session.budget.continuations`，持久化） |
-| `max_per_session` | 每会话续跑上限（配置值，0=不限） |
+| `max_per_session` | 该会话**实际适用**续跑上限（D078：task 绑定会话 = `max_per_session`，平台席 = `max_per_session_platform`） |
 | `last_continuation_at` | 上次投喂时间（最近一条 outgoing 转录 ts；无转录为 `null`） |
 | `in_flight` | 投喂后尚无 incoming 响应（回合进行中，该会话不会被继续投喂） |
 | `platform_seat` | 平台席（未绑定任务，默认 `platform_seats: skip` 不进续跑候选） |
@@ -57,7 +57,9 @@
 
 ### 预算调整
 
-- `self_evolve.continuation.max_per_session`：每会话续跑上限（0=不限，保守默认）。续跑耗尽即停且**不等于任务成功**——若会话被 `budget exceeded` 停靠，需人工研判是否重投喂/提额
+- `self_evolve.continuation.max_per_session`：task 绑定会话续跑上限（0=不限，保守默认 5）。续跑耗尽即停且**不等于任务成功**——若会话被 `budget exceeded` 停靠，需人工研判是否重投喂/提额
+- `self_evolve.continuation.max_per_session_platform`：**平台席独立续跑上限（默认 2）**（D078）。预算按角色分流——task 绑定会话用 `max_per_session`、平台席（无 task 绑定）用 `max_per_session_platform`。**行为变更注意**：现 `platform_seats: "allow"` 配置（原继承 5）升级后平台席收紧到 2，属有意保守收窄；遥测 session 级 `max_per_session` 列显示的是该会话**实际适用上限**
+- `self_evolve.continuation.summary_entries`：续跑摘要窗口条数（默认 8，0 = 关闭摘要窗口回退固定模板）（D077）。调大 = 摘要带更多转录要点（上下文更全、更臃肿）；调小 = 更轻量；投喂时自动剔除固定模板文本噪音（stripNoise），无需人工维护
 - `self_evolve.continuation.idle_sec`：空闲触发间隔。调小 = 续跑更勤（回合更紧凑）；调大 = 空等更久；**须小于 `idle_sleep_sec`**，否则会话先被 idle-sleep 休眠，续跑永不触发
 - 改配置后重启/下次 tick 生效（guardian 每次 tick 重读配置）
 
@@ -69,7 +71,7 @@
 ### 平台席策略（D068）
 
 - 平台席 = 无 task 绑定会话（scout/sys-arch/run-lead 等）。默认 `platform_seats: "skip"` **不进续跑候选**，防无界空转烧 token（E6 gap 3 根治）
-- 需对平台席启用续跑时显式配置 `platform_seats: "allow"`；逃生路径仍受 `max_per_session` 有界，且无任务产出时继续消耗预算，运维应留意
+- 需对平台席启用续跑时显式配置 `platform_seats: "allow"`；逃生路径仍受 **`max_per_session_platform`（默认 2，D078）** 独立预算有界（低于 task 绑定会话的 5），且无任务产出时继续消耗预算，运维应留意
 - 观测：遥测列 `platform_seat=true` 即平台席；候选数与投喂数应为 0（skip 默认）
 
 ### 续跑 gate 运维规程（D068 / R3-C2）
@@ -90,7 +92,7 @@
 
 1. 会话是否 `sleeping`/`terminated`/`error`？续跑只对 awake 且无 error 会话投喂
 2. 任务是否已终态（done/dissolved）？终态不续跑
-3. `budget.continuations` 是否已 ≥ `max_per_session`？预算耗尽即停
+3. `budget.continuations` 是否已 ≥ 该会话适用上限？预算耗尽即停——task 绑定会话上限 `max_per_session`、平台席 `max_per_session_platform`（D078）
 4. `idle_sec` 是否 ≥ `idle_sleep_sec`？若是则先被休眠，调小 `idle_sec`
 5. 是否平台席（无任务绑定）？默认 `platform_seats: skip` 不进候选；需续跑显式配置 `"allow"`
 6. 是否 in-flight（投喂后未响应）？进行中回合不重复投喂，等待响应落盘后由 idle 时钟判定

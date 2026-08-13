@@ -79,6 +79,11 @@
 |D074|**C2 验收 test 目标修正（处置记录）**：chunk acceptance `<project-test-command>` 占位符在 QA 阶段具体化为 `cli.test` 注册断言（`picode session audit` 入 --help 命令表）+ `session-audit.test` 派生/执行/失败容错断言，371 测试全绿；验收口径由占位符修正为具体断言，实现据此补齐 test 目标|
 |D075|**`session audit --clean` 端到端实测延后（处置记录）**：C2 验收仅单测覆盖派生 + cleanResidual 注入 closeRun 失败容错；`--clean` 对真实终态 run 的端到端清理延后至 C3 后由监督者执行（证据注明），不改变 C1/C2 语义|
 |D076|**语义续跑（N7 升级）**：续跑 prompt 注入上一回合要点摘要——`feedContinuation` 改用 `composeContinuationPrompt`（固定指令 + `TranscriptStore.historySummary()` 确定性启发式要点，无 LLM）；摘要为 null（空/损坏转录）回退固定 `CONTINUATION_PROMPT`；数据源仅复用既有 `transcripts/<agent>.jsonl`（**零新增数据源**）；预算/幂等/纯函数语义不回归|
+|D077|**摘要窗口可配置 + stripNoise 去噪**（摘要质量）：`historySummary` 增 `opts.stripNoise[]`（outgoing 要点生成前删除命中子串，删空条目整条跳过；条数统计仍基于原始转录）；`maxEntries<=0` 视为摘要窗口关闭返回 null；`feedContinuation` 用配置 `self_evolve.continuation.summary_entries`（默认 8）替代硬编码 8，并传 `stripNoise:[READY_MESSAGE_TEXT, CONTINUATION_PROMPT]` 剔除机械模板噪音；提取 `CONTINUATION_SUMMARY_HEADER` 常量供 compose/re-spawn 复用。wakeWithOpencode 的 stripNoise 越界改动因 write_paths 门禁回退（D079 缓项）|
+|D078|**续跑预算按角色分流**（预算差异化）：新增 `self_evolve.continuation.max_per_session_platform`（默认 **2**，平台席独立更紧预算；非负整数校验，0=不限保留）；`deriveContinuationTargets` 预算门按 `taskId` 分流——task 绑定会话用 `max_per_session`、平台席（taskId 空）用 `max_per_session_platform`，判定顺序保持预算门在前、platform_seats=skip 门在后；遥测顶层增 `max_per_session_platform` 字段、session 级 `max_per_session` 反映该会话适用上限（三面口径一致）。**现 allow 配置（继承 5）升级后平台席收紧到 2，属有意保守行为变更**|
+|D079|**缓项：re-spawn 摘要去噪一致化**：`wakeWithOpencode`（opencode-adapter.ts）传 `stripNoise:[READY_MESSAGE_TEXT]` 的改动越出本任务 write_paths（P07 门禁 MUST）被回退；feed 路径不受影响。后续单独任务接入（非 C1 验收必需）|
+|D080|**缓项：上一回合摘要语义化/关键动作提取**：stripNoise 仅精确剔模板句，摘要仍含续跑 feed 的 outgoing 记录（确定性、可复现）；后续可对 summary 做模板句剔除/关键动作提取（仍启发式，不引 LLM）|
+|D081|**缓项：checkpoint 快照 / maxTokens 真计量**（E7 缓项延续）：会话 checkpoint 快照先定「快照只读、文件为准」边界；maxTokens 待 serve token 契约（D058）就绪|
 
 ## 开放
 
@@ -207,3 +212,45 @@
 - 实现：`packages/orchestrator/src/continuation.ts`（`composeContinuationPrompt` + `feedContinuation` 接线）、`transcript-store.ts` `historySummary` 复用
 - 边界：摘要为启发式要点（统计 + 截断），非 LLM 精炼；语义续跑不改变候选派生与投喂节奏
 - 纪律强化：跨 chunk 延后的验收动作须在收尾 task（docs/knowledge）显式列明执行人与时机，避免残留检查缺位
+
+## D077 — 摘要窗口可配置 + stripNoise 去噪（C1 task-continuation-summary）
+- 2026-08-14 · 来源：run-lead 规划 run-2026-08-13T18-29-39-276Z-plan（E9 候选 1/2）+ run-2026-08-13T21-32-57-118Z C1
+- 问题：D076 语义续跑把 `historySummary` 的 `maxEntries` 硬编码为 8，且每次自动续跑投喂的机械模板文本（`READY_MESSAGE_TEXT` / `CONTINUATION_PROMPT`）会被记入转录——下一轮摘要被重复模板噪音淹没、窗口无法调优
+- 决定：
+  - `historySummary` 新增 `opts.stripNoise?: string[]`：生成 outgoing 要点前从文本删除命中子串，删空条目整条跳过；条数统计（outgoing/incoming）仍基于原始转录不受影响；纯函数（同输入同输出）
+  - `maxEntries <= 0` 视为摘要窗口关闭，返回 null（回退固定 `CONTINUATION_PROMPT`）
+  - `feedContinuation` 用配置 `self_evolve.continuation.summary_entries`（默认 8，非负整数校验）替代硬编码 8，并传 `stripNoise: [READY_MESSAGE_TEXT, CONTINUATION_PROMPT]` 剔除机械投喂噪音
+  - 提取 `CONTINUATION_SUMMARY_HEADER` 常量，`composeContinuationPrompt` 复用（摘要段标题同源，供测试/引用）
+- 实现：`packages/orchestrator/src/transcript-store.ts`（historySummary opts.stripNoise/maxEntries<=0）、`continuation.ts`（feed 接线 + 常量）、`packages/core/src/config.ts`（summary_entries 默认 8 + 校验）、对应测试（config 默认/校验 + transcript 去噪 + feed 集成）
+- 边界：摘要仍为确定性启发式（非 LLM 精炼，D076 不变）；wakeWithOpencode 重 spawn 保持默认 maxEntries=20 且不加 stripNoise（越界改动回退，D079）
+- commit: 6d1973f（C1 task-continuation-summary 合并；本体 8d67fd0 + P07 门禁回退 87615b9）
+
+## D078 — 续跑预算按角色分流（C2 task-continuation-budget）
+- 2026-08-14 · 来源：run-lead 规划 run-2026-08-13T18-29-39-276Z-plan（E9 候选 4 预算差异化）+ run-2026-08-13T21-32-57-118Z C2
+- 问题：`max_per_session` 单一预算对 task 绑定会话与平台席共用——平台席（监测/调研型角色）续跑需求轻却继承三角预算，易烧 token
+- 决定：
+  - 新增 `self_evolve.continuation.max_per_session_platform`（默认 **2**，平台席独立更紧预算；非负整数校验，0=不限保留）
+  - `deriveContinuationTargets` 预算门按 `taskId` 分流：task 绑定会话用 `max_per_session`、平台席（taskId 空）用 `max_per_session_platform`；判定顺序保持预算门在前、`platform_seats=skip` 门在后（skip 默认下平台席本就先被挡出，预算门仅对 allow 逃生生效）
+  - `continuationTelemetry` 顶层增 `max_per_session_platform` 字段；session 级 `max_per_session` 反映该会话**适用上限**（task 绑定 → max_per_session，平台席 → max_per_session_platform），三面（status/CLI/MCP）口径一致
+  - **有意行为变更**：现 `platform_seats: "allow"` 配置（继承 max_per_session=5）升级后平台席收紧到 2，属有意保守收窄，需在配置变更说明中注明
+- 实现：`packages/core/src/config.ts`（字段默认 2 + 校验）、`packages/orchestrator/src/continuation.ts`（预算分流）、`status.ts`（遥测顶层/会话级字段）、对应测试
+- 边界：0=不限语义保留；平台席默认 skip 不受预算门影响；遥测字段新增不破坏既有消费方（向后兼容）
+- commit: 910ae6a（C2 task-continuation-budget 合并，main = fc1ed8d）
+
+## D079 — 缓项：re-spawn 摘要去噪一致化（处置记录）
+- 2026-08-14 · 来源：D077 C1 越界改动回退（evidence 记录）
+- 事实：D077 初始 commit 7c98e80 亦改 `packages/orchestrator/src/opencode-adapter.ts`（`wakeWithOpencode` 传 `stripNoise:[READY_MESSAGE_TEXT]`），该文件不在 task-continuation-summary write_paths 内，P07 diff 门禁（`git diff --name-only base...HEAD ⊆ write_paths`）MUST 拦截
+- 处置：squad-lead 以 5cc0e35/87615b9 回退该一行（re-spawn 去噪属后续候选，非 C1 验收必需）；feed 路径 stripNoise 不受影响，D077 验收口径一致
+- 纪律强化：越界 write_paths 的改动即使语义正确也须回退；re-spawn 去噪留待独立任务（后续候选）
+
+## D080 — 缓项：摘要语义化/关键动作提取（后续候选）
+- 2026-08-14 · 来源：D077 决策边界 + run-lead 规划 (d) 后续候选 1
+- 事实：stripNoise 仅精确剔除固定模板句；摘要仍含续跑 feed 的 outgoing 记录（确定性、可复现）——可读但不含「关键动作」语义
+- 处置：后续对 summary 做模板句剔除/关键动作提取（仍启发式，不引 LLM；不改变编排器无 LLM 不变量 D003）
+- 纪律：未立项不实现；决策目录 §12.3 摘要语义仍标注「启发式」
+
+## D081 — 缓项：checkpoint 快照 / maxTokens 真计量（E7 缓项延续）
+- 2026-08-14 · 来源：run-2026-08-13T21-32-57-118Z goal acceptance + E7 缓项延续
+- 事实：会话 checkpoint 快照（N5）与 maxTokens 真计量（N6，待 serve token 契约 D058）仍未实施；本轮预算差异化（D078）只解决预算总量，不解决「会话中途崩溃恢复」
+- 处置：checkpoint 先定「快照只读、文件为准」边界（D002）；maxTokens 待 opencode serve 暴露 token 计量契约后再评估
+- 纪律：缓项只记录不实现，避免范围蔓延；实施须重新立项

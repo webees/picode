@@ -419,10 +419,18 @@
 
 |选项|说明|
 |------|------|
-|**`max_per_session` 有界正数（保守默认 5）** ★|每会话累计续跑次数上限；耗尽即停（耗尽 ≠ 成功），靠既有 idle-sleep/budgets 停靠|
+|**`max_per_session` 有界正数（保守默认 5）** ★|task 绑定会话每会话累计续跑次数上限；耗尽即停（耗尽 ≠ 成功），靠既有 idle-sleep/budgets 停靠|
+|**`max_per_session_platform` 独立更紧预算（默认 2）** ★|平台席（无 task 绑定会话）独立上限，按 `taskId` 分流（D078）；0 = 不限保留|
 |0 = 不限|关掉续跑预算闸（风险自担，须显式声明）|
 
-**已定：保守有界默认 = 5**（R2-C2：默认 0=不限 曾使无任务席位被无界续跑烧 token，改有界；`config.ts` `self_evolve.continuation.max_per_session`）。长时自治 run 可显式调大，0 = 不限须显式声明。
+**已定（D078）：预算按角色分流。** `max_per_session` 默认 5（task 绑定会话）、
+`max_per_session_platform` 默认 2（平台席独立更紧预算；`config.ts`
+`self_evolve.continuation.*`）。`deriveContinuationTargets` 预算门按 `taskId` 分流——
+task 绑定用 `max_per_session`、平台席（taskId 空）用 `max_per_session_platform`，
+判定顺序保持预算门在前、`platform_seats=skip` 门在后。**有意行为变更**：现
+`platform_seats: "allow"` 配置（原继承 `max_per_session=5`）升级后平台席收紧到 2，
+属有意保守收窄。遥测顶层增 `max_per_session_platform` 字段、session 级
+`max_per_session` 反映该会话适用上限（三面口径一致）。0 = 不限须显式声明。
 
 ### 12.2 续跑空闲间隔
 
@@ -497,6 +505,21 @@ re-spawn（wakeWithOpencode）同款消费已复用。预算/幂等/纯函数语
 |------|------|
 |**guardian 周期性 sweep（无 daemon）** ★|续跑 sweep 内嵌 guardianTick（checkBudgets 之后、probeServeHealth 之前）；无常驻进程|
 |daemon/worker 常驻|违背「无 daemon、状态文件化」（sys-arch 评估），不采用|
+
+### 12.8 摘要窗口与去噪（D077）
+
+|选项|说明|
+|------|------|
+|**`summary_entries` 可配（默认 8）+ `stripNoise` 去噪** ★|`historySummary` 取最近 N 条作要点；生成 outgoing 要点前删除命中子串（feed 传 `[READY_MESSAGE_TEXT, CONTINUATION_PROMPT]`），删空条目整条跳过；条数统计仍基于原始转录；`maxEntries<=0` = 摘要窗口关闭返回 null（回退固定模板）|
+|固定硬编码 8（D076）|摘要被每次投喂的机械模板噪音淹没、窗口无法调优（D077 前的问题）|
+|re-spawn 去噪（wakeWithOpencode stripNoise）|**缓项（D079）**：改动越出 C1 write_paths 被 P07 门禁回退；feed 路径不受影响|
+
+**已定（D077）：`summary_entries` 默认 8（非负整数，0 = 窗口关闭）**；`feedContinuation`
+传 `stripNoise: [READY_MESSAGE_TEXT, CONTINUATION_PROMPT]` 剔除固定投喂模板文本，
+避免摘要被重复噪音淹没。提取 `CONTINUATION_SUMMARY_HEADER` 常量供
+`composeContinuationPrompt`/re-spawn 复用。摘要仍为确定性启发式（D076 不变，
+非 LLM 精炼）；wakeWithOpencode 重 spawn 保持默认 `maxEntries=20`、不加 stripNoise
+（越界改动回退，D079 缓项）。
 
 ---
 
