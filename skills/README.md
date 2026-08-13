@@ -1,6 +1,15 @@
 # Skills（picode 技能体系）
 
-> 结构：mattpocock bucket 分级（M1）；维护纪律见 docs/standards/doc-style.md §6（M5）。
+> 结构：mattpocock bucket 分级（M1）；维护纪律见 docs/standards/doc-style.md §6（M5）；安装双轨见下（M6）。
+
+## 安装双轨（M6）
+
+二选一防双份：
+
+- **托管只读**：随平台/仓库订阅更新，不可本地编辑——仅读，避免 fork 漂移。
+- **可编辑副本**：复制到本机 skills 根（如 `~/.agents/skills/`）自用/hack，可改可删；改动不与上游同步，升级需手动合并。
+
+picode 技能源码库由监督者代装；两者只取其一，禁止同时安装同技能。
 
 ## engineering（日常代码工作）
 

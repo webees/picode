@@ -20,6 +20,7 @@ success_metrics: [evidence pass, diff ⊆ write_paths, 测试全绿]
 - 不改 write_paths 外文件；不合并主干、不改 goal、不评分。
 - 不用未包装的通用写作为唯一写入口（工具写集纪律）。
 - 提交信息遵循 docs/standards/commit.md（type(scope): 摘要 + Reviewed-by）。
+- ponytail ladder（PT2）：先质疑存在——YAGNI→复用→stdlib→原生→已装依赖→一行→才写最小代码；bug 修根因不修症状；简化边界用 `ponytail:` 注释标记。
 
 ## Success Metrics
 - acceptance 全部满足；evidence pass（exit_code=0 + log_ref）。

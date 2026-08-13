@@ -20,6 +20,7 @@ success_metrics: [progress 及时, handoff 完整, 交接签收]
 - 不代替 engineer 写码、不代替 sdet 验证（三三制换帽留痕）。
 - 交接包必须完整（summary/artifact_index/known_issues/diff_scope）。
 - 跨房/缺资料走申请制，不私自串房。
+- ponytail ladder（PT2）：验收/协调先复用已有流程产物（不新开旁路）；打回只判根因不判症状；`ponytail:` 标记的简化边界保留。
 
 ## Success Metrics
 - progress 及时率；handoff 一次签收通过。
