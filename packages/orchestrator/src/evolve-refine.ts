@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { branchName, ensureDir, readYamlFile, writeAtomic, type PicodeConfig } from "@picode/core";
+import type { AutoRefineGateConfig } from "@picode/core";
 import { readEvidence, type EvidenceState } from "./closure.js";
 
 /**
@@ -12,8 +13,26 @@ import { readEvidence, type EvidenceState } from "./closure.js";
  *
  * Approval gate (default `--require-approval`): without `--approve` the drafts
  * are returned but never written; with `--approve` they land in the file.
+ *
+ * C1 auto-refine review gate (Q2 / refinement.ts): every lesson draft is
+ * reviewed by a rule-based gate BEFORE it may be distilled — evidence must
+ * actually contain evidence (exit_code / log_ref / changed files), otherwise
+ * noise and empty trajectories are rejected. Configurable via
+ * `self_evolve.refine_gate` (mode: heuristic | none). `--auto` skips the manual
+ * `--approve` and lands only the approved lessons per the review result.
  * Rule-based and deterministic — no LLM, so tests can pin exact behaviour.
  */
+
+export interface LessonReview {
+  decision: "approved" | "rejected";
+  reason: string;
+}
+
+export const DEFAULT_REFINE_GATE: AutoRefineGateConfig = {
+  mode: "heuristic",
+  require_evidence: true,
+  reject_noise: true,
+};
 
 export interface LessonDraft {
   task_id: string;
@@ -25,6 +44,8 @@ export interface LessonDraft {
   write_paths: string[];
   /** 提炼出的 lesson 文本（P07 证据链语义）。 */
   lesson: string;
+  /** C1 auto-refine gate 评审结果（approved/rejected + reason）。 */
+  review: LessonReview;
 }
 
 const LESSONS_HEADING = "## Lessons（auto-refine 草稿）";
@@ -39,6 +60,42 @@ export function distillLesson(taskId: string, ev: EvidenceState | null): string 
     return `反例：${taskId} 验证失败（evidence fail）：${cmds || "无命令"}——需修复后重提证据（P07）`;
   }
   return `正例：${taskId} 证据链闭合（evidence pass）：${cmds || "无命令"}——验证命令 + log_ref 配套可复用（P07）`;
+}
+
+/**
+ * C1 heuristic review (Q2): the trajectory counts as useful evidence when it
+ * contains exit_code / log_ref / changed files (commits). Empty trajectories
+ * (no evidence.yaml) and noise (evidence with no commands, no log_ref, no
+ * commits) are rejected so one-off noise never becomes a lesson.
+ */
+export function reviewLesson(
+  commits: string[],
+  ev: EvidenceState | null,
+  gate: AutoRefineGateConfig,
+): LessonReview {
+  if (gate.mode === "none") {
+    return { decision: "approved", reason: "gate mode=none：评审门关闭，全部放行" };
+  }
+  const hasExec = ev !== null && ev.commands.length > 0;
+  const hasLog = ev !== null && ev.commands.some((c) => Boolean(c.log_ref));
+  const hasChanges = commits.length > 0;
+  if (!hasExec && !hasLog && !hasChanges) {
+    // 无任何证据信号: 空轨迹（无 evidence.yaml）由 require_evidence 把关，
+    // 噪音（有 evidence 但无命令/log_ref/变更文件）由 reject_noise 把关。
+    if (!ev) {
+      return gate.require_evidence
+        ? { decision: "rejected", reason: "空轨迹：无 evidence.yaml、无变更文件——无证据 MUST NOT 提炼（T07）" }
+        : { decision: "approved", reason: "gate.require_evidence=false：空轨迹放行" };
+    }
+    return gate.reject_noise
+      ? { decision: "rejected", reason: "噪音轨迹：无命令、无 log_ref、无变更文件——拒绝提炼" }
+      : { decision: "approved", reason: "gate.reject_noise=false：噪音轨迹放行" };
+  }
+  const parts: string[] = [];
+  if (hasExec) parts.push(`${ev!.commands.length} 条命令 exit_code 已记录`);
+  if (hasLog) parts.push("log_ref 验证物");
+  if (hasChanges) parts.push(`${commits.length} 个 commit（变更文件）`);
+  return { decision: "approved", reason: `证据充分：${parts.join(" + ")}` };
 }
 
 /** Commits on the task branch (base..branch); absent branch/range ⇒ none. */
@@ -66,6 +123,7 @@ export function extractLessons(
   repoRoot: string,
   dir: string,
   config: PicodeConfig,
+  gate: AutoRefineGateConfig = DEFAULT_REFINE_GATE,
 ): LessonDraft[] {
   const tasksDir = path.join(dir, "tasks");
   if (!fs.existsSync(tasksDir)) return [];
@@ -79,14 +137,16 @@ export function extractLessons(
     const task = readYamlFile<{ id: string; status: string; write_paths?: string[] }>(tpath);
     if (!task) continue;
     const ev = readEvidence(dir, taskId);
+    const commits = gitLogForTask(repoRoot, config, runId, taskId);
     lessons.push({
       task_id: taskId,
       status: task.status,
       evidence: ev ? ev.result : "missing",
       commands: ev ? ev.commands.map((c) => c.cmd) : [],
-      commits: gitLogForTask(repoRoot, config, runId, taskId),
+      commits,
       write_paths: task.write_paths ?? [],
       lesson: distillLesson(taskId, ev),
+      review: reviewLesson(commits, ev, gate),
     });
   }
   return lessons.sort((a, b) => a.task_id.localeCompare(b.task_id));
@@ -111,6 +171,7 @@ export function renderLessonsSection(lessons: LessonDraft[]): string {
     if (l.commands.length) lines.push(`- commands: ${l.commands.join("、")}`);
     if (l.commits.length) lines.push(`- commits: ${l.commits.join(", ")}`);
     lines.push(`- write_paths: ${l.write_paths.join(", ")}`);
+    lines.push(`- review: ${l.review.decision}（${l.review.reason}）`);
     lines.push("");
     lines.push(l.lesson, "");
   }
@@ -149,19 +210,54 @@ export function appendLessonsToEvolveLog(
 }
 
 /**
- * E6 auto-refine entry: extract lessons and enforce the approval gate.
- * `--approve` (approve=true) writes into the file; otherwise drafts only.
+ * E6 auto-refine entry: extract lessons, run the C1 auto-refine review gate,
+ * and enforce the approval gate.
+ *
+ *   - `--approve` (approve=true): manual approval writes every draft into the
+ *     file (human judgment overrides the rule-based gate).
+ *   - `--auto` (auto=true): skip the manual `--approve`; land ONLY the lessons
+ *     the review gate approved, rejected noise/empty trajectories stay out.
+ *   - neither: drafts only, nothing written.
+ *
+ * `--auto` and `--approve` together is a usage error (mutually exclusive).
  */
+export interface RefineEvolveOptions {
+  approve?: boolean;
+  auto?: boolean;
+}
+
+export interface RefineResult {
+  lessons: LessonDraft[];
+  /** 是否落盘: --approve，或 --auto 且至少一条 approved。 */
+  approved: boolean;
+  /** 落盘文件路径（未落盘为 null）。 */
+  written: string | null;
+  /** 生效的评审门配置。 */
+  gate: AutoRefineGateConfig;
+  /** --auto 是否开启。 */
+  auto: boolean;
+}
+
 export function refineEvolveKnowledge(
   repoRoot: string,
   dir: string,
   config: PicodeConfig,
-  opts: { approve: boolean },
-): { lessons: LessonDraft[]; approved: boolean; written: string | null } {
-  const lessons = extractLessons(repoRoot, dir, config);
+  opts: RefineEvolveOptions = {},
+): RefineResult {
+  const gate: AutoRefineGateConfig = config.self_evolve.refine_gate ?? DEFAULT_REFINE_GATE;
+  const lessons = extractLessons(repoRoot, dir, config, gate);
+  const auto = opts.auto === true;
+  if (auto) {
+    const approvedLessons = lessons.filter((l) => l.review.decision === "approved");
+    if (approvedLessons.length === 0) {
+      return { lessons, approved: false, written: null, gate, auto };
+    }
+    const written = appendLessonsToEvolveLog(repoRoot, dir, config, approvedLessons);
+    return { lessons, approved: true, written, gate, auto };
+  }
   if (!opts.approve) {
-    return { lessons, approved: false, written: null };
+    return { lessons, approved: false, written: null, gate, auto };
   }
   const written = appendLessonsToEvolveLog(repoRoot, dir, config, lessons);
-  return { lessons, approved: true, written };
+  return { lessons, approved: true, written, gate, auto };
 }
