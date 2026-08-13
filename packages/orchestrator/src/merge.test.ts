@@ -16,6 +16,7 @@ import {
 import { enqueueMerge, mergeNext, readMergeQueue } from "./merge.js";
 import { progressPath, sweepProgress } from "./progress.js";
 import { SessionStore } from "./session-store.js";
+import { readYamlFile } from "@picode/core";
 
 function tmpGitRepo(): string {
   const dir = gitInit({ prefix: "picode-test-", email: "test@picode", name: "picode-test" });
@@ -68,6 +69,22 @@ test("enqueue writes merge queue; process merges branch into main (serial)", asy
   assert.ok(out.merged);
   assert.equal(out.merged.status, "merged");
   assert.ok(fs.existsSync(path.join(repo, "src", "module-a", "a.ts")));
+});
+
+test("R2-C1-b: merge 成功后 task.yaml.status 置为 merged（续跑 sweep 不再投喂已合并任务）", async () => {
+  const { repo, dir, config, taskId, worktree } = await setupPreparedTask();
+  commitOnWorktree(worktree, "src/module-a/a.ts", "export const a = 1;\n", "feat: module-a");
+  await enqueueMerge(dir, taskId, "release-eng");
+  const sessions = new SessionStore(dir);
+  for (const s of [`squad-lead@${taskId}`, `engineer@${taskId}`, `sdet@${taskId}`]) {
+    await sessions.sleep(s, "handoff");
+  }
+  const out = await mergeNext(repo, dir, config);
+  assert.equal(out.merged?.status, "merged");
+  const task = readYamlFile<{ status?: string }>(
+    path.join(dir, "tasks", taskId, "task.yaml"),
+  );
+  assert.equal(task?.status, "merged");
 });
 
 test("scale L merge_ready wakes code-review AND sec-eng (T11)", async () => {

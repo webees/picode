@@ -7,6 +7,7 @@ import {
   readYamlFile,
   withFileLock,
   writeAtomic,
+  writeYamlFile,
   type PicodeConfig,
 } from "@picode/core";
 import { isEvolveRun, runVerifyCommands } from "./evolve-run.js";
@@ -135,6 +136,21 @@ export interface MergeOutcome {
  * topological ordering). On failure the working tree is restored via
  * `git merge --abort` so the repo never stays in a conflicted state.
  */
+/**
+ * A merge that landed is terminal for the task (R2-C1): mark
+ * runs/<id>/tasks/<taskId>/task.yaml status = "merged" so the continuation
+ * sweep stops feeding that task's seats (TERMINAL_TASK_STATUSES). This is a
+ * run-state write (under .picode/runs, gitignored), not part of the git merge.
+ */
+function markTaskMerged(dir: string, taskId: string): void {
+  const p = path.join(dir, "tasks", taskId, "task.yaml");
+  if (!fs.existsSync(p)) return;
+  const task = readYamlFile<{ status?: string }>(p);
+  if (!task) return;
+  task.status = "merged";
+  writeYamlFile(p, task);
+}
+
 export async function mergeNext(
   repoRoot: string,
   dir: string,
@@ -213,6 +229,10 @@ export async function mergeNext(
           error = `${error}\n(abort failed: ${ae instanceof Error ? ae.message.split("\n")[0] : String(ae)})`;
         }
       }
+    }
+    // R2-C1: a landed merge is terminal — stop feeding this task's seats.
+    if (status === "merged") {
+      markTaskMerged(dir, req.task_id);
     }
     const updated: MergeRequest = {
       ...req,

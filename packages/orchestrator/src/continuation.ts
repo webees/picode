@@ -34,8 +34,13 @@ export const CONTINUATION_RETRY: OpencodeRetryPolicy = {
   backoffMs: 500,
 };
 
-/** 任务终态：续跑 sweep 必须跳过（C1-c；closure.ts dissolve 的三种终态）。 */
-export const TERMINAL_TASK_STATUSES = new Set<string>(["dissolved", "failed", "cancelled"]);
+/** 任务终态：续跑 sweep 必须跳过（C1-c；closure.ts dissolve + merge.ts merge 的终态）。 */
+export const TERMINAL_TASK_STATUSES = new Set<string>([
+  "dissolved",
+  "failed",
+  "cancelled",
+  "merged",
+]);
 
 /** 一个可续跑候选：agent_id + 其 opencode 会话 id（pi_session_id，形如 oc-<id>）。 */
 export interface ContinuationTarget {
