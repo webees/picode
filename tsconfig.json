@@ -4,6 +4,7 @@
     { "path": "packages/core" },
     { "path": "packages/bus" },
     { "path": "packages/orchestrator" },
-    { "path": "packages/pi-extension" }
+    { "path": "packages/pi-extension" },
+    { "path": "packages/dashboard-server" }
   ]
 }
