@@ -9,7 +9,7 @@ import YAML from "yaml";
 
 const PICODE = "/Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js";
 const REPO = "/tmp/picode-dogfood";
-const RUN = "run-2026-08-13T01-15-17-073Z";
+const RUN = "run-2026-08-13T09-36-28-520Z";
 const RUN_DIR = `${REPO}/.picode/runs/${RUN}`;
 
 const CHUNKS = {
@@ -86,6 +86,52 @@ const CHUNKS = {
       "docs/knowledge/evolve/run-2026-08-13T01-15-17-073Z.md",
       "docs/knowledge/research/README.md",
       "docs/plans/run-2026-08-13T01-15-17-073Z-plan-r2.md",
+    ],
+    skills: "docs,spec",
+  },
+  "idle-clock": {
+    first: "packages/orchestrator/src/continuation.ts",
+    write: [
+      "packages/orchestrator/src/continuation.ts",
+      "packages/orchestrator/src/continuation.test.ts",
+      "packages/core/src/config.ts",
+      "packages/core/src/config.test.ts",
+      "docs/reference/decision-catalog.md",
+    ],
+    skills: "typescript,state-machine",
+  },
+  "continuation-gate": {
+    first: "packages/orchestrator/src/continuation-gate.ts",
+    write: [
+      "packages/orchestrator/src/continuation-gate.ts",
+      "packages/orchestrator/src/continuation-gate.test.ts",
+      "packages/orchestrator/src/self-drive.ts",
+      "packages/orchestrator/src/self-drive.test.ts",
+    ],
+    skills: "typescript,git",
+  },
+  "continuation-telemetry": {
+    first: "packages/orchestrator/src/status.ts",
+    write: [
+      "packages/orchestrator/src/status.ts",
+      "packages/orchestrator/src/status.test.ts",
+      "packages/orchestrator/src/commands/self-drive.ts",
+      "packages/orchestrator/src/commands/self-drive.test.ts",
+      "packages/mcp-server/src/management.ts",
+      "packages/mcp-server/src/management.test.ts",
+      "packages/mcp-server/src/registry.test.ts",
+      "docs/guides/operations.md",
+    ],
+    skills: "typescript,mcp,cli",
+  },
+  "round3-docs": {
+    first: "docs/knowledge/evolve/run-2026-08-13T09-36-28-520Z.md",
+    write: [
+      "docs/knowledge/evolve/run-2026-08-13T09-36-28-520Z.md",
+      "docs/DECISIONS.md",
+      "docs/reference/decision-catalog.md",
+      "docs/guides/operations.md",
+      "docs/plans/run-2026-08-13T09-36-28-520Z-plan.md",
     ],
     skills: "docs,spec",
   },
