@@ -9,3 +9,4 @@
 | [mattpocock-skills](./mattpocock-skills.md) | mattpocock/skills | M1-M6（C4 skills 体系 + docs cell 落地） |
 | [agency-agents](./agency-agents.md) | msitarzewski/agency-agents | A1-A6（人设模板/persona-lint/种子重写已融合） |
 | [ponytail](./ponytail.md) | dietrichgebert/ponytail | PT1-PT5（种子技能/审查维度已融合） |
+| [prime-agent-continuation](./prime-agent-continuation.md) | PrimeIntellect-ai/prime-agent（autonomous.ts 源码） | M1-M8（continuation 预算/重附/评审门映射；第二轮候选 5 项） |
