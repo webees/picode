@@ -1,5 +1,5 @@
 * {
-  scrollbar-color: #8885 var(--c-border);
+  scrollbar-color: var(--border) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -11,15 +11,14 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--c-border);
-  border-radius: 1px;
+  background: var(--border-subtle);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #8885;
-  border-radius: 1px;
+  background: var(--border-strong);
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #8886;
+  background: var(--ring);
 }

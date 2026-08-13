@@ -14,8 +14,8 @@
   @apply absolute right-0 block h-full w-[100px];
 
   box-shadow:
-    0 0 10px hsl(var(--primary)),
-    0 0 5px hsl(var(--primary));
+    0 0 10px var(--primary),
+    0 0 5px var(--primary);
   opacity: 1;
   transform: rotate(3deg) translate(0, -4px);
 }
@@ -38,16 +38,6 @@
 .nprogress-custom-parent #nprogress .spinner,
 .nprogress-custom-parent #nprogress .bar {
   @apply absolute;
-}
-
-@keyframes nprogress-spinner {
-  0% {
-    transform: rotate(0deg);
-  }
-
-  100% {
-    transform: rotate(360deg);
-  }
 }
 
 @keyframes nprogress-spinner {
