@@ -3,7 +3,6 @@ import {
   AlertTriangleIcon,
   CheckCircle2Icon,
   FileTextIcon,
-  LoaderCircleIcon,
   ShieldCheckIcon,
   XCircleIcon,
 } from '@lucide/vue'
@@ -15,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useGates } from '@/services/api/picode.api'
 
 const props = defineProps<{ runId: string }>()
@@ -66,9 +66,11 @@ function resultLabel(result: string): string {
     </AlertDescription>
   </Alert>
 
-  <div v-else-if="isLoading" class="flex items-center justify-center py-16 text-muted-foreground">
-    <LoaderCircleIcon class="mr-2 size-4 animate-spin" />
-    加载中…
+  <div v-else-if="isLoading" class="space-y-4">
+    <Skeleton class="h-8 w-48" />
+    <div class="grid gap-3 md:grid-cols-2">
+      <Skeleton v-for="i in 4" :key="i" class="h-40 w-full" />
+    </div>
   </div>
 
   <div v-else class="space-y-4">

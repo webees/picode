@@ -2,7 +2,6 @@
 import {
   ActivityIcon,
   AlertTriangleIcon,
-  LoaderCircleIcon,
   RefreshCwIcon,
 } from '@lucide/vue'
 import { useQueries } from '@tanstack/vue-query'
@@ -13,6 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -91,9 +91,12 @@ function formatTime(iso: string | null) {
     </AlertDescription>
   </Alert>
 
-  <div v-else-if="isLoading" class="flex items-center justify-center py-16 text-muted-foreground">
-    <LoaderCircleIcon class="mr-2 size-4 animate-spin" />
-    加载中…
+  <div v-else-if="isLoading" class="space-y-4">
+    <div class="grid gap-4 md:grid-cols-3">
+      <Skeleton v-for="i in 3" :key="i" class="h-24 w-full" />
+    </div>
+    <Skeleton class="h-10 w-full" />
+    <Skeleton v-for="i in 6" :key="i" class="h-10 w-full" />
   </div>
 
   <div v-else class="space-y-4">
