@@ -159,6 +159,19 @@ export interface EvolveBudgetsConfig {
 }
 
 /**
+ * C1 session continuation (N1/N2/N3 / prime-agent autonomous continuation):
+ * guardian 对「已 awake、无 error、任务未终态、空闲超过 idle_sec」的 opencode
+ * 会话按 D061 noReply 语义投喂固定续跑 prompt，并用 budget.continuations
+ * 有界（max_per_session，0 = 不限）。所有计数持久化、幂等、断连可恢复。
+ */
+export interface ContinuationConfig {
+  /** 每会话最大自动续跑次数；0 = 不限（保守默认有界，续跑耗尽即停）。 */
+  max_per_session: number;
+  /** 会话空闲超过 idle_sec 秒才投喂续跑（sweep 节流，防连发）。 */
+  idle_sec: number;
+}
+
+/**
  * C1 auto-refine review gate (Q2 / refinement.ts): rule-based review of the
  * evidence trajectory before a lesson is distilled/written. Default is the
  * "heuristic" mode — evidence must actually contain evidence (exit_code,
@@ -196,6 +209,8 @@ export interface SelfEvolveConfig {
   forbidden_path_globs: string[];
   /** C1 auto-refine gate (Q2): refine 前对 evidence 轨迹做规则评审。 */
   refine_gate: AutoRefineGateConfig;
+  /** C1 session continuation (N1/N2/N3): 空闲会话有界自动投喂续跑 prompt。 */
+  continuation: ContinuationConfig;
 }
 
 export interface PicodeConfig {
@@ -445,6 +460,13 @@ export const DEFAULTS: PicodeConfig = {
       require_evidence: true,
       reject_noise: true,
     },
+    // C1 continuation conservative defaults (N2): 0 = unlimited, relying on
+    // the existing idle-sleep/budgets to dock; idle_sec (5 min) spaces feeds so
+    // a session is never spammed within a window.
+    continuation: {
+      max_per_session: 0,
+      idle_sec: 300,
+    },
   },
 };
 
@@ -648,6 +670,17 @@ export function validateConfig(config: PicodeConfig): void {
   ] as const) {
     if (typeof val !== "boolean") {
       configError(`self_evolve.refine_gate.${key} must be a boolean (C1)`);
+    }
+  }
+  const cont = config.self_evolve.continuation;
+  for (const [key, val] of [
+    ["max_per_session", cont.max_per_session],
+    ["idle_sec", cont.idle_sec],
+  ] as const) {
+    if (!Number.isInteger(val) || val < 0) {
+      configError(
+        `self_evolve.continuation.${key} must be a non-negative integer (0 = unlimited)`,
+      );
     }
   }
 }

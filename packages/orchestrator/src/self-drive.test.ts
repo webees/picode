@@ -375,3 +375,43 @@ test("runGuardian: bounded by max-ticks and stops on halt file", async () => {
   assert.equal(halted.halted, true);
   assert.equal(halted.ticks, 0); // halt file checked before the first tick
 });
+
+test("guardianTick: feeds a continuation to an idle awake oc- session (C1)", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  // loadConfig 的嵌套对象与 DEFAULTS 共享引用，先前测试可能改过 budgets；
+  // 克隆隔离 + 显式清零预算，确保本测试只验证续跑 sweep。
+  config.self_evolve = structuredClone(config.self_evolve);
+  config.self_evolve.budgets = { maxTurns: 0, maxTokens: 0, timeoutMs: 0, gate_commands: [] };
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  store.register("engineer", { agentId: "engineer@task-x", initialState: "sleeping" });
+  await store.wake("engineer@task-x", "test");
+  await store.attachPiSession("engineer@task-x", "oc-ses_g1");
+  const rec = store.get("engineer@task-x")!;
+  rec.last_wake_at = new Date(Date.now() - 120_000).toISOString();
+  const YAML = (await import("yaml")).default;
+  fs.writeFileSync(path.join(dir, "sessions", "engineer@task-x.yaml"), YAML.stringify(rec));
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const state = { down: false };
+  const restore = mockServe(state, calls);
+  try {
+    const res = await guardianTick(dir, config);
+    assert.deepEqual(res.continuation.fed, ["engineer@task-x"]);
+    const posts = calls.filter((c) => c.method === "POST" && c.url.includes("/message"));
+    assert.equal(posts.length, 1);
+    const msg = posts[0].body as { noReply: boolean; parts: Array<{ type: string; text: string }> };
+    assert.equal(msg.noReply, true);
+    assert.ok(msg.parts.some((p) => p.text.includes("继续推进")));
+    assert.equal(store.get("engineer@task-x")!.budget?.continuations, 1);
+  } finally {
+    restore();
+  }
+});
+
+test("guardianTick: opencode 未启用时 continuation 恒空（无 oc- 会话）", async () => {
+  const { dir, config } = setupRun();
+  const res = await guardianTick(dir, config);
+  assert.deepEqual(res.continuation.fed, []);
+});

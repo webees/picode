@@ -12,6 +12,7 @@ import { sweepProgress, type SweepResult } from "./progress.js";
 import { sleepAgent, buildPiEnv } from "./pi-adapter.js";
 import { OpencodeSpawner } from "./opencode-adapter.js";
 import { TranscriptStore } from "./transcript-store.js";
+import { sweepContinuations } from "./continuation.js";
 
 /**
  * Self-drive guardian (TC-02): a deterministic loop that advances a run
@@ -310,6 +311,8 @@ export interface GuardianTickResult {
   slept: string[];
   serve: { ok: boolean; failed: string[] };
   budgets: BudgetCheckResult;
+  /** C1 continuation: 本轮自动投喂续跑 prompt 的 agent 列表。 */
+  continuation: { fed: string[] };
   halt: boolean;
 }
 
@@ -413,7 +416,8 @@ export async function checkBudgets(
  *      so a freshly-queued task is woken as a triad, not split by progress_due
  *   4. sweep stale progress → progress_due (nudge for tasks already running)
  *   5. enforce per-session budgets (C1): stop over-limit awake sessions
- *   6. optionally sleep idle sessions (opt-in)
+ *   6. continuation sweep (C1): feed idle awake oc- sessions a bounded prompt
+ *   7. optionally sleep idle sessions (opt-in)
  */
 export async function guardianTick(
   dir: string,
@@ -432,6 +436,10 @@ export async function guardianTick(
 
   const budgets = await checkBudgets(dir, config);
 
+  // C1 continuation (N1/N2/N3): 在 checkBudgets 之后、probeServeHealth 之前，
+  // 对空闲 awake 的 opencode 会话有界投喂续跑 prompt（C2 顺序契约）。
+  const continuation = await sweepContinuations(dir, config);
+
   const slept = opts.idleSleep ? await sleepIdleSessions(dir, config) : [];
   const serve = await probeServeHealth(dir, config);
 
@@ -445,6 +453,7 @@ export async function guardianTick(
     slept,
     serve,
     budgets,
+    continuation,
     halt: runState?.halt ?? false,
   };
 }

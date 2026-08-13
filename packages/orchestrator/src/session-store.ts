@@ -102,7 +102,8 @@ export class SessionStore {
       persona_path: null,
       error: null,
       // C1-run-budgets: per-session wake-turn meter starts at 0.
-      budget: { turns: 0 },
+      // C1 continuation: per-session auto-refeed counter starts at 0.
+      budget: { turns: 0, continuations: 0 },
     };
     ensureDir(this.sessionsDir());
     writeYamlFile(this.sessionPath(agentId), record);
@@ -130,8 +131,35 @@ export class SessionStore {
         wake_reason: reason,
         last_wake_at: new Date().toISOString(),
         // C1-run-budgets: each sleeping→awake transition counts as one turn.
-        budget: { turns: (cur.budget?.turns ?? 0) + 1 },
+        // N3: 续跑计数持久化 — 重 wake 只加 turn，绝不重置 continuations。
+        budget: {
+          turns: (cur.budget?.turns ?? 0) + 1,
+          continuations: cur.budget?.continuations ?? 0,
+        },
       };
+    });
+  }
+
+  /**
+   * C1 continuation: 记录一次续跑投喂（budget.continuations +1，持久化）。
+   * 幂等由调用方保证（guardian 每次 sweep 对每个目标最多投喂一次）。
+   */
+  async recordContinuation(agentId: string): Promise<SessionRecord> {
+    const p = this.sessionPath(agentId);
+    return withFileLock(this.lockPath(), () => {
+      const cur = readYamlFile<SessionRecord>(p);
+      if (!cur) {
+        throw new PicodeError(ErrorCode.SESSION_NOT_FOUND, `session not found: ${agentId}`);
+      }
+      const next: SessionRecord = {
+        ...cur,
+        budget: {
+          turns: cur.budget?.turns ?? 0,
+          continuations: (cur.budget?.continuations ?? 0) + 1,
+        },
+      };
+      writeYamlFile(p, next);
+      return next;
     });
   }
 
