@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { readYamlFile, withFileLock, SESSION_EVENTS, type PicodeConfig } from "@picode/core";
 import { SessionStore } from "./session-store.js";
 import {
@@ -306,6 +307,19 @@ class ServeRecoveryStore {
   }
 }
 
+/**
+ * R2-C3 (chunk-guardian-reload-signal): guardian 代码更新检测信号。
+ * 守护进程启动时 import 缓存使 TS dist 热载复杂且有中途退出风险（违背「无 daemon」
+ * 不变量），因此不自动热载、不自动退出——只做观测：启动时记录 repo HEAD，每 tick
+ * 对比 `git rev-parse HEAD`，main HEAD 前移（合并落地）即置 detected 并警告一次，
+ * 运维据此按 operations.md 重启守护。
+ */
+export interface CodeUpdatedSignal {
+  detected: boolean;
+  base_sha: string;
+  head_sha: string;
+}
+
 /** Result of one guardian tick (one pass over the run). */
 export interface GuardianTickResult {
   ticked_at: string;
@@ -318,7 +332,28 @@ export interface GuardianTickResult {
   budgets: BudgetCheckResult;
   /** C1 continuation: 本轮自动投喂续跑 prompt 的 agent 列表。 */
   continuation: { fed: string[] };
+  /**
+   * R2-C3: 守护启动后 main HEAD 是否前移（合并落地 → 需重启热载）。
+   * null = 基线不可得/代码未变（幂等）；非 null = detected 且含 base/head SHA。
+   */
+  code_updated: CodeUpdatedSignal | null;
   halt: boolean;
+}
+
+/** R2-C3: 读当前仓库 HEAD（git rev-parse HEAD）；非 git 仓库或无提交返回 null。 */
+export function repoHeadSha(cwd: string): string | null {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** R2-C3: 对比启动时 base HEAD 与当前 HEAD；未变/不可得 → null（幂等），前移 → 检测信号。 */
+export function detectCodeUpdated(cwd: string, baseSha: string): CodeUpdatedSignal | null {
+  const headSha = repoHeadSha(cwd);
+  if (headSha === null || headSha === baseSha) return null;
+  return { detected: true, base_sha: baseSha, head_sha: headSha };
 }
 
 /** Sleep sessions awake beyond `sess_mgr.idle_sleep_sec` (opt-in). */
@@ -435,7 +470,7 @@ export async function checkBudgets(
 export async function guardianTick(
   dir: string,
   config: PicodeConfig,
-  opts: { idleSleep?: boolean } = {},
+  opts: { idleSleep?: boolean; baseSha?: string | null } = {},
 ): Promise<GuardianTickResult> {
   const parked = sweepDraftPark(dir, config);
   const drain = await drainSessionCommands(dir, config);
@@ -457,6 +492,9 @@ export async function guardianTick(
   const serve = await probeServeHealth(dir, config);
 
   const runState = readRunState(dir);
+  // R2-C3: 仅当守护进程提供了启动时基线 HEAD 才检测代码更新（单次 tick 无基线 → null）。
+  const code_updated =
+    opts.baseSha != null ? detectCodeUpdated(dir, opts.baseSha) : null;
   return {
     ticked_at: new Date().toISOString(),
     drained: drain.processed,
@@ -467,6 +505,7 @@ export async function guardianTick(
     serve,
     budgets,
     continuation,
+    code_updated,
     halt: runState?.halt ?? false,
   };
 }
@@ -477,6 +516,8 @@ export interface GuardianOptions {
   maxTicks?: number;
   haltFile?: string;
   idleSleep?: boolean;
+  /** R2-C3: 启动时记录的 repo HEAD 基线（默认 null → 启动时实时记录）。 */
+  baseSha?: string | null;
 }
 
 /** Summary of a guardian loop run. */
@@ -503,6 +544,11 @@ export async function runGuardian(
   const maxTicks = opts.maxTicks ?? Number.POSITIVE_INFINITY;
   const haltFile = opts.haltFile ?? path.join(dir, "guardian.halt");
 
+  // R2-C3: 启动时记录 base HEAD（守护代码基线）；每 tick 对比，main HEAD 前移即
+  // 置 code_updated 警告一次（不自动退出、不热载——见 operations.md 重启规程）。
+  const baseSha = opts.baseSha ?? repoHeadSha(dir);
+  let codeWarned = false;
+
   let halted = false;
   let ticks = 0;
   const ticksRun: GuardianTickResult[] = [];
@@ -520,8 +566,18 @@ export async function runGuardian(
         break;
       }
       ticks += 1;
-      const result = await guardianTick(dir, config, { idleSleep: opts.idleSleep });
+      const result = await guardianTick(dir, config, {
+        idleSleep: opts.idleSleep,
+        baseSha,
+      });
       ticksRun.push(result);
+      if (result.code_updated?.detected && !codeWarned) {
+        console.warn(
+          `[guardian] 检测到仓库 HEAD 前移：base ${result.code_updated.base_sha} → head ${result.code_updated.head_sha}；` +
+            "守护进程仍载入旧代码，请按 docs/guides/operations.md 重启守护热载（guardian 不自动退出）",
+        );
+        codeWarned = true;
+      }
       if (result.halt) {
         halted = true;
         break;

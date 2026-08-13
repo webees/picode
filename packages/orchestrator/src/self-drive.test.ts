@@ -3,6 +3,7 @@ import { gitInit } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { createRun, resolveRunDir } from "./run-store.js";
 import { addChunkAndTask, approveBrief, draftBrief } from "./task.js";
 import { SessionStore } from "./session-store.js";
@@ -532,4 +533,99 @@ test("C2-d: self-drive continuation 命令已注册且 --status 只读派生候�
   assert.equal(out.count, 1);
   assert.deepEqual(out.targets, [{ agent_id: "engineer@task-x", session_id: "oc-ses_c2d_reg" }]);
   assert.equal(store.get("engineer@task-x")!.budget?.continuations ?? 0, 0, "--status 不写计数");
+});
+
+// ---------------------------------------------------------------------------
+// R2-C3（chunk-guardian-reload-signal）：guardian 代码更新检测 —— 启动记录 base
+// HEAD，tick 对比 git rev-parse HEAD，main HEAD 前移（合并落地）即置 detected 并
+// console.warn 一次（不退出、不热载；重启规程见 operations.md）。
+// ---------------------------------------------------------------------------
+
+/** 在 repo 里追加提交并返回新 HEAD；用于模拟 main HEAD 前移。 */
+function commitAndHead(repo: string, file: string, content: string): string {
+  fs.writeFileSync(path.join(repo, file), content, "utf8");
+  execFileSync("git", ["add", file], { cwd: repo, stdio: "pipe" });
+  execFileSync("git", ["commit", "-qm", `test: ${file}`], { cwd: repo, stdio: "pipe" });
+  return execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
+}
+
+test("R2-C3: 初始 tick code_updated === null（base = 当前 HEAD，代码未变）", async () => {
+  const repo = tmpGitRepo();
+  const base = commitAndHead(repo, "a.txt", "v1");
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir, config } = resolveRunDir(repo, runId);
+
+  const res = await guardianTick(dir, config, { baseSha: base });
+  assert.equal(res.code_updated, null, "代码未变必须为 null");
+});
+
+test("R2-C3: main HEAD 前移（新 commit）后 tick detected === true 且 base/head SHA 正确", async () => {
+  const repo = tmpGitRepo();
+  const base = commitAndHead(repo, "a.txt", "v1");
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir, config } = resolveRunDir(repo, runId);
+  const head = commitAndHead(repo, "b.txt", "v2");
+  assert.notEqual(head, base, "前置：HEAD 必须前移");
+
+  const res = await guardianTick(dir, config, { baseSha: base });
+  assert.ok(res.code_updated, "HEAD 前移必须被检测");
+  assert.equal(res.code_updated!.detected, true);
+  assert.equal(res.code_updated!.base_sha, base);
+  assert.equal(res.code_updated!.head_sha, head);
+});
+
+test("R2-C3: 代码未变则保持 null（幂等，base=当前 HEAD）", async () => {
+  const repo = tmpGitRepo();
+  const head = commitAndHead(repo, "a.txt", "v1");
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir, config } = resolveRunDir(repo, runId);
+
+  const first = await guardianTick(dir, config, { baseSha: head });
+  assert.equal(first.code_updated, null);
+  const second = await guardianTick(dir, config, { baseSha: head });
+  assert.equal(second.code_updated, null, "反复 tick 保持 null（幂等）");
+});
+
+test("R2-C3: runGuardian 启动记录 base HEAD，HEAD 前移后 warn 一次且不退出", async () => {
+  const repo = tmpGitRepo();
+  const base = commitAndHead(repo, "a.txt", "v1");
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir, config } = resolveRunDir(repo, runId);
+  const head = commitAndHead(repo, "b.txt", "v2");
+
+  const warns: string[] = [];
+  const orig = console.warn;
+  console.warn = (...a: unknown[]) => warns.push(a.map(String).join(" "));
+  try {
+    const summary = await runGuardian(dir, config, {
+      maxTicks: 2,
+      intervalMs: 5,
+      baseSha: base,
+    });
+    assert.equal(summary.ticks, 2, "不退出：maxTicks 跑满");
+    assert.equal(summary.halted, false);
+    assert.equal(warns.length, 1, "HEAD 前移只 warn 一次");
+    assert.match(warns[0] ?? "", /检测到仓库 HEAD 前移/);
+    assert.ok(
+      summary.ticksRun.every((t) => t.code_updated?.detected === true),
+      "每个 tick 都置 detected（持续观测）",
+    );
+    assert.ok(
+      summary.ticksRun.every((t) => t.code_updated!.head_sha === head),
+      "head_sha 与当前 HEAD 一致",
+    );
+  } finally {
+    console.warn = orig;
+  }
+});
+
+test("R2-C3: runGuardian 未提供 baseSha 时启动即记录当前 HEAD（初始 tick 为 null）", async () => {
+  const repo = tmpGitRepo();
+  commitAndHead(repo, "a.txt", "v1");
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir, config } = resolveRunDir(repo, runId);
+
+  const summary = await runGuardian(dir, config, { maxTicks: 1, intervalMs: 5 });
+  assert.equal(summary.ticks, 1);
+  assert.equal(summary.ticksRun[0].code_updated, null, "启动即记录 base = 当前 HEAD");
 });
