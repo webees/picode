@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { useRun } from '@/services/api/picode.api'
+import { label, RUN_KIND, RUN_SCALE, RUN_STATUS } from '@/utils/labels'
 
 const props = defineProps<{ runId: string }>()
 
@@ -43,13 +44,13 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
       <CardHeader>
         <div class="flex flex-wrap items-center gap-2">
           <Badge :variant="statusVariant[goal.status] ?? 'outline'">
-            {{ goal.status }}
+            {{ label(RUN_STATUS, goal.status) }}
           </Badge>
           <Badge variant="secondary">
-            scale {{ goal.scale }}
+            {{ label(RUN_SCALE, goal.scale) }}
           </Badge>
           <Badge variant="outline">
-            {{ goal.kind }}
+            {{ label(RUN_KIND, goal.kind) }}
           </Badge>
         </div>
         <CardTitle class="text-lg">
@@ -62,7 +63,7 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
       <CardContent class="space-y-4 text-sm">
         <div>
           <div class="mb-1 font-medium">
-            Intent
+            目标说明
           </div>
           <p class="text-muted-foreground">
             {{ goal.intent }}
@@ -72,7 +73,7 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <div class="rounded-lg border p-3">
             <div class="text-xs text-muted-foreground">
-              会话（snapshot）
+              会话总数
             </div>
             <div class="mt-1 text-xl font-semibold">
               {{ snapshot?.sessions.total ?? 0 }}
@@ -80,7 +81,7 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
           </div>
           <div class="rounded-lg border p-3">
             <div class="text-xs text-muted-foreground">
-              Awake
+              活跃会话
             </div>
             <div class="mt-1 text-xl font-semibold">
               {{ snapshot?.sessions.awake.length ?? 0 }}
@@ -96,7 +97,7 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
           </div>
           <div class="rounded-lg border p-3">
             <div class="text-xs text-muted-foreground">
-              Merge 完成
+              已合并任务
             </div>
             <div class="mt-1 text-xl font-semibold">
               {{ snapshot?.merge_queue.merged ?? 0 }}
@@ -106,7 +107,7 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
         <Separator />
         <div>
           <div class="mb-1 font-medium">
-            Product Acceptance（{{ goal.product_acceptance.length }}）
+            产品验收标准（{{ goal.product_acceptance.length }} 项）
           </div>
           <ul class="list-inside list-disc space-y-1 text-muted-foreground">
             <li v-for="(item, i) in goal.product_acceptance" :key="i">
@@ -116,7 +117,7 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
         </div>
         <div v-if="goal.open_questions.length">
           <div class="mb-1 font-medium">
-            Open Questions
+            待决问题
           </div>
           <ul class="list-inside list-disc space-y-1 text-muted-foreground">
             <li v-for="(q, i) in goal.open_questions" :key="i">

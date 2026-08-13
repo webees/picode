@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { useRuns } from '@/services/api/picode.api'
+import { label, RUN_KIND, RUN_SCALE, RUN_STATUS } from '@/utils/labels'
 
 const router = useRouter()
 const { data, isLoading, isError, error, refetch } = useRuns()
@@ -35,8 +36,8 @@ function formatDate(iso: string) {
 
 <template>
   <BasicPage
-    title="Runs"
-    description="Picode 运行实例列表 — 数据源 .picode/runs 只读投影"
+    title="运行实例"
+    description="picode 历次自动化任务一览 — 点开任意运行查看分块、任务、会话与合并进度"
   >
     <template #actions>
       <Button
@@ -52,9 +53,9 @@ function formatDate(iso: string) {
 
     <Alert v-if="isError" variant="destructive" class="mb-4">
       <AlertTriangleIcon />
-      <AlertTitle>无法连接 dashboard-server</AlertTitle>
+      <AlertTitle>无法连接后端服务</AlertTitle>
       <AlertDescription>
-        请先启动后端：npm run dev -w @picode/dashboard-server（默认 127.0.0.1:8788）。
+        请先启动面板后端：npm run dev -w @picode/dashboard-server（默认 127.0.0.1:8788）。
         {{ error instanceof Error ? error.message : String(error) }}
       </AlertDescription>
     </Alert>
@@ -96,10 +97,10 @@ function formatDate(iso: string) {
         <CardHeader>
           <div class="flex items-start justify-between gap-2">
             <Badge :variant="statusVariant[run.status] ?? 'outline'">
-              {{ run.status }}
+              {{ label(RUN_STATUS, run.status) }}
             </Badge>
             <Badge variant="secondary">
-              scale {{ run.scale }}
+              {{ label(RUN_SCALE, run.scale) }}
             </Badge>
           </div>
           <CardTitle class="break-all text-base">
@@ -111,10 +112,10 @@ function formatDate(iso: string) {
         </CardHeader>
         <CardContent class="flex flex-wrap gap-2 text-xs text-muted-foreground">
           <Badge variant="outline">
-            {{ run.kind }}
+            {{ label(RUN_KIND, run.kind) }}
           </Badge>
-          <span>{{ formatDate(run.created_at) }}</span>
-          <span>验收 {{ run.acceptance }} · 产品 {{ run.product_acceptance }}</span>
+          <span>启动于 {{ formatDate(run.created_at) }}</span>
+          <span>验收 {{ run.acceptance }} 项 · 产品要求 {{ run.product_acceptance }} 项</span>
           <span v-if="isLoading" class="ml-auto">
             <LoaderCircleIcon class="size-3 animate-spin" />
           </span>

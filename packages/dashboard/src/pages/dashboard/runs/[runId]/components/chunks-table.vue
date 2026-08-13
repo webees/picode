@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useChunks } from '@/services/api/picode.api'
+import { CHUNK_STATUS, label } from '@/utils/labels'
 
 const props = defineProps<{ runId: string }>()
 
@@ -32,7 +33,7 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
 <template>
   <Alert v-if="isError" variant="destructive">
     <AlertTriangleIcon />
-    <AlertTitle>无法加载 chunks</AlertTitle>
+    <AlertTitle>无法加载分块计划</AlertTitle>
     <AlertDescription>
       {{ error instanceof Error ? error.message : String(error) }}
     </AlertDescription>
@@ -47,10 +48,10 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>ID</TableHead>
+          <TableHead>编号</TableHead>
           <TableHead>状态</TableHead>
-          <TableHead>Task</TableHead>
-          <TableHead>依赖</TableHead>
+          <TableHead>对应任务</TableHead>
+          <TableHead>前置依赖</TableHead>
           <TableHead>写入路径</TableHead>
           <TableHead>验收</TableHead>
         </TableRow>
@@ -62,7 +63,7 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
           </TableCell>
           <TableCell>
             <Badge :variant="statusVariant[chunk.status ?? ''] ?? 'outline'">
-              {{ chunk.status ?? '-' }}
+              {{ label(CHUNK_STATUS, chunk.status) }}
             </Badge>
           </TableCell>
           <TableCell class="font-mono text-xs">
@@ -82,8 +83,8 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
           <Empty>
             <EmptyContent>
               <EmptyMedia variant="icon" />
-              <EmptyTitle>暂无 chunks</EmptyTitle>
-              <EmptyDescription>该 run 尚未分块。</EmptyDescription>
+              <EmptyTitle>暂无分块</EmptyTitle>
+              <EmptyDescription>该运行尚未划分分块。</EmptyDescription>
             </EmptyContent>
           </Empty>
         </TableEmpty>

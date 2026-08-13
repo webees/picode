@@ -27,6 +27,7 @@ import {
   LIVE_POLL_INTERVAL_MS,
   useSessions,
 } from '@/services/api/picode.api'
+import { label, SESSION_STATE } from '@/utils/labels'
 
 const props = defineProps<{ runId: string }>()
 
@@ -110,7 +111,7 @@ function formatTime(iso: string | null) {
       <Card>
         <CardHeader class="pb-2">
           <CardTitle class="text-sm flex items-center gap-1">
-            <ActivityIcon class="size-3.5" /> Awake
+            <ActivityIcon class="size-3.5" /> 工作中
           </CardTitle>
         </CardHeader>
         <CardContent class="text-2xl font-semibold">
@@ -120,7 +121,7 @@ function formatTime(iso: string | null) {
       <Card>
         <CardHeader class="pb-2">
           <CardTitle class="text-sm flex items-center gap-1">
-            <RefreshCwIcon class="size-3.5" /> 轮询间隔
+            <RefreshCwIcon class="size-3.5" /> 刷新间隔
           </CardTitle>
         </CardHeader>
         <CardContent class="text-2xl font-semibold">
@@ -133,13 +134,13 @@ function formatTime(iso: string | null) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Agent</TableHead>
+            <TableHead>会话名</TableHead>
             <TableHead>角色</TableHead>
             <TableHead>状态</TableHead>
-            <TableHead>tokens total</TableHead>
+            <TableHead>Token 消耗</TableHead>
             <TableHead>续跑 / 上限</TableHead>
-            <TableHead>in-flight</TableHead>
-            <TableHead>上次投喂</TableHead>
+            <TableHead>回合中</TableHead>
+            <TableHead>上次续跑</TableHead>
             <TableHead>错误</TableHead>
           </TableRow>
         </TableHeader>
@@ -153,7 +154,7 @@ function formatTime(iso: string | null) {
             </TableCell>
             <TableCell>
               <Badge :variant="stateVariant[s.state] ?? 'outline'">
-                {{ s.state }}
+                {{ label(SESSION_STATE, s.state) }}
               </Badge>
             </TableCell>
             <TableCell>
@@ -203,10 +204,10 @@ function formatTime(iso: string | null) {
 
     <Alert v-if="awakeSessions.length > 0" class="text-xs">
       <ActivityIcon />
-      <AlertTitle>Tokens 实时活跃度</AlertTitle>
+      <AlertTitle>Token 实时活跃度</AlertTitle>
       <AlertDescription>
-        仅对 awake 且已挂 serve 的会话轮询（{{ LIVE_POLL_INTERVAL_MS / 1000 }}s）。
-        serve 失联/超时返回 {ok:false,error}，面板显示降级提示不白屏（ERR-01）。
+        仅对工作中且已连接后端的会话轮询（每 {{ LIVE_POLL_INTERVAL_MS / 1000 }} 秒）。
+        后端失联/超时返回降级提示，不会白屏。
       </AlertDescription>
     </Alert>
   </div>

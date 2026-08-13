@@ -17,11 +17,11 @@ const runId = computed(() => params.runId ?? '')
 
 const tabs = [
   { name: '概览', value: 'overview' },
-  { name: 'Chunks', value: 'chunks' },
+  { name: '分块计划', value: 'chunks' },
   { name: '任务看板', value: 'tasks' },
-  { name: '会话 & Tokens', value: 'sessions' },
-  { name: 'Merge 列车', value: 'merge' },
-  { name: '门禁 Evidence', value: 'gates' },
+  { name: '会话活跃度', value: 'sessions' },
+  { name: '合并队列', value: 'merge' },
+  { name: '质量门禁', value: 'gates' },
 ]
 
 const defaultTab = tabs[0].value
@@ -30,7 +30,7 @@ const defaultTab = tabs[0].value
 <template>
   <BasicPage
     :title="runId"
-    :description="`Run ${runId}`"
+    description="运行详情 — 目标、分块、任务、会话、合并与门禁全貌"
   >
     <Tabs :default-value="defaultTab" class="w-full">
       <TabsList>

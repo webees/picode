@@ -4,6 +4,7 @@ import { AlertTriangleIcon, LoaderCircleIcon } from '@lucide/vue'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { useBoard } from '@/services/api/picode.api'
+import { BOARD_COLUMN_ZH } from '@/utils/labels'
 
 import { BOARD_COLUMN_META } from './tasks-board.data'
 
@@ -13,6 +14,8 @@ const { data, isLoading, isError, error } = useBoard(props.runId)
 
 const columns = computed(() => data.value?.columns ?? [])
 const cards = computed(() => data.value?.cards ?? [])
+
+const KIND_ZH: Record<string, string> = { task: '任务', intake: '立项', chunk: '分块' }
 
 function cardsOf(column: string) {
   return cards.value.filter(c => c.column === column)
@@ -44,7 +47,7 @@ function cardsOf(column: string) {
         :class="BOARD_COLUMN_META[col]?.headerClass ?? ''"
       >
         <div class="flex items-center justify-between">
-          <span>{{ BOARD_COLUMN_META[col]?.label ?? col }}</span>
+          <span>{{ BOARD_COLUMN_ZH[col] ?? BOARD_COLUMN_META[col]?.label ?? col }}</span>
           <span class="tabular-nums">{{ cardsOf(col).length }}</span>
         </div>
         <div class="mt-0.5 text-[10px] font-normal opacity-70">
@@ -61,14 +64,14 @@ function cardsOf(column: string) {
         >
           <div class="flex items-center gap-1.5">
             <Badge variant="outline" class="px-1 py-0 text-[10px]">
-              {{ card.kind }}
+              {{ KIND_ZH[card.kind] ?? card.kind }}
             </Badge>
             <Badge
               v-if="card.blocked"
               variant="destructive"
               class="px-1 py-0 text-[10px]"
             >
-              BLOCKED
+              受阻
             </Badge>
           </div>
           <div class="mt-1.5 break-all font-medium">

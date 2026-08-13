@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useMerge } from '@/services/api/picode.api'
+import { label, MERGE_STATUS } from '@/utils/labels'
 
 const props = defineProps<{ runId: string }>()
 
@@ -98,7 +99,7 @@ function formatTime(iso: string | null) {
           <TableRow v-for="req in queue" :key="req.id">
             <TableCell>
               <Badge :variant="statusVariant[req.status] ?? 'outline'">
-                {{ req.status }}
+                {{ label(MERGE_STATUS, req.status) }}
               </Badge>
             </TableCell>
             <TableCell class="font-mono text-xs">
@@ -122,9 +123,9 @@ function formatTime(iso: string | null) {
             <Empty>
               <EmptyContent>
                 <EmptyMedia variant="icon" />
-                <EmptyTitle>暂无 merge 记录</EmptyTitle>
+                <EmptyTitle>暂无合并记录</EmptyTitle>
                 <EmptyDescription>
-                  串行 merge 列车（D036）当前为空 — 任务合并后入队。
+                  合并队列当前为空 — 任务完成验证后会按顺序合并。
                 </EmptyDescription>
               </EmptyContent>
             </Empty>

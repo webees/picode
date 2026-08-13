@@ -45,6 +45,16 @@ function resultBadge(result: string): 'default' | 'secondary' | 'destructive' | 
     return 'destructive'
   return 'outline'
 }
+
+function resultLabel(result: string): string {
+  if (result === 'pass')
+    return '通过'
+  if (result === 'fail')
+    return '失败'
+  if (result === 'pass_with_finding')
+    return '通过（有发现）'
+  return result
+}
 </script>
 
 <template>
@@ -65,16 +75,16 @@ function resultBadge(result: string): 'default' | 'secondary' | 'destructive' | 
     <Card>
       <CardHeader class="pb-2">
         <CardTitle class="flex items-center gap-1 text-sm">
-          <ShieldCheckIcon class="size-4" /> E4 门禁文件（gates/）
+          <ShieldCheckIcon class="size-4" /> 合并前门禁
         </CardTitle>
-        <CardDescription>run 级门禁 gate 文件（E4 verify_commands / E6 等）。</CardDescription>
+        <CardDescription>run 级门禁文件（合并前自动验证命令、归档记录等）。</CardDescription>
       </CardHeader>
       <CardContent v-if="gates.length === 0">
         <Empty>
           <EmptyContent>
             <EmptyMedia variant="icon" />
-            <EmptyTitle>暂无门禁文件</EmptyTitle>
-            <EmptyDescription>gates/ 目录为空 — 当前 run 尚未产生 gate 记录。</EmptyDescription>
+            <EmptyTitle>暂无门禁记录</EmptyTitle>
+            <EmptyDescription>当前运行尚未产生门禁记录。</EmptyDescription>
           </EmptyContent>
         </Empty>
       </CardContent>
@@ -95,16 +105,16 @@ function resultBadge(result: string): 'default' | 'secondary' | 'destructive' | 
     <Card>
       <CardHeader class="pb-2">
         <CardTitle class="flex items-center gap-1 text-sm">
-          <CheckCircle2Icon class="size-4" /> 任务 Evidence
+          <CheckCircle2Icon class="size-4" /> 任务验收证据
         </CardTitle>
-        <CardDescription>各任务 evidence.yaml（C1-a~e 验收命令与结果）。</CardDescription>
+        <CardDescription>各任务的验证记录（验收命令、退出码与结果）。</CardDescription>
       </CardHeader>
       <CardContent v-if="evidence.length === 0">
         <Empty>
           <EmptyContent>
             <EmptyMedia variant="icon" />
-            <EmptyTitle>暂无 evidence</EmptyTitle>
-            <EmptyDescription>尚无任务产出验收证据。</EmptyDescription>
+            <EmptyTitle>暂无验收证据</EmptyTitle>
+            <EmptyDescription>尚无任务产出验收记录。</EmptyDescription>
           </EmptyContent>
         </Empty>
       </CardContent>
@@ -113,7 +123,7 @@ function resultBadge(result: string): 'default' | 'secondary' | 'destructive' | 
           <div class="flex items-center justify-between gap-2">
             <span class="break-all font-mono text-xs font-medium">{{ ev.task_id }}</span>
             <Badge :variant="resultBadge(evidenceResult(ev))">
-              {{ evidenceResult(ev) }}
+              {{ resultLabel(evidenceResult(ev)) }}
             </Badge>
           </div>
           <ul class="space-y-1">
