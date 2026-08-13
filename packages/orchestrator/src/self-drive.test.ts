@@ -425,6 +425,107 @@ test("guardianTick: opencode 未启用时 continuation 恒空（无 oc- 会话�
 });
 
 // ---------------------------------------------------------------------------
+// R3-C2（chunk-continuation-gate）：guardianTick 接线——checkBudgets 之后、
+// 续跑 sweep 之前跑 gate；gate 启用时「通过 → 停靠不投喂」「失败/快照未变 →
+// 本轮不投喂但保留候选」。默认关闭不改变 C1 行为（回归）。
+// ---------------------------------------------------------------------------
+
+/** 配置 continuation.gate_commands（类型字段由 C1 声明，此处按缺省 cast）。 */
+function setGateCommands(config: ReturnType<typeof resolveRunDir>["config"], cmds: string[]): void {
+  (config.self_evolve.continuation as unknown as { gate_commands: string[] }).gate_commands = cmds;
+}
+
+test("R3-C2: guardianTick 默认 gate 关闭 → 正常投喂（回归，continuation.fed 结构不变）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve = structuredClone(config.self_evolve);
+  config.self_evolve.budgets = { maxTurns: 0, maxTokens: 0, timeoutMs: 0, gate_commands: [] };
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  store.register("engineer", { agentId: "engineer@task-x", initialState: "sleeping" });
+  await store.wake("engineer@task-x", "test");
+  await store.attachPiSession("engineer@task-x", "oc-ses_gate_tick_off");
+  const rec = store.get("engineer@task-x")!;
+  rec.last_wake_at = new Date(Date.now() - 120_000).toISOString();
+  const YAML = (await import("yaml")).default;
+  fs.writeFileSync(path.join(dir, "sessions", "engineer@task-x.yaml"), YAML.stringify(rec));
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const state = { down: false };
+  const restore = mockServe(state, calls);
+  try {
+    const res = await guardianTick(dir, config);
+    assert.deepEqual(res.continuation.fed, ["engineer@task-x"]);
+    assert.equal(res.continuation.gate[0].reason, "disabled", "gate 未启用 → 标记 disabled");
+    assert.equal(messagePosts(calls).length, 1);
+  } finally {
+    restore();
+  }
+});
+
+test("R3-C2: guardianTick gate 通过 → 该会话本轮不投喂（停靠语义）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve = structuredClone(config.self_evolve);
+  config.self_evolve.budgets = { maxTurns: 0, maxTokens: 0, timeoutMs: 0, gate_commands: [] };
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  setGateCommands(config, ["true"]);
+  store.register("engineer", { agentId: "engineer@task-x", initialState: "sleeping" });
+  await store.wake("engineer@task-x", "test");
+  await store.attachPiSession("engineer@task-x", "oc-ses_gate_tick_pass");
+  const rec = store.get("engineer@task-x")!;
+  rec.last_wake_at = new Date(Date.now() - 120_000).toISOString();
+  const YAML = (await import("yaml")).default;
+  fs.writeFileSync(path.join(dir, "sessions", "engineer@task-x.yaml"), YAML.stringify(rec));
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const state = { down: false };
+  const restore = mockServe(state, calls);
+  try {
+    const res = await guardianTick(dir, config);
+    assert.deepEqual(res.continuation.fed, [], "gate 通过 → 本轮不投喂");
+    assert.equal(res.continuation.gate[0].reason, "gate_passed");
+    assert.equal(messagePosts(calls).length, 0);
+  } finally {
+    restore();
+  }
+});
+
+test("R3-C2: guardianTick gate 失败 → 不投喂（保留候选），下轮快照未变不重跑", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve = structuredClone(config.self_evolve);
+  config.self_evolve.budgets = { maxTurns: 0, maxTokens: 0, timeoutMs: 0, gate_commands: [] };
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  setGateCommands(config, ["false"]);
+  store.register("engineer", { agentId: "engineer@task-x", initialState: "sleeping" });
+  await store.wake("engineer@task-x", "test");
+  await store.attachPiSession("engineer@task-x", "oc-ses_gate_tick_fail");
+  const rec = store.get("engineer@task-x")!;
+  rec.last_wake_at = new Date(Date.now() - 120_000).toISOString();
+  const YAML = (await import("yaml")).default;
+  fs.writeFileSync(path.join(dir, "sessions", "engineer@task-x.yaml"), YAML.stringify(rec));
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const state = { down: false };
+  const restore = mockServe(state, calls);
+  try {
+    const first = await guardianTick(dir, config);
+    assert.deepEqual(first.continuation.fed, []);
+    assert.equal(first.continuation.gate[0].reason, "gate_failed");
+
+    const second = await guardianTick(dir, config);
+    assert.deepEqual(second.continuation.fed, []);
+    assert.equal(second.continuation.gate[0].reason, "snapshot_unchanged", "快照未变 → 不重跑");
+    assert.equal(messagePosts(calls).length, 0, "全程不投喂");
+  } finally {
+    restore();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // C2-b：会话 error（serve 失联）→ P1 恢复重投喂 ready + 清 error → 续跑计数
 // 保持（不重置）、sweep 从持久化计数续发且不超 max_per_session（N3）
 // ---------------------------------------------------------------------------

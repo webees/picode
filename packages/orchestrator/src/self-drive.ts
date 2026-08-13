@@ -13,7 +13,7 @@ import { sweepProgress, type SweepResult } from "./progress.js";
 import { sleepAgent, buildPiEnv } from "./pi-adapter.js";
 import { OpencodeSpawner } from "./opencode-adapter.js";
 import { TranscriptStore } from "./transcript-store.js";
-import { sweepContinuations } from "./continuation.js";
+import { sweepContinuationsGated } from "./continuation-gate.js";
 
 // C2 (chunk-continuation-recovery): 把 continuation 机制经本模块透出到包公共面，
 // 供 mcp-server 的 continuation_status / continuation_feed 包装（index.ts 在 T06
@@ -330,8 +330,14 @@ export interface GuardianTickResult {
   slept: string[];
   serve: { ok: boolean; failed: string[] };
   budgets: BudgetCheckResult;
-  /** C1 continuation: 本轮自动投喂续跑 prompt 的 agent 列表。 */
-  continuation: { fed: string[] };
+  /**
+   * C1 continuation + R3-C2 gate: 本轮自动投喂续跑 prompt 的 agent 列表；
+   * gate 启用时附带每候选的 gate 结果（通过/失败/快照未变跳过）。
+   */
+  continuation: {
+    fed: string[];
+    gate: Array<{ agent_id: string; reason: string; ran: boolean; passed: boolean }>;
+  };
   /**
    * R2-C3: 守护启动后 main HEAD 是否前移（合并落地 → 需重启热载）。
    * null = 基线不可得/代码未变（幂等）；非 null = detected 且含 base/head SHA。
@@ -486,7 +492,9 @@ export async function guardianTick(
 
   // C1 continuation (N1/N2/N3): 在 checkBudgets 之后、probeServeHealth 之前，
   // 对空闲 awake 的 opencode 会话有界投喂续跑 prompt（C2 顺序契约）。
-  const continuation = await sweepContinuations(dir, config);
+  // R3-C2: 投喂前先跑可选 gate（gate_commands 非空才启用）；gate 启用时
+  // 「通过 → 停靠不投喂」「失败/快照未变 → 不投喂但保留候选（下轮可重试）」。
+  const continuation = await sweepContinuationsGated(dir, config);
 
   const slept = opts.idleSleep ? await sleepIdleSessions(dir, config) : [];
   const serve = await probeServeHealth(dir, config);
