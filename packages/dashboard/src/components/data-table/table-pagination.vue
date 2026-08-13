@@ -1,0 +1,170 @@
+<script setup lang="ts" generic="T extends RowData">
+import type { RowData, Table } from '@tanstack/vue-table'
+
+import { ChevronLeftIcon, ChevronRightIcon, ChevronsLeftIcon, ChevronsRightIcon } from '@lucide/vue'
+
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PAGE_SIZES } from '@/constants/app'
+
+import type { features } from './features'
+import type { ServerPagination } from './types'
+
+interface DataTablePaginationProps {
+  table: Table<typeof features, T>
+  serverPagination?: ServerPagination
+}
+const props = defineProps<DataTablePaginationProps>()
+
+const isServerPagination = computed(() => !!props.serverPagination)
+
+const currentPage = computed(() => {
+  if (isServerPagination.value && props.serverPagination) {
+    return props.serverPagination.page
+  }
+  return props.table.atoms.pagination.get().pageIndex + 1
+})
+
+const currentPageSize = computed(() => {
+  if (isServerPagination.value && props.serverPagination) {
+    return props.serverPagination.pageSize
+  }
+  return props.table.atoms.pagination.get().pageSize
+})
+
+const totalPages = computed(() => {
+  if (isServerPagination.value && props.serverPagination) {
+    return Math.ceil(props.serverPagination.total / props.serverPagination.pageSize)
+  }
+  return props.table.getPageCount()
+})
+
+const canPreviousPage = computed(() => {
+  if (isServerPagination.value) {
+    return currentPage.value > 1
+  }
+  return props.table.getCanPreviousPage()
+})
+
+const canNextPage = computed(() => {
+  if (isServerPagination.value) {
+    return currentPage.value < totalPages.value
+  }
+  return props.table.getCanNextPage()
+})
+
+function handlePageSizeChange(value: any) {
+  if (!value)
+    return
+  const newPageSize = Number(value)
+  if (isServerPagination.value && props.serverPagination?.onPageSizeChange) {
+    props.serverPagination.onPageSizeChange(newPageSize)
+  }
+  else {
+    props.table.setPageSize(newPageSize)
+  }
+}
+
+function goToFirstPage() {
+  if (isServerPagination.value && props.serverPagination?.onPageChange) {
+    props.serverPagination.onPageChange(1)
+  }
+  else {
+    props.table.setPageIndex(0)
+  }
+}
+
+function goToPreviousPage() {
+  if (isServerPagination.value && props.serverPagination?.onPageChange) {
+    props.serverPagination.onPageChange(currentPage.value - 1)
+  }
+  else {
+    props.table.previousPage()
+  }
+}
+
+function goToNextPage() {
+  if (isServerPagination.value && props.serverPagination?.onPageChange) {
+    props.serverPagination.onPageChange(currentPage.value + 1)
+  }
+  else {
+    props.table.nextPage()
+  }
+}
+
+function goToLastPage() {
+  if (isServerPagination.value && props.serverPagination?.onPageChange) {
+    props.serverPagination.onPageChange(totalPages.value)
+  }
+  else {
+    props.table.setPageIndex(props.table.getPageCount() - 1)
+  }
+}
+</script>
+
+<template>
+  <div class="flex items-center justify-between px-2 py-2 bg-background">
+    <div class="flex-1" />
+    <div class="flex items-center space-x-6 lg:space-x-8">
+      <div class="flex items-center space-x-2">
+        <p class="hidden text-sm font-medium line-clamp-1 md:block">
+          Rows per page
+        </p>
+        <Select
+          :model-value="`${currentPageSize}`"
+          @update:model-value="handlePageSizeChange"
+        >
+          <SelectTrigger class="h-8 w-[70px]">
+            <SelectValue :placeholder="`${currentPageSize}`" />
+          </SelectTrigger>
+          <SelectContent side="top">
+            <SelectItem v-for="pageSize in PAGE_SIZES" :key="pageSize" :value="`${pageSize}`">
+              {{ pageSize }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div class="flex w-[100px] items-center justify-center text-sm font-medium">
+        Page {{ currentPage }} of {{ totalPages }}
+      </div>
+      <div class="flex items-center space-x-2">
+        <Button
+          variant="outline"
+          class="hidden size-8 p-0 lg:flex"
+          :disabled="!canPreviousPage"
+          @click="goToFirstPage"
+        >
+          <span class="sr-only">Go to first page</span>
+          <ChevronsLeftIcon class="size-4" />
+        </Button>
+        <Button
+          variant="outline"
+          class="size-8 p-0"
+          :disabled="!canPreviousPage"
+          @click="goToPreviousPage"
+        >
+          <span class="sr-only">Go to previous page</span>
+          <ChevronLeftIcon class="size-4" />
+        </Button>
+        <Button
+          variant="outline"
+          class="size-8 p-0"
+          :disabled="!canNextPage"
+          @click="goToNextPage"
+        >
+          <span class="sr-only">Go to next page</span>
+          <ChevronRightIcon class="size-4" />
+        </Button>
+        <Button
+          variant="outline"
+          class="hidden size-8 p-0 lg:flex"
+          :disabled="!canNextPage"
+          @click="goToLastPage"
+        >
+          <span class="sr-only">Go to last page</span>
+          <ChevronsRightIcon class="size-4" />
+        </Button>
+      </div>
+    </div>
+  </div>
+</template>
