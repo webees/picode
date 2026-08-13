@@ -9,7 +9,7 @@ import YAML from "yaml";
 
 const PICODE = "/Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js";
 const REPO = "/tmp/picode-dogfood";
-const RUN = "run-2026-08-13T12-16-26-548Z";
+const RUN = "run-2026-08-13T15-08-28-705Z";
 const RUN_DIR = `${REPO}/.picode/runs/${RUN}`;
 
 const CHUNKS = {
@@ -166,6 +166,26 @@ const CHUNKS = {
       "README.md",
       "docs/knowledge/evolve/run-2026-08-13T12-16-26-548Z.md",
     ],
+    skills: "docs,spec",
+  },
+  "design-system": {
+    first: "packages/dashboard/src/assets/index.css",
+    write: ["packages/dashboard/src/assets/**", "packages/dashboard/src/constants/themes.ts", "packages/dashboard/src/stores/theme.ts", "packages/dashboard/src/layouts/**", "packages/dashboard/src/components/global-layout/**", "packages/dashboard/src/components/dashboard/**"],
+    skills: "vue,css,tailwind,design",
+  },
+  "overview": {
+    first: "packages/dashboard/src/pages/dashboard/index.vue",
+    write: ["packages/dashboard/src/pages/dashboard/index.vue", "packages/dashboard/src/constants/sidebar-data.ts", "packages/dashboard/src/pages/dashboard/index.components.ts"],
+    skills: "vue,typescript",
+  },
+  "run-detail": {
+    first: "packages/dashboard/src/pages/dashboard/runs/[runId]/index.vue",
+    write: ["packages/dashboard/src/pages/dashboard/runs/**"],
+    skills: "vue,typescript",
+  },
+  "ui-docs": {
+    first: "docs/DECISIONS.md",
+    write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "README.md"],
     skills: "docs,spec",
   },
 };
