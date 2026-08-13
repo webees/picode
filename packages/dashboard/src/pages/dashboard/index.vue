@@ -1,43 +1,55 @@
 <script setup lang="ts">
-import { AlertTriangleIcon, LoaderCircleIcon, RefreshCwIcon } from '@lucide/vue'
+import { AlertTriangleIcon, ArrowRightIcon, FolderOpenIcon, RefreshCwIcon } from '@lucide/vue'
 import { useRouter } from 'vue-router'
 
 import { BasicPage } from '@/components/global-layout'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { useRuns } from '@/services/api/picode.api'
-import { label, RUN_KIND, RUN_SCALE, RUN_STATUS } from '@/utils/labels'
+
+import {
+  formatRunDate,
+  kindLabel,
+  scaleLabel,
+  statusMeta,
+  summarizeRuns,
+} from './index.components'
 
 const router = useRouter()
-const { data, isLoading, isError, error, refetch } = useRuns()
+
+const { data, isLoading, isError, error, refetch, isFetching } = useRuns()
 
 const runs = computed(() => data.value?.runs ?? [])
+const stats = computed(() => summarizeRuns(runs.value))
 
-const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  active: 'default',
-  completed: 'secondary',
-  cancelled: 'destructive',
-  blocked: 'destructive',
-  intake: 'outline',
-  draft: 'outline',
-}
+const statCards = computed(() => [
+  { label: '全部运行', value: stats.value.total, accent: '' },
+  { label: '进行中', value: stats.value.active, accent: 'text-emerald-600 dark:text-emerald-400' },
+  { label: '已完成', value: stats.value.completed, accent: 'text-slate-500 dark:text-slate-400' },
+  { label: '受阻', value: stats.value.blocked, accent: 'text-rose-600 dark:text-rose-400' },
+])
+
+const runCards = computed(() => runs.value.map(run => ({
+  run,
+  status: statusMeta(run.status),
+  kind: kindLabel(run.kind),
+  scale: scaleLabel(run.scale),
+  date: formatRunDate(run.created_at),
+  meta: `验收 ${run.acceptance} 项 · 产品要求 ${run.product_acceptance} 项`,
+})))
 
 function openRun(runId: string) {
   router.push({ path: `/dashboard/runs/${runId}` })
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString()
 }
 </script>
 
 <template>
   <BasicPage
-    title="运行实例"
-    description="picode 历次自动化任务一览 — 点开任意运行查看分块、任务、会话与合并进度"
+    title="运行总览"
+    description="查看当前工作目录下的全部运行，点击任意卡片可进入详情。数据只读，不会改动任何内容。"
   >
     <template #actions>
       <Button
@@ -46,41 +58,56 @@ function formatDate(iso: string) {
         :disabled="isLoading"
         @click="refetch"
       >
-        <RefreshCwIcon class="size-4" :class="isLoading ? 'animate-spin' : ''" />
+        <RefreshCwIcon class="size-4" :class="isFetching ? 'animate-spin' : ''" />
         刷新
       </Button>
     </template>
 
-    <Alert v-if="isError" variant="destructive" class="mb-4">
+    <Alert v-if="isError" variant="destructive" class="mb-6">
       <AlertTriangleIcon />
-      <AlertTitle>无法连接后端服务</AlertTitle>
+      <AlertTitle>暂时连不上数据服务</AlertTitle>
       <AlertDescription>
-        请先启动面板后端：npm run dev -w @picode/dashboard-server（默认 127.0.0.1:8788）。
+        请先启动数据服务：npm run dev -w @picode/dashboard-server（默认 127.0.0.1:8788），再点「刷新」。
         {{ error instanceof Error ? error.message : String(error) }}
       </AlertDescription>
     </Alert>
 
+    <div class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <Card
+        v-for="s in statCards"
+        :key="s.label"
+        class="px-4 py-3"
+      >
+        <div class="text-xs text-muted-foreground">
+          {{ s.label }}
+        </div>
+        <div class="mt-1 text-2xl font-semibold tabular-nums" :class="s.accent">
+          {{ s.value }}
+        </div>
+      </Card>
+    </div>
+
     <div v-if="isLoading" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      <Card v-for="i in 6" :key="i" class="md:col-span-1">
+      <Card v-for="i in 6" :key="i">
         <CardHeader>
           <div class="h-4 w-1/2 animate-pulse rounded bg-muted" />
-          <div class="h-3 w-2/3 animate-pulse rounded bg-muted" />
+          <div class="mt-2 h-3 w-2/3 animate-pulse rounded bg-muted" />
         </CardHeader>
       </Card>
     </div>
 
     <div v-else-if="runs.length === 0" class="grid gap-4">
-      <Card class="md:col-span-2 lg:col-span-3">
-        <CardHeader>
-          <CardTitle>No runs yet</CardTitle>
-          <CardDescription>当前 repo 下还没有 run 实例。</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Card>
+        <CardContent class="py-10">
           <Empty>
             <EmptyContent>
-              <EmptyMedia variant="icon" />
-              <EmptyTitle>暂无可展示的 run</EmptyTitle>
-              <EmptyDescription>在 --repo 指向的仓库创建 run 后刷新。</EmptyDescription>
+              <EmptyMedia variant="icon">
+                <FolderOpenIcon class="size-10" />
+              </EmptyMedia>
+              <EmptyTitle>还没有运行记录</EmptyTitle>
+              <EmptyDescription>
+                在数据服务指向的仓库里创建运行后，这里会自动出现列表。
+              </EmptyDescription>
             </EmptyContent>
           </Empty>
         </CardContent>
@@ -89,36 +116,42 @@ function formatDate(iso: string) {
 
     <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       <Card
-        v-for="run in runs"
-        :key="run.run_id"
-        class="cursor-pointer transition-shadow hover:shadow-md"
-        @click="openRun(run.run_id)"
+        v-for="card in runCards"
+        :key="card.run.run_id"
+        class="group cursor-pointer transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+        @click="openRun(card.run.run_id)"
       >
         <CardHeader>
-          <div class="flex items-start justify-between gap-2">
-            <Badge :variant="statusVariant[run.status] ?? 'outline'">
-              {{ label(RUN_STATUS, run.status) }}
-            </Badge>
-            <Badge variant="secondary">
-              {{ label(RUN_SCALE, run.scale) }}
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="size-2 shrink-0 rounded-full" :class="card.status.dot" />
+              <Badge :variant="card.status.badge">
+                {{ card.status.label }}
+              </Badge>
+            </div>
+            <Badge variant="secondary" class="shrink-0">
+              {{ card.scale }}
             </Badge>
           </div>
-          <CardTitle class="break-all text-base">
-            {{ run.title || run.run_id }}
+          <CardTitle class="break-all text-base leading-snug">
+            {{ card.run.title || card.run.run_id }}
           </CardTitle>
-          <CardDescription class="font-mono text-xs">
-            {{ run.run_id }}
-          </CardDescription>
         </CardHeader>
-        <CardContent class="flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <Badge variant="outline">
-            {{ label(RUN_KIND, run.kind) }}
-          </Badge>
-          <span>启动于 {{ formatDate(run.created_at) }}</span>
-          <span>验收 {{ run.acceptance }} 项 · 产品要求 {{ run.product_acceptance }} 项</span>
-          <span v-if="isLoading" class="ml-auto">
-            <LoaderCircleIcon class="size-3 animate-spin" />
-          </span>
+        <CardContent class="space-y-3 text-xs text-muted-foreground">
+          <p v-if="card.status.description" class="text-muted-foreground/90">
+            {{ card.status.description }}
+          </p>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>{{ card.kind }}</span>
+            <span>{{ card.date }}</span>
+            <span>{{ card.meta }}</span>
+            <span
+              class="ml-auto inline-flex items-center gap-1 text-foreground/70 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+            >
+              查看详情
+              <ArrowRightIcon class="size-3.5" />
+            </span>
+          </div>
         </CardContent>
       </Card>
     </div>
