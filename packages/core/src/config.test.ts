@@ -168,15 +168,20 @@ test("C1: self_evolve.continuation conservative defaults (bounded 5, idle_sec 5 
   const c = getDefaultConfig().self_evolve.continuation;
   assert.equal(c.max_per_session, 5, "R2-C2: 默认有界 5，任务缺席会话不能无界烧 token");
   assert.equal(c.idle_sec, 300);
+  // R3-C1: 平台席默认 skip（无 task 会话不进候选），gate_commands 默认空（C2 预留关闭）
+  assert.equal(c.platform_seats, "skip", "R3-C1: 平台席默认不进候选");
+  assert.deepEqual(c.gate_commands, [], "R3-C2 预留：默认不启用 gate");
 });
 
 test("C1: continuation overridable via project yaml", () => {
   const dir = tmpRepoWithConfig(
-    "self_evolve:\n  continuation:\n    max_per_session: 10\n    idle_sec: 60\n",
+    "self_evolve:\n  continuation:\n    max_per_session: 10\n    idle_sec: 60\n    platform_seats: allow\n    gate_commands: ['npm test']\n",
   );
   const c = loadConfig(dir).self_evolve.continuation;
   assert.equal(c.max_per_session, 10);
   assert.equal(c.idle_sec, 60);
+  assert.equal(c.platform_seats, "allow");
+  assert.deepEqual(c.gate_commands, ["npm test"]);
   // untouched defaults survive the merge (bounded 5 default, R2-C2)
   assert.equal(getDefaultConfig().self_evolve.continuation.max_per_session, 5);
   assert.equal(getDefaultConfig().self_evolve.continuation.idle_sec, 300);
@@ -190,6 +195,9 @@ test("C1: validateConfig rejects invalid continuation values", () => {
     { max_per_session: 1.5 },
     { idle_sec: -1 },
     { idle_sec: 10.5 },
+    { platform_seats: "maybe" },
+    { gate_commands: "npm test" },
+    { gate_commands: [42] },
   ];
   for (const patch of patches) {
     const cfg = {
