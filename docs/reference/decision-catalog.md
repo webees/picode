@@ -577,3 +577,41 @@ untracked 内容 sha256 聚合），失败快照按 agent 持久化 run 目录 `
 前端派生（纯函数，可单测）；角色/房间通俗名以静态常量维护（同步来源在
 `role-meta.data.ts` 注释标注：人设 frontmatter / ROLE_PRIMARY_ROOM 约定 /
 terminology §3），面板不引入新端点、不改 API 契约。
+
+---
+
+## 14. 会话生命周期（run 收尾休眠 + 跨 run 残留审计，D072/D073）
+
+权威正文：[spec/17-agent-runtime.md](../spec/17-agent-runtime.md)（会话状态机）；
+机制实现 `packages/orchestrator/src/self-drive.ts`（`sleepPlatformSeats`/`closeRun`/guardianTick
+终态分支）+ `packages/orchestrator/src/session-audit.ts`（`deriveAuditReport`/`cleanResidual`）。
+
+### 14.1 收尾自动休眠（goal 终态平台席）
+
+|选项|说明|
+|------|------|
+|**终态自动休眠平台席（sleepPlatformSeats + closeRun）** ★|goal completed/cancelled 即休眠全部 awake 平台席（无 task 绑定会话），guardianTick 与 `goal set-status` 双触发点；幂等 best-effort|
+|仅人工清理|残留会话占满 max_awake，阻塞后续 run 唤醒（本次 run 前 product acceptance 未满足的根因）|
+
+**已定（D072）：自动休眠。** `closeRun` = 补发 TASK_DISSOLVED（幂等） + `sleepPlatformSeats`；
+平台席判定 = `taskIdOfAgent===null`。不引入规则表新事件，`setGoalStatus` 保持纯净。
+
+### 14.2 跨 run 残留审计与清理
+
+|选项|说明|
+|------|------|
+|**`session audit` 跨 run 审计 + `--clean` 清理（C2）** ★|`deriveAuditReport` 纯派生（逐 run goal_status/awake[]/residual + 跨 run 汇总 vs max_awake）；`cleanResidual` 对终态 run 残留调 C1 closeRun（best-effort）；`--run` 过滤单 run|
+|仅收尾自动休眠，无审计/清理手段|残留检查/清理只能人工翻 run 目录，无法判定 max_awake 是否被残留占满|
+
+**已定（D073）：`picode session audit --repo <path> [--clean] [--run <id>]`**（noRun，跨 run）。
+审计纯读零写（D039 延续）；`--clean` 依赖 C1 closeRun 原语（动态 import 延迟接通，未合并时报 NOT_FOUND）。
+
+### 14.3 残留审计的 max_awake 判定
+
+|选项|说明|
+|------|------|
+|**`residual_awake >= max_awake` → `max_awake_exhausted`** ★|跨 run 汇总终态 run 的 awake 会话总数，与 `sess_mgr.max_awake` 比较；运维据此决定是否 `--clean`|
+|仅列残留、不做汇总|无法一眼判定是否已阻塞后续 run 唤醒|
+
+**已定（D073）：汇总含 `max_awake_exhausted` 布尔。** 清理前后各跑一次
+`session audit` 对比，验证残留清空且非终态 run 不受影响。
