@@ -29,6 +29,7 @@ test("management surface covers the lifecycle verbs", () => {
     "memory_brief_write", "memory_brief_ack", "change_order_create", "knowledge_ingest",
     "evolve_write_paths", "evolve_log",
     "self_drive_tick", "self_drive_events", "progress_sweep",
+    "continuation_status", "continuation_feed",
   ]) {
     assert.ok(names.has(n), `management tool missing: ${n}`);
   }
