@@ -163,3 +163,39 @@ test("C1: validateConfig rejects invalid refine_gate values", () => {
     assert.throws(() => validateConfig(cfg as typeof base), Error, `expected rejection for ${JSON.stringify(patch)}`);
   }
 });
+
+test("C1: self_evolve.continuation conservative defaults (bounded refeed)", () => {
+  const c = getDefaultConfig().self_evolve.continuation;
+  assert.equal(c.max_per_session, 3);
+  assert.equal(c.idle_sec, 300);
+});
+
+test("C1: continuation overridable via project yaml", () => {
+  const dir = tmpRepoWithConfig(
+    "self_evolve:\n  continuation:\n    max_per_session: 10\n    idle_sec: 60\n",
+  );
+  const c = loadConfig(dir).self_evolve.continuation;
+  assert.equal(c.max_per_session, 10);
+  assert.equal(c.idle_sec, 60);
+  // untouched defaults survive the merge
+  assert.equal(getDefaultConfig().self_evolve.continuation.max_per_session, 3);
+  assert.equal(getDefaultConfig().self_evolve.continuation.idle_sec, 300);
+});
+
+test("C1: validateConfig rejects invalid continuation values", () => {
+  const base = getDefaultConfig();
+  const cont = base.self_evolve.continuation;
+  const patches: Array<Record<string, unknown>> = [
+    { max_per_session: -1 },
+    { max_per_session: 1.5 },
+    { idle_sec: -1 },
+    { idle_sec: 10.5 },
+  ];
+  for (const patch of patches) {
+    const cfg = {
+      ...base,
+      self_evolve: { ...base.self_evolve, continuation: { ...cont, ...patch } },
+    };
+    assert.throws(() => validateConfig(cfg as typeof base), Error, `expected rejection for ${JSON.stringify(patch)}`);
+  }
+});

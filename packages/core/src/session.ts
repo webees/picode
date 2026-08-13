@@ -14,6 +14,11 @@ export type SessionState = "registered" | "sleeping" | "awake" | "terminated";
 export interface SessionBudgetUsed {
   /** Wake-turn counter: incremented once per sleeping→awake transition. */
   turns: number;
+  /**
+   * C1 continuation: 自动续跑投喂计数（guardian 对空闲 awake 会话投喂一次
+   * 续跑 prompt 即 +1）。持久化在 session.yaml（N3：serve 重启/重 wake 不重置）。
+   */
+  continuations: number;
 }
 
 export interface SessionRecord {

@@ -61,6 +61,35 @@ test("C1: register seeds budget.turns=0 and each wake increments it", async () =
   assert.equal(store.get("pm")!.budget?.turns, 2, "wake 次数即 turn 数");
 });
 
+test("C1: register seeds budget.continuations=0 and recordContinuation increments it", async () => {
+  const store = freshStore();
+  const registered = store.register("pm", { initialState: "sleeping" });
+  assert.equal(registered.budget?.continuations, 0);
+  await store.recordContinuation("pm");
+  assert.equal(store.get("pm")!.budget?.continuations, 1);
+  await store.recordContinuation("pm");
+  assert.equal(store.get("pm")!.budget?.continuations, 2);
+});
+
+test("C1: wake/sleep preserves the continuation counter (N3 持久化)", async () => {
+  const store = freshStore();
+  store.register("pm", { initialState: "sleeping" });
+  await store.wake("pm", "a");
+  await store.recordContinuation("pm");
+  await store.sleep("pm", "a");
+  await store.wake("pm", "b");
+  const rec = store.get("pm")!;
+  assert.equal(rec.budget?.turns, 2);
+  assert.equal(rec.budget?.continuations, 1, "重 wake 不得重置续跑计数");
+});
+
+test("C1: recordContinuation on a missing session throws coded SESSION_NOT_FOUND", async () => {
+  await assert.rejects(() => freshStore().recordContinuation("ghost"), (e: unknown) => {
+    expectCode(e, ErrorCode.SESSION_NOT_FOUND);
+    return true;
+  });
+});
+
 test("attachPiSession requires awake state (coded ILLEGAL_STATE)", async () => {
   const store = freshStore();
   store.register("pm", { initialState: "sleeping" });
