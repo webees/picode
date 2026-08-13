@@ -70,14 +70,20 @@ function readTaskStatus(dir: string, taskId: string): string | null {
 }
 
 /**
- * 会话最近活动时刻：max(last_wake_at, 最近一条转录 ts)。续跑投喂也会写入
- * 转录，因此「投喂后 idle 时钟自动重置」——两次续跑之间至少间隔 idle_sec。
+ * 会话最近「回合完成」时刻（R3-C1 idle 时钟修复）：max(last_wake_at,
+ * 最近一条 incoming 转录 ts)。续跑投喂记录为 outgoing，不参与 idle 计算——
+ * 投喂（outgoing）不再重置 idle 时钟。因此 idle 时钟 = 响应时间，非投喂时间。
  */
-function lastActivityMs(dir: string, agentId: string, lastWakeAt: string | null): number {
+function lastRoundCompletedMs(
+  dir: string,
+  agentId: string,
+  lastWakeAt: string | null,
+): number {
   let max = lastWakeAt ? Date.parse(lastWakeAt) : 0;
   if (Number.isNaN(max)) max = 0;
   try {
     for (const e of new TranscriptStore(dir).read(agentId)) {
+      if (e.type !== "incoming") continue;
       const t = Date.parse(e.ts);
       if (!Number.isNaN(t) && t > max) max = t;
     }
@@ -85,6 +91,20 @@ function lastActivityMs(dir: string, agentId: string, lastWakeAt: string | null)
     /* transcript 损坏视为无活动记录 */
   }
   return max;
+}
+
+/**
+ * 会话是否 in-flight（R3-C1）：转录末条为 outgoing 且其后无 incoming →
+ * 长回合进行中（agent 投喂后尚未响应），不进入候选（不叠投）。
+ */
+function isRoundInFlight(dir: string, agentId: string): boolean {
+  try {
+    const entries = new TranscriptStore(dir).read(agentId);
+    return entries.length > 0 && entries[entries.length - 1].type === "outgoing";
+  } catch {
+    /* transcript 损坏视为无活动记录 */
+    return false;
+  }
 }
 
 /**
@@ -96,7 +116,9 @@ function lastActivityMs(dir: string, agentId: string, lastWakeAt: string | null)
  *   2. 无 error（出错会话由 serve 恢复路径处理，不叠投）
  *   3. 任务未终态（有 task 文件且 status ∈ TERMINAL_TASK_STATUSES 的跳过）
  *   4. 续跑预算未耗尽（continuations < max_per_session，0 = 不限）
- *   5. 空闲超过 idle_sec（最近活动在 now - idle_sec 之前）
+ *   5. 平台席（无 task 绑定会话）默认 skip（platform_seats="allow" 才进候选）
+ *   6. 无 in-flight 长回合（末条 outgoing 无响应 → 不投喂）
+ *   7. 空闲超过 idle_sec（最近回合完成在 now - idle_sec 之前，idle 时钟=响应时间）
  */
 export function deriveContinuationTargets(
   dir: string,
@@ -115,8 +137,11 @@ export function deriveContinuationTargets(
     if (taskId) {
       const status = readTaskStatus(dir, taskId);
       if (status && TERMINAL_TASK_STATUSES.has(status)) continue;
+    } else if (cont.platform_seats === "skip") {
+      continue;
     }
-    const idleMs = now.getTime() - lastActivityMs(dir, s.agent_id, s.last_wake_at);
+    if (isRoundInFlight(dir, s.agent_id)) continue;
+    const idleMs = now.getTime() - lastRoundCompletedMs(dir, s.agent_id, s.last_wake_at);
     if (idleMs < cont.idle_sec * 1000) continue;
     const sessionId = opencodeSessionIdOf(s.pi_session_id);
     if (!sessionId) continue;

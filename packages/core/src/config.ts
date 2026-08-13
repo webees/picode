@@ -169,6 +169,17 @@ export interface ContinuationConfig {
   max_per_session: number;
   /** 会话空闲超过 idle_sec 秒才投喂续跑（sweep 节流，防连发）。 */
   idle_sec: number;
+  /**
+   * 平台席（无 task 绑定会话，如 scout/sys-arch/run-lead）策略（R3-C1）：
+   * "skip"（默认）→ 不进候选（防无界空转烧 token）；"allow" → 进入但
+   * 仍受 max_per_session 有界（显式逃生）。
+   */
+  platform_seats: "allow" | "skip";
+  /**
+   * C2 预留（R3-C1 一次加字段避免 config 冲突）：续跑投喂前的 gate 验证
+   * 命令；默认空 = 不启用（行为与 C1 一致）。
+   */
+  gate_commands: string[];
 }
 
 /**
@@ -464,9 +475,13 @@ export const DEFAULTS: PicodeConfig = {
     // taskless/mis-assigned seat cannot burn tokens unboundedly (R2-C2);
     // idle_sec (5 min) spaces feeds so a session is never spammed within a
     // window. 0 = unlimited must be declared explicitly.
+    // R3-C1: platform_seats default "skip"（无 task 会话不进候选，防空转）；
+    // gate_commands 默认空（C2 预留，不启用 gate）。
     continuation: {
       max_per_session: 5,
       idle_sec: 300,
+      platform_seats: "skip",
+      gate_commands: [],
     },
   },
 };
@@ -683,6 +698,19 @@ export function validateConfig(config: PicodeConfig): void {
         `self_evolve.continuation.${key} must be a non-negative integer (0 = unlimited)`,
       );
     }
+  }
+  if (cont.platform_seats !== "allow" && cont.platform_seats !== "skip") {
+    configError(
+      'self_evolve.continuation.platform_seats must be "allow" or "skip" (R3-C1 platform-seat policy)',
+    );
+  }
+  if (
+    !Array.isArray(cont.gate_commands) ||
+    cont.gate_commands.some((c) => typeof c !== "string")
+  ) {
+    configError(
+      "self_evolve.continuation.gate_commands must be an array of command strings (R3-C2 gate)",
+    );
   }
 }
 

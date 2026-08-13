@@ -37,6 +37,17 @@ function patchSession(dir: string, agentId: string, patch: Record<string, unknow
   writeYamlFile(p, { ...rec, ...patch });
 }
 
+/** 追加一条转录记录（可控 ts，用于精确构造 idle 时钟时间线）。 */
+function appendTranscript(dir: string, agentId: string, entry: Record<string, unknown>): void {
+  const p = path.join(dir, "transcripts", `${agentId}.jsonl`);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.appendFileSync(
+    p,
+    JSON.stringify({ schema_version: "1", agent_id: agentId, ...entry }) + "\n",
+    "utf8",
+  );
+}
+
 /** 注册 + 唤醒 + 挂接 opencode 会话 + 回拨 last_wake_at。 */
 async function idleAwakeOcSession(
   dir: string,
@@ -49,6 +60,18 @@ async function idleAwakeOcSession(
   await store.wake(agentId, "test");
   await store.attachPiSession(agentId, `oc-${sesId}`);
   patchSession(dir, agentId, { last_wake_at: new Date(Date.now() - idleMsAgo).toISOString() });
+}
+
+/** 唤醒 createRun 已注册的平台席（scout/sys-arch 等）+ 挂接 opencode 会话 + 回拨 last_wake_at。 */
+async function idleAwakePlatformSession(
+  dir: string,
+  store: SessionStore,
+  agentId: string,
+  sesId: string,
+): Promise<void> {
+  await store.wake(agentId, "test");
+  await store.attachPiSession(agentId, `oc-${sesId}`);
+  patchSession(dir, agentId, { last_wake_at: new Date(Date.now() - 600_000).toISOString() });
 }
 
 /** opencode serve mock：POST /message 返回 parts；messageFailures 模拟瞬时超时。 */
@@ -366,6 +389,159 @@ test("C1-d: deriveContinuationTargets 纯函数 — 同输入同输出且不触�
       path.join(dir, "sessions", "engineer@task-x.yaml"),
     );
     assert.deepEqual(before, after, "纯函数不得写状态文件");
+  } finally {
+    restore();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// R3-C1-b：idle 时钟 = 回合完成时间（最近 incoming 响应 ts），投喂不重置；
+// 进行中回合（末条 outgoing 无后续 incoming）不进入候选、不投喂
+// ---------------------------------------------------------------------------
+
+test("R3-C1-b: 转录末条为 outgoing 且无后续 incoming（长回合进行中）→ 不产出候选且不投喂", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_r3_b1");
+  appendTranscript(dir, "engineer@task-x", {
+    type: "outgoing",
+    ts: new Date(Date.now() - 10_000).toISOString(),
+    text: "续跑投喂（进行中回合，尚无响应）",
+  });
+
+  const targets = deriveContinuationTargets(dir, config, new Date());
+  assert.deepEqual(targets, [], "进行中回合（in-flight）不得被选为续跑候选");
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    const res = await sweepContinuations(dir, config);
+    assert.deepEqual(res.fed, []);
+    assert.equal(messagePosts(calls).length, 0, "in-flight 回合不得投喂");
+  } finally {
+    restore();
+  }
+});
+
+test("R3-C1-b: idle 时钟 = 最近 incoming 响应时间（投喂 outgoing 不重置）；响应后空闲超 idle_sec 恢复候选", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_r3_b2", 600_000);
+  const now = Date.now();
+  // 回合序列：120s 前投喂（outgoing）、30s 前响应（incoming）
+  appendTranscript(dir, "engineer@task-x", {
+    type: "outgoing",
+    ts: new Date(now - 120_000).toISOString(),
+    text: "投喂（不应重置 idle 时钟）",
+  });
+  appendTranscript(dir, "engineer@task-x", {
+    type: "incoming",
+    ts: new Date(now - 30_000).toISOString(),
+    parts: [{ type: "text", text: "继续工作中" }],
+  });
+
+  // 若 idle 时钟 = 投喂时间（120s > 60s）应候选；实际 = 响应时间（30s < 60s）→ 不候选
+  assert.deepEqual(deriveContinuationTargets(dir, config, new Date(now)), []);
+
+  // 响应后空闲超 idle_sec（响应 70s 前）→ 恢复候选（idle 时钟 = 响应时间）
+  const later = new Date(now + 40_000);
+  assert.deepEqual(deriveContinuationTargets(dir, config, later), [
+    { agent_id: "engineer@task-x", session_id: "oc-ses_r3_b2" },
+  ]);
+});
+
+test("R3-C1-b: 投喂（outgoing）后无响应 → 长期保持 in-flight 不投喂（不回退到投喂时间）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_r3_b3", 600_000);
+  appendTranscript(dir, "engineer@task-x", {
+    type: "outgoing",
+    ts: new Date(Date.now() - 10 * 60_000).toISOString(),
+    text: "长回合进行中",
+  });
+
+  const targets = deriveContinuationTargets(dir, config, new Date());
+  assert.deepEqual(targets, [], "outgoing 10 分钟前也仍视为 in-flight（无响应），不得投喂");
+});
+
+// ---------------------------------------------------------------------------
+// R3-C1-c：平台席（无 task 绑定会话）默认 platform_seats=skip 不进候选；
+// "allow" 时进入但受 max_per_session 有界
+// ---------------------------------------------------------------------------
+
+test("R3-C1-c: 无 task 绑定会话（scout/sys-arch）默认 platform_seats=skip 不进候选且不投喂", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakePlatformSession(dir, store, "scout", "ses_r3_c1a");
+  await idleAwakePlatformSession(dir, store, "sys-arch", "ses_r3_c1b");
+
+  const targets = deriveContinuationTargets(dir, config, new Date());
+  assert.deepEqual(targets, [], "平台席默认（skip）不得被选为续跑候选");
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    const res = await sweepContinuations(dir, config);
+    assert.deepEqual(res.fed, []);
+    assert.equal(messagePosts(calls).length, 0, "平台席默认不得投喂");
+  } finally {
+    restore();
+  }
+});
+
+test("R3-C1-c: platform_seats=allow 时平台席进入候选但受 max_per_session 有界", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.platform_seats = "allow";
+  config.self_evolve.continuation.max_per_session = 2;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakePlatformSession(dir, store, "scout", "ses_r3_c2");
+
+  assert.deepEqual(
+    deriveContinuationTargets(dir, config, new Date()),
+    [{ agent_id: "scout", session_id: "oc-ses_r3_c2" }],
+    "allow 时平台席可被选为候选",
+  );
+
+  // 预算耗尽 → 有界拦截（回归 R2-C1-c 预算门）
+  patchSession(dir, "scout", { budget: { turns: 1, continuations: 2 } });
+  assert.deepEqual(
+    deriveContinuationTargets(dir, config, new Date()),
+    [],
+    "预算耗尽不得选为候选",
+  );
+});
+
+test("R3-C1-d: deriveContinuationTargets 纯函数 — 平台席 + in-flight 场景同输入同输出且不触碰网络", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakePlatformSession(dir, store, "scout", "ses_r3_d1");
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_r3_d2");
+  appendTranscript(dir, "engineer@task-x", {
+    type: "outgoing",
+    ts: new Date(Date.now() - 5_000).toISOString(),
+    text: "进行中",
+  });
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    const now = new Date();
+    const a = deriveContinuationTargets(dir, config, now);
+    const b = deriveContinuationTargets(dir, config, now);
+    assert.deepEqual(a, b, "同输入必须同输出");
+    assert.deepEqual(a, [], "平台席 skip + in-flight 均不候选");
+    assert.equal(calls.length, 0, "纯函数不得发起网络请求");
   } finally {
     restore();
   }

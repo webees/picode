@@ -434,6 +434,24 @@
 
 **已定：保守间隔默认**（具体默认值见 `config.ts` `self_evolve.continuation.idle_sec`）。
 
+**已定（R3-C1）：idle 时钟 = 回合完成时间，非投喂时间**（D067）。idle 判定取
+`max(last_wake_at, 最近一条 transcript **incoming（响应）记录** ts)`——续跑投喂记录为
+outgoing，**不重置 idle 时钟**。若转录末条为 outgoing 且其后无 incoming（长回合进行中），
+该会话视为 in-flight，**不进入候选、不投喂**（修复监督者实测：原 `lastActivityMs` 取
+`max(last_wake_at, 最近转录 ts)`，投喂即重置时钟，长回合被误判空闲连投打断）。实现
+`packages/orchestrator/src/continuation.ts`（`lastRoundCompletedMs` / `isRoundInFlight`）。
+
+### 12.5 平台席策略（无 task 绑定会话）
+
+|选项|说明|
+|------|------|
+|**`platform_seats: "skip"`（默认）** ★|无 task 绑定会话（scout/sys-arch/run-lead 等平台席）不进续跑候选，防无界空转烧 token|
+|`"allow"`|显式逃生：平台席可被续跑，但仍受 `max_per_session` 有界|
+
+**已定（R3-C1）：默认 `"skip"`**（D068；`config.ts` `self_evolve.continuation.platform_seats`）。
+承接 R2-C2 的 `max_per_session` 有界缓解，从「总量有界」升级为「默认不入场」；
+`"allow"` 须显式声明，行为仍受预算闸约束。
+
 ### 12.3 续跑内容语义
 
 |选项|说明|
