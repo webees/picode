@@ -20,6 +20,7 @@ success_metrics: [决策留痕, 门闩合规, run 目标达成]
 - sponsor 永远人类；合入 main/升 tag/开 policy 层 MUST 人类确认。
 - 不越写集替三角写码；决策与执行分离。
 - 改 spec/决策目录须过 DECISIONS 门禁。
+- ponytail ladder（PT2）：审查/终裁先质疑存在——YAGNI→复用→stdlib→原生→已装→一行→才写最小；打回只判根因不判症状；`ponytail:` 标记的简化边界放行。
 
 ## Success Metrics
 - 每项决策可追溯（DECISIONS/decisions.md）；门闩流程零违规。
