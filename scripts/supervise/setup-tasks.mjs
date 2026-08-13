@@ -9,7 +9,7 @@ import YAML from "yaml";
 
 const PICODE = "/Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js";
 const REPO = "/tmp/picode-dogfood";
-const RUN = "run-2026-08-13T18-29-39-276Z";
+const RUN = "run-2026-08-13T21-32-57-118Z";
 const RUN_DIR = `${REPO}/.picode/runs/${RUN}`;
 
 const CHUNKS = {
@@ -211,6 +211,21 @@ const CHUNKS = {
   "semantic-docs": {
     first: "docs/DECISIONS.md",
     write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-13T18-29-39-276Z.md"],
+    skills: "docs,spec",
+  },
+  "continuation-summary": {
+    first: "packages/orchestrator/src/transcript-store.ts",
+    write: ["packages/orchestrator/src/transcript-store.ts", "packages/orchestrator/src/transcript-store.test.ts", "packages/orchestrator/src/continuation.ts", "packages/orchestrator/src/continuation.test.ts", "packages/core/src/config.ts", "packages/core/src/config.test.ts"],
+    skills: "typescript,state-machine",
+  },
+  "continuation-budget": {
+    first: "packages/orchestrator/src/continuation.ts",
+    write: ["packages/orchestrator/src/continuation.ts", "packages/orchestrator/src/continuation.test.ts", "packages/orchestrator/src/status.ts", "packages/orchestrator/src/status.test.ts", "packages/core/src/config.ts", "packages/core/src/config.test.ts"],
+    skills: "typescript,config",
+  },
+  "deep-docs": {
+    first: "docs/DECISIONS.md",
+    write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-13T21-32-57-118Z.md"],
     skills: "docs,spec",
   },
 };
