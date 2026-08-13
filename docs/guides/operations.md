@@ -117,3 +117,50 @@
 ### 为何不热载
 
 守护长时运行，代码（dist）在启动时 import 进内存；就地替换文件不会生效。真正的热载需重 import 模块并重入循环——中途退出会让当前 tick 半途而废，破坏会话状态机（「无 daemon」不变量）。合并→重启是最小闭环：一次重启即热载新代码、重置基线、恢复观测。
+
+## 监控面板（Dashboard，D070）运维
+
+面板 = `packages/dashboard-server`（只读 HTTP）+ `packages/dashboard`（前端 UI）。数据源 = `.picode/runs` YAML（文件真相 D002）+ opencode serve 实时 tokens（D058）。面板**只读**：全部 GET、无写、无 daemon、不持锁。
+
+### 前置
+
+- Node `>=20`（server）；前端另需 Node `>=22.15` + pnpm `>=10`
+- server 依赖主仓 build：`npm run build`（含 `@picode/dashboard-server`）
+- serve 在线（tokens 实时页才有值；`opencode.base_url` 缺省 `http://127.0.0.1:7788`）
+
+### 起后端（dashboard-server）
+
+```bash
+# 指向任意真实 run 仓（--repo 默认 cwd；读其 .picode/config.yaml 的 runs_root 与 opencode.base_url）
+node packages/dashboard-server/dist/index.js --repo /private/tmp/picode-dogfood
+# 默认监听 http://127.0.0.1:8788；换端口：--port 9000
+```
+
+冒烟验证：
+
+```bash
+curl -s localhost:8788/api/runs                 # run 列表（含当前 run id）
+curl -s localhost:8788/api/runs/<runId>         # goal + run.yaml + statusSnapshot
+curl -s localhost:8788/api/live/<runId>/<agent> # {ok,tokens:{total,input,output},at}；serve 失联 → {ok:false,error}
+```
+
+### 起前端（dashboard）
+
+```bash
+cd packages/dashboard && pnpm install && pnpm dev   # Vite 5173，dev proxy /api → 127.0.0.1:8788
+```
+
+浏览器打开 `http://localhost:5173/dashboard` → 选择 run → 六面板（概览 goal / chunks / 任务看板 / 会话+tokens 实时 / merge 列车 / 门禁 evidence·E4）。
+
+### 观察 tokens 活跃度
+
+- 前端会话页按 `refetchInterval`（2–5s）轮询 `/api/live/:runId/:agent`；tokens = 最近一条 assistant 消息的 `info.tokens.total`（serve 契约 D058）
+- serve 失联 / 会话未挂 serve（无 `pi_session_id`）→ 面板显示降级提示（`{error}`），不白屏
+- 排查顺序：`picode status` → serve 日志 `/tmp/opencode-serve.log` → serve 是否在线（`curl 127.0.0.1:7788/`）→ 会话 `pi_session_id` 是否存在（`sessions/<agent>.yaml`）
+
+### 排查清单
+
+1. `curl localhost:8788/api/runs` 非 200？server 未起或 `--repo` 错（`npm run build` 先行）
+2. 前端页面空态/报错？`pnpm dev` 是否在跑；proxy 是否指向 8788（vite.config.ts）；CORS 兜底已开
+3. tokens 列为空？serve 未在线或该会话无 `oc-` serve 会话（D044）；`/api/live` 返回 `{ok:false,error}` 即说明
+4. 端口冲突？server 换 `--port` 后需同步改 `packages/dashboard/vite.config.ts` 的 proxy target

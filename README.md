@@ -24,6 +24,30 @@ npm install && npm run build && npm test
 |`@picode/bus`|token + 房间 ACL|
 |`@picode/orchestrator`|状态机 CLI|
 |`@picode/pi-extension`|Pi 工具扩展|
+|`@picode/dashboard-server`|只读监控面板后端（node:http，9 端点）|
+|`@picode/dashboard`|监控面板前端（Vue3+Vite+shadcn-vue，自包含 pnpm）|
+
+## 监控面板（Dashboard）
+
+只读监控面板，直观展示 run 工作细节（goal / chunks / 任务看板 / 会话 + tokens 活跃度 / merge 列车 / 门禁 evidence）。数据源 = `.picode/runs` YAML + opencode serve 实时 tokens。
+
+### 前置
+
+- Node `>=20`（server）、Node `>=22.15` + pnpm `>=10`（前端）
+
+### 安装与运行
+
+```bash
+npm install && npm run build   # 主仓（含 dashboard-server）
+
+# 起后端（--repo 指向任意真实 run 仓，默认 cwd）
+node packages/dashboard-server/dist/index.js --repo <path-to-repo>
+
+# 起前端（另开终端）
+cd packages/dashboard && pnpm install && pnpm dev
+```
+
+打开 `http://localhost:5173/dashboard` 选择 run 即可。详见 [docs/guides/operations.md](./docs/guides/operations.md) 面板运维节与 [docs/DECISIONS.md](./docs/DECISIONS.md) D070。
 
 ## 状态
 

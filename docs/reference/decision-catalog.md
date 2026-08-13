@@ -490,3 +490,67 @@ untracked 内容 sha256 聚合），失败快照按 agent 持久化 run 目录 `
 |------|------|
 |**guardian 周期性 sweep（无 daemon）** ★|续跑 sweep 内嵌 guardianTick（checkBudgets 之后、probeServeHealth 之前）；无常驻进程|
 |daemon/worker 常驻|违背「无 daemon、状态文件化」（sys-arch 评估），不采用|
+
+---
+
+## 13. 监控面板（Dashboard，D070）
+
+权威正文：[spec/13-configuration.md](../spec/13-configuration.md)（`runs_root`/`opencode.base_url`）；
+机制实现 `packages/dashboard-server`（只读 HTTP）+ `packages/dashboard`（前端 UI）。
+
+### 13.1 包布局
+
+|选项|说明|
+|------|------|
+|**两包分置 monorepo（前端 + 只读后端）** ★|`packages/dashboard`（Vue3+Vite+shadcn-vue）+ `packages/dashboard-server`（`node:http` 零框架）|
+|单包合并|前端重依赖拖慢后端 build/test，职责不分|
+|后端并入 orchestrator|无独立重启/端口面，监视工具与编排耦合|
+
+**已定（D070）：两包分置。** 前端独立 pnpm，后端 npm workspace 成员。
+
+### 13.2 包管理器分离
+
+|选项|说明|
+|------|------|
+|**server=npm 成员，前端=自包含 pnpm** ★|根 `workspaces` 显式五包+server 排除前端（npm 无 `!` 排除）；E4 对前端 `pnpm -C packages/dashboard build` 显式验收|
+|前端并入 npm 根安装|vue-tsc 需 TS6.0.3 而主仓 TS5.8.2，冲突 + 重型依赖拖慢根 gate|
+|全部 pnpm|主仓 E4 gate=`npm run build` 由 merge 机械执行，切 pnpm 需全量迁移|
+
+**已定（D070）：分离。** 根 build/test 覆盖 server；前端独立 `pnpm install/build/dev`。
+
+### 13.3 后端形态（只读投影复用）
+
+|选项|说明|
+|------|------|
+|**轻量只读 HTTP + 复用 orchestrator 纯读投影** ★|直接 import `statusSnapshot`/`buildBoard`/`readMergeQueue`/`readProgress`/`readGoal`（D039 只读无锁）+ `@picode/core`（loadConfig/readYamlFile/runsRoot/runDir）；面板 = 薄 HTTP 包装，避免第二份解析逻辑|
+|后端重新解析 YAML|知识重复，与 01/04 解析漂移风险|
+|写操作面板（POST 编排）|违背「无 daemon、面板只读」不变量，不采用|
+
+**已定（D070）：投影复用。** 全部 GET、无副作用、不持锁。
+
+### 13.4 路由面（9 端点，全部 GET）
+
+|端点|内容|
+|------|------|
+|`GET /api/runs`|列 run（id + goal 摘要：status/scale/title/kind/created/acceptance 计数）|
+|`GET /api/runs/:id`|goal + run.yaml + statusSnapshot（goal/sessions/tasks/merge_queue/continuation 遥测）|
+|`GET /api/runs/:id/board`|buildBoard 7 列看板卡片 + `columns`|
+|`GET /api/runs/:id/chunks`|chunks.yaml 原样（缺省 `{chunks: []}`）|
+|`GET /api/runs/:id/tasks`|逐任务 task.yaml + brief/staffing latch + progress + evidence|
+|`GET /api/runs/:id/sessions`|会话表（SessionStore.list）+ continuation 遥测段（D069）|
+|`GET /api/runs/:id/merge`|merge_queue.jsonl 全量 + 计数（queued/merged/failed）|
+|`GET /api/runs/:id/gates`|gates/ 门禁文件 + 各任务 evidence（E4/E6）|
+|`GET /api/live/:runId/:agent`|代理 serve `GET /session/{id}/message` → 抽 `info.tokens.total/input/output`（`oc-` 前缀剥离）；serve 失联/超时（5s ERR-01）→ `{error}` 不挂死|
+
+**已定（D070）：9 端点全只读 JSON。** 实现 `packages/dashboard-server/src/router.ts`。
+
+### 13.5 运行方式
+
+|选项|说明|
+|------|------|
+|**server + 前端分别启动，Vite proxy 联调** ★|server `node packages/dashboard-server/dist/index.js --repo <path>`（默认 8788）；前端 `cd packages/dashboard && pnpm dev`（Vite 5173，proxy `/api` → 127.0.0.1:8788 免 CORS）|
+|SSE/WebSocket 推流|serve 无推送契约（D058），轮询最稳（tokens 页 `refetchInterval` 2–5s）|
+|打包部署|本地只读工具，不做部署（第二轮）|
+
+**已定（D070）：本地双进程 + 轮询。** `--repo` 默认 cwd，读 `.picode/config.yaml` 的
+`runs_root` 与 `opencode.base_url`，可指向任意真实 run 仓（dogfood 克隆等）。
