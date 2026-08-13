@@ -9,7 +9,7 @@ import YAML from "yaml";
 
 const PICODE = "/Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js";
 const REPO = "/tmp/picode-dogfood";
-const RUN = "run-2026-08-13T09-36-28-520Z";
+const RUN = "run-2026-08-13T12-16-26-548Z";
 const RUN_DIR = `${REPO}/.picode/runs/${RUN}`;
 
 const CHUNKS = {
@@ -135,6 +135,39 @@ const CHUNKS = {
     ],
     skills: "docs,spec",
   },
+  "dashboard-server": {
+    first: "packages/dashboard-server/src/index.ts",
+    write: [
+      "packages/dashboard-server/**",
+      "package.json",
+      "tsconfig.json",
+    ],
+    skills: "typescript,http,node",
+  },
+  "dashboard-scaffold": {
+    first: "packages/dashboard/package.json",
+    write: ["packages/dashboard/**"],
+    skills: "vue,vite,typescript,tailwind",
+  },
+  "dashboard-pages": {
+    first: "packages/dashboard/src/services/api/picode.api.ts",
+    write: [
+      "packages/dashboard/src/services/**",
+      "packages/dashboard/src/pages/dashboard/**",
+    ],
+    skills: "vue,tanstack,typescript",
+  },
+  "dashboard-docs": {
+    first: "docs/DECISIONS.md",
+    write: [
+      "docs/DECISIONS.md",
+      "docs/reference/decision-catalog.md",
+      "docs/guides/operations.md",
+      "README.md",
+      "docs/knowledge/evolve/run-2026-08-13T12-16-26-548Z.md",
+    ],
+    skills: "docs,spec",
+  },
 };
 
 function picode(args) {
@@ -168,7 +201,14 @@ function patchWritePaths(chunkId, paths) {
   return taskId;
 }
 
+// 每次装配的 chunk 白名单（按 run 指定；防历史 chunk 累积污染新 run）
+const RUN_CHUNKS = (process.env.RUN_CHUNKS ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 for (const [chunkId, spec] of Object.entries(CHUNKS)) {
+  if (RUN_CHUNKS.length > 0 && !RUN_CHUNKS.includes(chunkId)) continue;
   console.log(`=== ${chunkId} ===`);
   // 1. chunk add（幂等：chunks.yaml 已存在该 chunk 则跳过）
   const chunksYaml = YAML.parse(fs.readFileSync(`${RUN_DIR}/chunks.yaml`, "utf8"));
