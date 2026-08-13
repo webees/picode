@@ -150,7 +150,27 @@ curl -s localhost:8788/api/live/<runId>/<agent> # {ok,tokens:{total,input,output
 cd packages/dashboard && pnpm install && pnpm dev   # Vite 5173，dev proxy /api → 127.0.0.1:8788
 ```
 
-浏览器打开 `http://localhost:5173/dashboard` → 选择 run → 六面板（概览 goal / chunks / 任务看板 / 会话+tokens 实时 / merge 列车 / 门禁 evidence·E4）。
+浏览器打开 `http://localhost:5173/dashboard` → 选择 run → 详情页 9 视图（概览 / 进度 / 房间 / 人员 / 分块 / 看板 / 会话+tokens 实时 / 合并 / 门禁）。总览页即 run 列表 + 统计条。
+
+### 三视图数据来源（进度/房间/人员，D071-4/D071-5）
+
+三视图**不新增端点**，全部由既有 9 端点派生；`dashboard-server` 零改动。数据不准确时先查源端点，再查前端派生：
+
+|视图|数据源|派生|
+|------|------|------|
+|进度|`/api/runs/:id/tasks`（`progress` 段）|`deriveProgress`：逐任务 phase/blocked/summary/updated_at + in-flight/受阻计数（`views.data.ts`）|
+|房间|statusSnapshot `rooms`（消息数）+ `/tasks`（`work_room`/`triad`）|`deriveRooms`：squad 房按 task 派生成员；平台房按 ROLE→ROOM 约定（`role-meta.data.ts` ROOM_META）|
+|人员|`/api/runs/:id/sessions` + `/tasks`（`triad`）|`derivePersonnel`：平台席（sessions）+ 任务三角席（triad）|
+
+- 角色/房间通俗名与阶段映射 = 前端静态知识常量 `role-meta.data.ts`（同步来源见文件注释：人设 frontmatter / ROLE_PRIMARY_ROOM / terminology §3）；上游成员表/人设描述变更时需同步该文件
+- 单测守护：`packages/dashboard/src/pages/dashboard/runs/[runId]/__tests__/views.test.ts` fixture 断言派生纯函数；改派生须同步测试
+
+### Dashboard 设计约定（D071）
+
+- **语义状态色**：状态一律用 token（`--status-success/warning/danger/info`）或 `@/utils/labels` 的色点映射，禁止硬编码色值；浅深色均满足 WCAG AA ≥4.5:1
+- **域组件复用**：新页面组件优先用 `components/dashboard/`（StatCard/StatusBadge/SectionCard/EmptyState/ErrorState/Skeleton*）；加载态用骨架屏而非 spinner；`--radius` 统一 0.5rem
+- **文案**：面板文案中文通俗，走 `@/utils/labels` 单一事实源（RUN_STATUS/RUN_KIND/RUN_SCALE），不写机器化/英文拼接
+- **只读不变量**：展示层只派生不改数据；新增数据需求先评估既有端点派生，不新增端点（D070 只读投影契约）
 
 ### 观察 tokens 活跃度
 

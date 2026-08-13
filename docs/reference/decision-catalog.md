@@ -554,3 +554,26 @@ untracked 内容 sha256 聚合），失败快照按 agent 持久化 run 目录 `
 
 **已定（D070）：本地双进程 + 轮询。** `--repo` 默认 cwd，读 `.picode/config.yaml` 的
 `runs_root` 与 `opencode.base_url`，可指向任意真实 run 仓（dogfood 克隆等）。
+
+### 13.6 视觉检修（D071）
+
+|选项|说明|
+|------|------|
+|**语义状态色 token + 域组件层 + 三视图派生** ★|D071：`--status-success/warning/danger/info` + 边框/阴影 token + `components/dashboard` 域组件（StatCard/StatusBadge/SectionCard/EmptyState/ErrorState/Skeleton*）；总览/详情页统一复用|
+|各页手写样式/硬编码状态色|样式漂移、无一致性（检修前的「丑/晦涩」根因）|
+
+**已定（D071）：统一 token + 域组件。** 语义状态色浅深色均满足 WCAG AA ≥4.5:1；
+`--radius` 统一 0.5rem（修 :root 双 radius 冲突）；默认主题精修蓝强调色（zinc 基础）。
+
+### 13.7 三视图数据派生方式（D071-4/D071-5，零端点改动）
+
+|选项|说明|
+|------|------|
+|**既有 9 端点派生纯函数 + 静态知识常量** ★|`views.data.ts`（`derivePersonnel/deriveRooms/deriveProgress`）由 `/tasks` + `/sessions` + statusSnapshot 响应派生，`views.test.ts` fixture 断言；角色/房间/阶段静态知识落 `role-meta.data.ts`（ROLE_META/ROOM_META/PHASE_META），`dashboard-server` 与 9 端点零改动|
+|新增专用端点（如 /api/runs/:id/rooms）|改动 server、破坏 D070 只读投影契约，不采用|
+|前端直读 `members.json` / 人设文件|引入文件系统耦合，面板只读约定下不采用|
+
+**已定（D071）：派生纯函数 + 静态知识。** 三视图数据全部由既有 9 端点响应在
+前端派生（纯函数，可单测）；角色/房间通俗名以静态常量维护（同步来源在
+`role-meta.data.ts` 注释标注：人设 frontmatter / ROLE_PRIMARY_ROOM 约定 /
+terminology §3），面板不引入新端点、不改 API 契约。
