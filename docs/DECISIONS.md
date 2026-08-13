@@ -78,6 +78,7 @@
 |D073|**session audit 跨 run 会话残留审计与清理**（C2）：`deriveAuditReport` 纯派生（逐 run 读 goal.status + SessionStore，输出 residual 标记 + 跨 run 汇总 vs max_awake）+ `cleanResidual` 执行器（对终态 run 残留调 C1 closeRun 原语，动态 import 延迟接通，best-effort 单 run 失败不阻断）；CLI `session audit [--clean] [--run]`（noRun 跨 run）|
 |D074|**C2 验收 test 目标修正（处置记录）**：chunk acceptance `<project-test-command>` 占位符在 QA 阶段具体化为 `cli.test` 注册断言（`picode session audit` 入 --help 命令表）+ `session-audit.test` 派生/执行/失败容错断言，371 测试全绿；验收口径由占位符修正为具体断言，实现据此补齐 test 目标|
 |D075|**`session audit --clean` 端到端实测延后（处置记录）**：C2 验收仅单测覆盖派生 + cleanResidual 注入 closeRun 失败容错；`--clean` 对真实终态 run 的端到端清理延后至 C3 后由监督者执行（证据注明），不改变 C1/C2 语义|
+|D076|**语义续跑（N7 升级）**：续跑 prompt 注入上一回合要点摘要——`feedContinuation` 改用 `composeContinuationPrompt`（固定指令 + `TranscriptStore.historySummary()` 确定性启发式要点，无 LLM）；摘要为 null（空/损坏转录）回退固定 `CONTINUATION_PROMPT`；数据源仅复用既有 `transcripts/<agent>.jsonl`（**零新增数据源**）；预算/幂等/纯函数语义不回归|
 
 ## 开放
 
@@ -194,4 +195,15 @@
 - 2026-08-14 · 来源：task-session-audit evidence（`--clean 实测待 C3 后跑（监督者执行）`）
 - 事实：C2 单测覆盖 deriveAuditReport 派生 + cleanResidual 注入 closeRun 失败容错，但未对真实终态 run 做 `--clean` 端到端实测；延后至 C3（lifecycle-docs）合并后由监督者执行
 - 处置：端到端验证列入 C3 收尾清单；行为语义不受影响（cleanResidual 依赖 C1 closeRun 原语）
+
+## D076 — 语义续跑：续跑 prompt 注入上一回合要点摘要（composeContinuationPrompt + historySummary）
+- 2026-08-14 · 来源：run-lead 自治规划 run-2026-08-13T18-29-39-276Z（N7 升级，宽松目标）
+- 问题：D066 续跑投喂为固定模板（`CONTINUATION_PROMPT`），空泛且不携带上一回合上下文——长回合任务续跑时 agent 需自行从任务文件/转录回忆进度，易重复或遗漏，且与「无 LLM」边界未冲突但语义增益有限
+- 决定：
+  - `composeContinuationPrompt`：续跑 prompt = 固定指令 + 上一回合要点摘要（`TranscriptStore.historySummary(agentId)`，确定性启发式：条数统计 + 最近 `maxEntries` 条可读要点、截断 120 字；**无 LLM**——编排器无 LLM 不变量，D003）
+  - `feedContinuation` 投喂前取摘要注入；摘要为 **null**（空转录 / 文件损坏 / 无内容）→ 回退固定 `CONTINUATION_PROMPT`（best-effort，不报错不空注入）
+  - **零新增数据源**：摘要源自既有 `transcripts/<agent>.jsonl`（D066/P4 转录归档），不新增文件、接口、配置；re-spawn（wakeWithOpencode）同款消费已在 D066 路径复用（transcript-store.ts `historySummary`）
+  - 不回归：预算（`max_per_session`）/幂等（noReply + 计数）/纯函数（`deriveContinuationTargets` 读文件无网络）语义不变；平台席策略、idle 时钟、in-flight 判定不受影响
+- 实现：`packages/orchestrator/src/continuation.ts`（`composeContinuationPrompt` + `feedContinuation` 接线）、`transcript-store.ts` `historySummary` 复用
+- 边界：摘要为启发式要点（统计 + 截断），非 LLM 精炼；语义续跑不改变候选派生与投喂节奏
 - 纪律强化：跨 chunk 延后的验收动作须在收尾 task（docs/knowledge）显式列明执行人与时机，避免残留检查缺位

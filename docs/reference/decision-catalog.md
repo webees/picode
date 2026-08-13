@@ -481,8 +481,15 @@ untracked 内容 sha256 聚合），失败快照按 agent 持久化 run 目录 `
 |选项|说明|
 |------|------|
 |**固定模板 + 现有任务上下文** ★|复用 ready 消息角色/任务上下文 + 固定「继续推进或报告完成」模板；不 LLM 生成指令（编排器无 LLM）|
-|transcript 摘要注入（P4 historySummary）|语义续跑，第二轮候选|
+|**transcript 摘要注入（P4 historySummary）** ★|语义续跑：续跑 prompt 含上一回合要点摘要；确定性启发式、无 LLM；摘要为 null（空/损坏转录）回退固定模板|
 |LLM 动态生成指令|违背「编排器无 LLM」，不采用|
+
+**已定（D076）：固定模板 + transcript 摘要注入双轨。** 续跑 prompt 由
+`composeContinuationPrompt` 组合——固定指令 + `TranscriptStore.historySummary()`
+（`transcripts/<agent>.jsonl` 派生，条数统计 + 最近 `maxEntries` 条可读要点、截断 120 字，
+确定性启发式、**无 LLM**，D003）；摘要为 null 时回退固定 `CONTINUATION_PROMPT`（best-effort，
+不报错不空注入）。**零新增数据源**：摘要源自 D066 既有转录归档，不新增文件/接口/配置；
+re-spawn（wakeWithOpencode）同款消费已复用。预算/幂等/纯函数语义不回归。
 
 ### 12.4 进程形态
 

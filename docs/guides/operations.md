@@ -32,7 +32,9 @@
 
 ## 续跑（continuation，D066）
 
-续跑 = guardian 对「已 awake ∧ 无 error ∧ 任务未终态 ∧ 预算未耗尽 ∧ 空闲超 `idle_sec`」的 opencode 会话按 D061 noReply 语义投喂固定续跑 prompt。全部状态落盘、幂等、可恢复。
+续跑 = guardian 对「已 awake ∧ 无 error ∧ 任务未终态 ∧ 预算未耗尽 ∧ 空闲超 `idle_sec`」的 opencode 会话按 D061 noReply 语义投喂续跑 prompt。全部状态落盘、幂等、可恢复。
+
+续跑 prompt 含上一回合要点摘要（`transcripts/<agent>.jsonl` 启发式派生，无 LLM，D076）；摘要为 null（空/损坏转录）回退固定模板。转录归档因此也是语义续跑的唯一数据源。
 
 ### 观察续跑状态
 
