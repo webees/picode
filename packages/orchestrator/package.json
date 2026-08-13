@@ -9,7 +9,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node --test dist/*.test.js"
+    "test": "node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
     "@picode/core": "0.1.0",
