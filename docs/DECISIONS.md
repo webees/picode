@@ -69,6 +69,9 @@
 |D064|**picode 提供 MCP 服务器（stdio · 全量工具面）**：新增 `@picode/mcp-server`——编排面（~36 工具，直接包装 orchestrator store 函数，门闩/锁/不变量全保留）+ 执行面（pi-extension 20 工具 1:1，ACL 六层全保留：profile+token+房间+路径+state 白名单+allowlist 边界）。传输 stdio（`PICODE_REPO` 指定仓库）；执行面逐调用注入 env + 重捕获工具表（与 harness/opencode 插件同款模式），token 由服务器代签（`issueToken` + run secret.txt/dev-secret 兜底），transport 参数 `_` 前缀与工具参数分离。副作用工具（session_wake/sleep/terminate、task_prepare、merge_process、task_dissolve）在描述中显式标注。HTTP/SSE 传输与 resources 留待后续|
 |D065|**sponsor 信息投喂入口（intake）**：sponsor 任意时刻投喂（一条信息/想法/链接/文档），状态机 `add → triage → close`；落盘 `runs/<id>/intake/feed-*.yaml`（from=sponsor/ts/type/body）；分诊由 run-lead 会话决策或规则按 type 转对应角色（需求→product/run-lead；研究→ind-res；文档→docs cell；问题→run-lead 拆卡）；分发走 bus 通知 + 唤醒；处理结果回执 sponsor|
 |D066|**会话续跑机制（continuation）**：对「已 awake ∧ 无 error ∧ 任务未终态 ∧ 预算未耗尽 ∧ 空闲超 `idle_sec`」的 opencode 会话，guardian 机械层按 D061 noReply 语义投喂**固定续跑 prompt**（复用 ready 消息角色/任务上下文 + 固定「继续推进或报告完成」模板）；预算 `self_evolve.continuation.max_per_session`（0=不限，保守默认）+ 每会话 `budget.continuations` 计数持久化（文件真相，D002），耗尽即停，靠既有 idle-sleep/budgets 停靠；断连经 P1 恢复重投喂 ready 后从持久化计数续发（不重算不超发）。**边界：不引入 daemon（N4 缓）、不 LLM 生成续跑指令（N7 缓）**；语义续跑（transcript 摘要注入）列第二轮|
+|D067|**续跑 idle 时钟 = 回合完成时间，非投喂时间**（R3-C1 修监督者实测缺陷）：idle 判定取 `max(last_wake_at, 最近一条 transcript **incoming（响应）记录** ts)`，续跑投喂记录为 outgoing **不重置 idle 时钟**；转录末条为 outgoing 且其后无 incoming（长回合进行中）视为 **in-flight，不进入候选、不投喂**。根因：原 `lastActivityMs` 取 `max(last_wake_at, 最近转录 ts)` 而转录含 outgoing，每次投喂立即重置 idle 时钟，noReply 长回合被误判空闲连投打断（实测 run-lead 被连投 4 次排队）。实现 `continuation.ts`（`lastRoundCompletedMs` / `isRoundInFlight`），纯函数不变|
+|D068|**平台席策略 + 续跑 gate 可选接入**（R3-C1/C2）：`self_evolve.continuation.platform_seats` 默认 `"skip"`——无 task 绑定会话（scout/sys-arch/run-lead 等平台席）不进续跑候选，根治 E6「平台席无界空转」gap（R2-C2 仅 `max_per_session` 有界缓解）；`"allow"` 显式逃生仍受预算闸约束。`self_evolve.continuation.gate_commands` 默认 `[]`（不启用）——启用时续跑投喂前跑 gate（有界超时，借鉴 prime-agent `captureGitWorktreeSnapshot`：git status + diff HEAD + untracked 聚合）；**上次失败快照与当前一致 → 不重跑不投喂**（防没改代码反复重跑），gate 通过 → 停靠不投喂；失败快照按 agent 持久化 run 目录 `continuation-gate.jsonl`。不引入 LLM 决策/daemon，默认关闭不改既有行为|
+|D069|**续跑遥测三面可观测**（R3-C3）：status/CLI/MCP 三面一致暴露逐会话续跑列——`continuations_used`（`session.budget.continuations` 持久化）/ `last_continuation_at`（最近 outgoing 转录 ts）/ `max_per_session`（配置值）/ `in_flight`（末条 outgoing 无响应=回合进行中）/ `platform_seat`（未绑定任务）。`picode status` 快照含 `continuation` 段；`self-drive continuation --status` 与 MCP `continuation_status` 复用同一派生（`status.ts` `continuationTelemetry`），三面口径一致、纯读零写|
 
 ## 开放
 
@@ -102,3 +105,26 @@
 - 恢复（N3）：serve 重启 → P1 恢复重投喂 ready → 清 error → 续跑 sweep 从持久化计数续发，不重算不超发（幂等）
 - 边界：**不引入 daemon/常驻进程**（N4 缓，sys-arch「无 daemon、状态文件化」不变量，以周期性 sweep + probeServeHealth 心跳重附替代）；**不 LLM 生成续跑指令**（N7 缓，编排器无 LLM 不变量，固定模板 + 现有任务上下文，agent 依人设与任务文件自判）
 - 缓项：N5 会话 checkpoint 快照、N6 maxTokens 计量（上游无 token 契约，D058）、N7 语义续跑（transcript 摘要注入）均列第二轮
+
+## D067 — 续跑 idle 时钟 = 回合完成时间
+- 2026-08-13 · 来源：监督者 R3 实测缺陷（run-2026-08-13T09-36-28-520Z）
+- 问题：idle 判定原取 `max(last_wake_at, 最近转录 ts)`，转录含 outgoing（投喂）记录——每次续跑投喂都立即把 idle 时钟重置到投喂时间；noReply 长回合（agent 工作 > idle_sec 仍未响应）期间 sweep 误判「已空闲」再次投喂，长回合被打断（实测 run-lead 被连投 4 次排队；`max_per_session` 只限总量、不限打断）
+- 决定：idle 时钟 = **回合完成时间** = `max(last_wake_at, 最近一条 transcript incoming（响应）记录 ts)`；投喂（outgoing）不参与 idle 计算。转录末条为 outgoing 且其后无 incoming → 该会话 **in-flight**（长回合进行中），不进入候选、不投喂
+- 实现：`packages/orchestrator/src/continuation.ts` 的 `lastRoundCompletedMs` / `isRoundInFlight`；`deriveContinuationTargets` 保持纯函数（读文件无网络）
+- 边界：投喂 outgoing 永不重置 idle 时钟；in-flight 只跳过当前候选派生，不改变 feed 语义
+
+## D068 — 平台席策略 + 续跑 gate 可选接入
+- 2026-08-13 · 来源：E6 剩余风险（平台席空转未根治）+ ind-res 研究（M3 gate + git 快照防重复重跑）
+- 问题 1：`deriveContinuationTargets` 对无 task 绑定会话（scout/sys-arch/run-lead 等平台席）无终态门，R2 仅用 `max_per_session=5` 有界缓解，仍空转烧 token
+- 问题 2：`budgets.gate_commands` 声明未执行；续跑前无验证门，agent 可能反复重跑同一失败步骤空转
+- 决定：
+  - `platform_seats`（默认 `"skip"`）：无 task 绑定会话默认不进续跑候选（根治空转）；`"allow"` 显式逃生、仍受 `max_per_session` 有界
+  - `gate_commands`（默认空 `[]`，不启用）：启用时续跑投喂前对候选跑 gate（有界超时 60s），`git status --porcelain + diff HEAD + untracked 聚合` 得工作树快照；**上次失败快照指纹 === 当前 → 不重跑不投喂**（防没改代码反复重跑）；gate 通过 → 停靠不投喂；失败 → 不投喂但保留候选（下轮重试）；失败快照按 agent 持久化 `runs/<id>/continuation-gate.jsonl`
+- 实现：`packages/orchestrator/src/continuation-gate.ts`（`shouldRunGate` / `captureGitWorktreeSnapshot` / `runContinuationGate` / `sweepContinuationsGated` / `ContinuationGateStore`）；guardianTick 接线在 checkBudgets 之后、续跑 sweep 之前
+- 边界：默认关闭不改既有行为（gate_commands 空 = 与 D066 完全一致）；不引入 LLM 决策、不引入 daemon
+
+## D069 — 续跑遥测（status/CLI/MCP 三面）
+- 2026-08-13 · 来源：R2 plan (d) 5「续跑遥测看板」+ ind-res 研究 M2
+- 问题：`picode status` 无续跑列；`self-drive continuation --status` 只给候选数；MCP `continuation_status` 同缺——运营无法查看每会话续跑预算、上次投喂时间、进行中回合与平台席停靠
+- 决定：`status.ts` 新增 `ContinuationTelemetry` 段（每会话 `continuations_used` / `last_continuation_at` / `max_per_session` / `in_flight` / `platform_seat`），`statusSnapshot` / CLI `continuation --status` / MCP `continuation_status` 三面共用同一 `continuationTelemetry` 派生，口径一致、纯读零写（D039 status 快照扩展，不改状态）
+- 实现：`packages/orchestrator/src/status.ts`（`continuationTelemetry`）、`commands/self-drive.ts`、`packages/mcp-server/src/management.ts`

@@ -1,6 +1,6 @@
 # 运维规程（serve/会话/续跑/guardian 重启/真相关于文件）
 
-> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）。
+> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）。
 > 遵循本规程可避免已知的 serve 类故障人工踩坑，并正确观察/调整续跑、重启守护热载。
 
 ## serve 重启规程（ERR-04 缓解）
@@ -64,6 +64,26 @@
 - `picode self-drive continuation --feed <agent>`：手动投喂 1 次续跑 prompt 并计数（不阻塞、noReply 异步）。用于：会话空闲但未触发续跑、或预算耗尽后人工研判决定再投喂
 - 断连/重启衔接：serve 重启（见上）→ P1 恢复重投喂 ready → 清 error → 续跑 sweep 从持久化计数续发，不重算不超发（幂等）
 
+### 平台席策略（D068）
+
+- 平台席 = 无 task 绑定会话（scout/sys-arch/run-lead 等）。默认 `platform_seats: "skip"` **不进续跑候选**，防无界空转烧 token（E6 gap 3 根治）
+- 需对平台席启用续跑时显式配置 `platform_seats: "allow"`；逃生路径仍受 `max_per_session` 有界，且无任务产出时继续消耗预算，运维应留意
+- 观测：遥测列 `platform_seat=true` 即平台席；候选数与投喂数应为 0（skip 默认）
+
+### 续跑 gate 运维规程（D068 / R3-C2）
+
+`gate_commands` 默认空（不启用）。启用 = 续跑投喂前对每个候选跑 gate 命令，防止「上次失败后没改代码、agent 反复重跑同一失败步骤」烧 token。
+
+- **配置**：`self_evolve.continuation.gate_commands: ["<cmd>", ...]`（如 `["npm run build"]` / `["npm test"]`）；单条命令有界超时 60s，超时视为 gate 失败
+- **行为**：
+  - gate **通过** → 该会话本轮不投喂（视为可停靠，`gate_passed`）
+  - gate **失败** → 本轮不投喂但**保留候选**（下轮可重试）；失败快照指纹按 agent 落盘 `runs/<id>/continuation-gate.jsonl`
+  - **快照未变**（上次失败指纹 === 当前）→ 不重跑 gate、本轮不投喂（防没改代码反复重跑）
+  - gate 关闭（默认）→ 与无 gate 行为完全一致（回归 C1）
+- **快照原理**：`git status --porcelain` + `git diff HEAD` + untracked 内容 sha256 聚合；**须为 git 仓库**，否则快照不可得 → 保守每次重跑 gate（去重失效但不误判）
+- **排查**：会话不投喂且日志无预算耗尽时，查看 `runs/<id>/continuation-gate.jsonl` 的 `reason`（`snapshot_unchanged` / `gate_failed` / `gate_passed`）判断是 gate 拦截还是停靠
+- 注意：启用 gate 后续跑节奏由 gate 命令执行时间主导，命令本身须有界（shell 超时 60s 兜底）
+
 ### 续跑不触发的排查
 
 1. 会话是否 `sleeping`/`terminated`/`error`？续跑只对 awake 且无 error 会话投喂
@@ -72,7 +92,8 @@
 4. `idle_sec` 是否 ≥ `idle_sleep_sec`？若是则先被休眠，调小 `idle_sec`
 5. 是否平台席（无任务绑定）？默认 `platform_seats: skip` 不进候选；需续跑显式配置 `"allow"`
 6. 是否 in-flight（投喂后未响应）？进行中回合不重复投喂，等待响应落盘后由 idle 时钟判定
-7. 进程形态：续跑由 guardian tick 驱动，**无 daemon**——guardian 未运行则无续跑（检查 self-drive 进程存活）
+7. 是否被续跑 gate 拦截（`gate_commands` 非空时）？查 `runs/<id>/continuation-gate.jsonl` 的 `reason`（`snapshot_unchanged` / `gate_failed` / `gate_passed`）
+8. 进程形态：续跑由 guardian tick 驱动，**无 daemon**——guardian 未运行则无续跑（检查 self-drive 进程存活）
 
 ## guardian 重启规程（R2-C3，代码更新热载）
 

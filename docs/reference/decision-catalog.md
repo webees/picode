@@ -452,6 +452,30 @@ outgoing，**不重置 idle 时钟**。若转录末条为 outgoing 且其后无 
 承接 R2-C2 的 `max_per_session` 有界缓解，从「总量有界」升级为「默认不入场」；
 `"allow"` 须显式声明，行为仍受预算闸约束。
 
+### 12.6 续跑前 gate（防重复重跑，R3-C2）
+
+|选项|说明|
+|------|------|
+|**`gate_commands` 空 = 不启用（默认）** ★|行为与 D066 完全一致；续跑直接投喂|
+|配置 `gate_commands`|投喂前对候选跑 gate（有界超时 60s）；**上次失败快照与当前一致 → 不重跑不投喂**（防没改代码反复重跑）；gate 通过 → 停靠不投喂；失败 → 不投喂但保留候选（下轮重试）|
+
+**已定（R3-C2）：默认不启用**（D068；`config.ts` `self_evolve.continuation.gate_commands`）。
+借鉴 prime-agent `captureGitWorktreeSnapshot`（`git status --porcelain` + `diff HEAD` +
+untracked 内容 sha256 聚合），失败快照按 agent 持久化 run 目录 `continuation-gate.jsonl`；
+非 git 仓库快照不可得 → 保守每次重跑 gate（不误判但去重失效）。
+不引入 LLM 决策、不引入 daemon；默认关闭不改既有行为。
+
+### 12.7 续跑遥测（R3-C3）
+
+|选项|说明|
+|------|------|
+|**status/CLI/MCP 三面逐会话遥测列** ★|`continuations_used` / `last_continuation_at` / `max_per_session` / `in_flight` / `platform_seat`；纯读零写|
+|仅 status 快照|可观测面不足，运营无法定位续跑预算耗尽/长回合 in-flight|
+
+**已定（R3-C3）：三面一致**（D069；`packages/orchestrator/src/status.ts` `continuationTelemetry`）。
+`picode status` 快照含 `continuation` 段；`self-drive continuation --status` 与 MCP
+`continuation_status` 复用同一派生，口径一致、纯读零写（D039 status 快照扩展）。
+
 ### 12.3 续跑内容语义
 
 |选项|说明|
