@@ -12,6 +12,8 @@ declare global {
   const API_TIMEOUT: typeof import('../constants/app-config').API_TIMEOUT
   const CONTENT_LAYOUTS: typeof import('../constants/themes').CONTENT_LAYOUTS
   const DEFAULT_PAGE_SIZE: typeof import('../constants/app').DEFAULT_PAGE_SIZE
+  const DEFAULT_RADIUS: typeof import('../constants/themes').DEFAULT_RADIUS
+  const DEFAULT_THEME: typeof import('../constants/themes').DEFAULT_THEME
   const EffectScope: typeof import('vue').EffectScope
   const HOME_PATH: typeof import('../constants/app').HOME_PATH
   const PAGE_SIZES: typeof import('../constants/app').PAGE_SIZES

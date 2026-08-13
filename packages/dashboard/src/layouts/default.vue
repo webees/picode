@@ -50,10 +50,6 @@ const breadcrumbTitle = computed(() => {
         <CommandMenuPanel />
         <div class="flex-1" />
         <div class="ml-auto flex items-center space-x-4">
-          <span class="hidden items-center gap-1.5 text-xs text-muted-foreground lg:flex">
-            <span class="size-2 rounded-full bg-status-success" aria-hidden="true" />
-            运行中
-          </span>
           <LanguageChange />
           <ToggleTheme />
           <ThemePopover />
