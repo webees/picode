@@ -36,7 +36,20 @@
 
 ### 观察续跑状态
 
-- `picode self-drive continuation --status`：只读预览当前候选会话数（不投喂，安全）
+- `picode self-drive continuation --status`：只读预览当前候选会话数（不投喂，安全），并输出全会话续跑遥测列（见下）
+- `picode status --run <id>`：快照含 `continuation` 段——`max_per_session` / `idle_sec` 配置值与 `sessions[]` 逐会话遥测
+- MCP `continuation_status`：与 CLI 同源派生（同一函数），返回候选 + 全会话遥测列；三面口径一致、纯读零写
+
+逐会话遥测列（三面同名同义）：
+
+| 列 | 含义 |
+|---|---|
+| `continuations_used` | 累计自动续跑投喂次数（`session.budget.continuations`，持久化） |
+| `max_per_session` | 每会话续跑上限（配置值，0=不限） |
+| `last_continuation_at` | 上次投喂时间（最近一条 outgoing 转录 ts；无转录为 `null`） |
+| `in_flight` | 投喂后尚无 incoming 响应（回合进行中，该会话不会被继续投喂） |
+| `platform_seat` | 平台席（未绑定任务，默认 `platform_seats: skip` 不进续跑候选） |
+
 - 会话文件 `runs/<id>/sessions/<agent>.yaml`：`budget.continuations` 为累计续跑计数；`error` 字段可见预算耗尽停靠（`budget exceeded`）或 serve 失联（ERR-01 watchdog）
 - 转录归档 `runs/<id>/transcripts/<agent>.jsonl`：每次续跑投喂落盘（含固定续跑 prompt 与响应）
 
@@ -57,7 +70,9 @@
 2. 任务是否已终态（done/dissolved）？终态不续跑
 3. `budget.continuations` 是否已 ≥ `max_per_session`？预算耗尽即停
 4. `idle_sec` 是否 ≥ `idle_sleep_sec`？若是则先被休眠，调小 `idle_sec`
-5. 进程形态：续跑由 guardian tick 驱动，**无 daemon**——guardian 未运行则无续跑（检查 self-drive 进程存活）
+5. 是否平台席（无任务绑定）？默认 `platform_seats: skip` 不进候选；需续跑显式配置 `"allow"`
+6. 是否 in-flight（投喂后未响应）？进行中回合不重复投喂，等待响应落盘后由 idle 时钟判定
+7. 进程形态：续跑由 guardian tick 驱动，**无 daemon**——guardian 未运行则无续跑（检查 self-drive 进程存活）
 
 ## guardian 重启规程（R2-C3，代码更新热载）
 

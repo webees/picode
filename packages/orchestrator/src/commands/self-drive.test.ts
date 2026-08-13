@@ -7,6 +7,7 @@ import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRun, resolveRunDir } from "../run-store.js";
 import { SessionStore } from "../session-store.js";
+import { TranscriptStore } from "../transcript-store.js";
 
 const CLI = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -208,6 +209,48 @@ test("C2-d: continuation --feed 对非 awake / 非 opencode 会话返回 fed:fal
     assert.match(out.reason, /not-awake-or-not-opencode-session/);
     assert.deepEqual(messagePosts(logFile), [], "非投喂目标不得 POST");
     assert.equal(store.get("engineer-sleeping")!.budget?.continuations ?? 0, 0);
+  } finally {
+    closeServe();
+  }
+});
+
+test("R3-C3: continuation --status 增预算/上次投喂/in-flight/平台席列（只读）", async () => {
+  const { repo, runId, dir, store, logFile, closeServe } = await setupCliRun();
+  try {
+    await idleAwakeOcSession(store, dir, "engineer@task-cont-cli", "ses_c3d1");
+    await store.recordContinuation("engineer@task-cont-cli");
+    await new TranscriptStore(dir).recordOutgoing("engineer@task-cont-cli", "续跑 prompt");
+    if (fs.existsSync(logFile)) fs.rmSync(logFile);
+
+    const { status, stdout } = runCli([
+      "self-drive", "continuation", "--status",
+      "--repo", repo, "--run", runId,
+    ]);
+    assert.equal(status, 0, stdout);
+    const out = JSON.parse(stdout) as {
+      count: number;
+      sessions: Array<{
+        agent_id: string;
+        continuations_used: number;
+        max_per_session: number;
+        last_continuation_at: string | null;
+        in_flight: boolean;
+        platform_seat: boolean;
+      }>;
+    };
+    const row = out.sessions.find((x) => x.agent_id === "engineer@task-cont-cli");
+    assert.ok(row, "sessions column must include the agent");
+    assert.equal(row!.continuations_used, 1, "预算列：累计续跑计数");
+    assert.equal(row!.max_per_session, 5, "预算列：上限（config max_per_session）");
+    assert.ok(row!.last_continuation_at, "上次投喂时间列");
+    assert.equal(row!.in_flight, true, "in-flight 列：outgoing 后无响应");
+    assert.equal(row!.platform_seat, false, "平台席列：绑定任务非平台席");
+    assert.deepEqual(messagePosts(logFile), [], "--status 只读：不得 POST /message");
+    assert.equal(
+      store.get("engineer@task-cont-cli")!.budget?.continuations,
+      1,
+      "--status 不得写计数",
+    );
   } finally {
     closeServe();
   }

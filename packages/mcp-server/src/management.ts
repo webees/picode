@@ -16,6 +16,7 @@ import {
   addChunkAndTask,
   buildBoard,
   checkPersonas,
+  continuationTelemetry,
   createChangeOrder,
   createRun,
   createStaffingRequest,
@@ -622,13 +623,13 @@ export function managementTools(): ToolDef[] {
     ),
     withRun(
       "continuation_status",
-      "续跑候选只读预览（C2）：派生当前可续跑的 idle awake oc- 会话（同 deriveContinuationTargets），零投喂、零写路径。",
+      "续跑观测（C2 + R3-C3/D069）：派生当前可续跑候选（同 deriveContinuationTargets，零投喂）+ 全会话续跑遥测列（continuations_used / last_continuation_at / max_per_session / in_flight / platform_seat）。纯读零写路径。",
       {},
       [],
       (p, env) => {
         const { dir, config } = requireRun(env, str(p, "run_id"));
         const targets = deriveContinuationTargets(dir, config);
-        return { ok: true, count: targets.length, targets };
+        return { ok: true, count: targets.length, targets, ...continuationTelemetry(dir, config) };
       },
     ),
     withRun(
