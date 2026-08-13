@@ -73,6 +73,7 @@
 |D068|**平台席策略 + 续跑 gate 可选接入**（R3-C1/C2）：`self_evolve.continuation.platform_seats` 默认 `"skip"`——无 task 绑定会话（scout/sys-arch/run-lead 等平台席）不进续跑候选，根治 E6「平台席无界空转」gap（R2-C2 仅 `max_per_session` 有界缓解）；`"allow"` 显式逃生仍受预算闸约束。`self_evolve.continuation.gate_commands` 默认 `[]`（不启用）——启用时续跑投喂前跑 gate（有界超时，借鉴 prime-agent `captureGitWorktreeSnapshot`：git status + diff HEAD + untracked 聚合）；**上次失败快照与当前一致 → 不重跑不投喂**（防没改代码反复重跑），gate 通过 → 停靠不投喂；失败快照按 agent 持久化 run 目录 `continuation-gate.jsonl`。不引入 LLM 决策/daemon，默认关闭不改既有行为|
 |D069|**续跑遥测三面可观测**（R3-C3）：status/CLI/MCP 三面一致暴露逐会话续跑列——`continuations_used`（`session.budget.continuations` 持久化）/ `last_continuation_at`（最近 outgoing 转录 ts）/ `max_per_session`（配置值）/ `in_flight`（末条 outgoing 无响应=回合进行中）/ `platform_seat`（未绑定任务）。`picode status` 快照含 `continuation` 段；`self-drive continuation --status` 与 MCP `continuation_status` 复用同一派生（`status.ts` `continuationTelemetry`），三面口径一致、纯读零写|
 |D070|**监控面板（Dashboard）**：`packages/dashboard-server`（npm workspace 成员 · `node:http` 只读 HTTP · 复用 orchestrator 纯读投影 9 端点 + serve tokens 代理）+ `packages/dashboard`（自包含 pnpm 项目 · Vue3+Vite+shadcn-vue · 从根 workspaces 显式排除）。后端并入根 build/test、前端 E4 用 `pnpm -C packages/dashboard build` 显式验收；只读、无写、无 daemon（D002/D057 延续）；`--repo` 定位任意真实 run 仓|
+|D071|**Dashboard 视觉检修**：语义状态色 token（绿/琥珀/红/蓝，浅深色均 WCAG AA ≥4.5:1）+ 边框阴影层级 token + 域组件层（StatCard/StatusBadge/SectionCard/EmptyState/ErrorState/Skeleton 系）+ 布局壳精修。总览页中文通俗文案/统计条/状态色点（labels 单一事实源）；详情页 9 视图 TabsList + 进度/房间/人员三视图。**零端点改动约束**：三视图由既有 9 端点派生纯函数（`views.data.ts`）+ 静态知识常量（`role-meta.data.ts`），`dashboard-server` 零改动|
 
 ## 开放
 
@@ -143,3 +144,15 @@
   - **非目标（范围外）**：无写操作（无 POST 编排/唤醒/合并按钮）、无鉴权（本地 localhost 工具）、无部署打包；鉴权/写面列第二轮
 - 实现：C1 server（`packages/dashboard-server`，9 端点 + live 代理 + 根 workspace 接线，1af542e）；C2 scaffold（`packages/dashboard` vendor 模板裁剪 + proxy + 骨架页，7cd3aa5）；C3 pages（API hooks + 6 面板，chunk-dashboard-pages）；C4 本文档（docs 层）
 - 边界：面板只读不改状态、不持锁；serve 失联降级显示不白屏（C3 降级提示）；数据源 = 文件真相（D002）+ serve 实时 tokens
+
+## D071 — Dashboard 视觉检修（语义色/布局/三视图/零端点改动约束）
+- 2026-08-13 · 来源：sponsor 反馈面板「丑、描述晦涩」+ run-2026-08-13T15-08-28-705Z C1–C3 检修规划
+- 问题：面板视觉语言不统一（主题重复/radius 冲突/未定义 `--c-border` token）、文案晦涩（英文/机器拼写）、且缺房间/人员/进度可见性；D070 已定 9 端点只读契约，验收约束**不改 dashboard-server**
+- 决定：
+  - **语义色 token**：`index.css` 新增 `--status-success/warning/danger/info`（绿/琥珀/红/蓝，浅深色均 WCAG AA ≥4.5:1）+ `--border-subtle/strong` + `--shadow-card/popover` + 骨架屏动画基元；`themes.css` 去重 `theme-yellow` 重复块、统一 `--radius: 0.5rem`（修 :root 双 radius 冲突）；默认主题改精修蓝强调色（zinc 基础）
+  - **域组件层**：`components/dashboard/` 新增 StatCard / StatusBadge / SectionCard / EmptyState / ErrorState / SkeletonTable / SkeletonGrid，总览与详情页统一复用，消除各页手写样式漂移
+  - **总览页（C2）**：标题/描述/错误态改中文通俗文案；新增统计条（全部/进行中/已完成/受阻）；卡片状态色点 + 悬停反馈 + 空态图标；文案统一走 `@/utils/labels`（RUN_STATUS/RUN_KIND/RUN_SCALE 单一事实源），`index.components.ts` 仅补展示细节（badge 样式/状态圆点/相对时间/统计聚合）
+  - **详情页三视图（C3）**：9 视图横向可滚 TabsList（概览/进度/房间/人员/分块/看板/会话/合并/门禁）；新增进度视图（逐任务 phase/blocked/summary/updated_at + in-flight/受阻计数）、房间视图（squad 房按 task `work_room`+triad 派生成员、平台房按 snapshot.rooms + ROLE→ROOM 约定）、人员视图（平台席 sessions + 任务三角 tasks.triad）；看板列加宽 + 列头状态点 + 卡内进度条；各视图 spinner 换骨架屏 + 语义色
+  - **零端点改动约束（硬约束）**：三视图全部由既有 9 端点响应派生——`views.data.ts` 导出 `derivePersonnel/deriveRooms/deriveProgress` 纯函数 + `views.test.ts` fixture 断言；角色/房间/阶段静态知识落 `role-meta.data.ts`（ROLE_META 取自人设 frontmatter description + ROLE_PRIMARY_ROOM 约定，ROOM_META 取自 terminology §3）；面板只读不读 `members.json` 避免文件系统耦合；`dashboard-server` 与 9 端点零改动
+- 实现：C1 设计系统（5e8b3ec）；C2 总览（7fe32ba + 文案 labels 收敛 4ab9ee7）；C3 运行详情三视图（73abe11）；C4 本文档（docs 层）
+- 边界：仅视觉/文案/派生展示层，不改任何 API 契约；数据仍源 = 文件真相（D002）+ serve 实时 tokens（D058）；后续页面继续复用 token 与域组件，新增数据需先经 D071-4 派生纯函数或静态知识常量

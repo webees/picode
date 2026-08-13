@@ -29,7 +29,7 @@ npm install && npm run build && npm test
 
 ## 监控面板（Dashboard）
 
-只读监控面板，直观展示 run 工作细节（goal / chunks / 任务看板 / 会话 + tokens 活跃度 / merge 列车 / 门禁 evidence）。数据源 = `.picode/runs` YAML + opencode serve 实时 tokens。
+只读监控面板，直观展示 run 工作细节（goal / chunks / 任务看板 / 会话 + tokens 活跃度 / merge 列车 / 门禁 evidence）。数据源 = `.picode/runs` YAML + opencode serve 实时 tokens。选 run 后进入详情页 **9 视图**：概览（KPI 统计卡 + 告警）、进度（逐任务 phase/受阻）、房间（成员/消息数）、人员（平台席 + 任务三角）、分块、看板、会话实时 tokens、合并、门禁——三视图（进度/房间/人员）由既有 9 端点前端派生，**不新增后端端点**（D071）。
 
 ### 前置
 
@@ -47,7 +47,7 @@ node packages/dashboard-server/dist/index.js --repo <path-to-repo>
 cd packages/dashboard && pnpm install && pnpm dev
 ```
 
-打开 `http://localhost:5173/dashboard` 选择 run 即可。详见 [docs/guides/operations.md](./docs/guides/operations.md) 面板运维节与 [docs/DECISIONS.md](./docs/DECISIONS.md) D070。
+打开 `http://localhost:5173/dashboard` 选择 run 即可。详见 [docs/guides/operations.md](./docs/guides/operations.md) 面板运维节（含三视图数据来源与设计约定）与 [docs/DECISIONS.md](./docs/DECISIONS.md) D070/D071。
 
 ## 状态
 
