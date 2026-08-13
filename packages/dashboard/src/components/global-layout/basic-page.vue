@@ -7,7 +7,7 @@ defineProps<LayoutHeaderProps>()
 </script>
 
 <template>
-  <main>
+  <main class="min-w-0">
     <BasicHeader
       :title="title"
       :description="description"

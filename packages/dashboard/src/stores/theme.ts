@@ -2,12 +2,14 @@ import { defineStore } from 'pinia'
 
 import type { ContentLayout, Radius, Theme } from '@/constants/themes'
 
+import { DEFAULT_RADIUS, DEFAULT_THEME } from '@/constants/themes'
+
 export const useThemeStore = defineStore('system-config', () => {
-  const radius = shallowRef(0.5)
+  const radius = shallowRef<Radius>(DEFAULT_RADIUS)
   function setRadius(newRadius: Radius) {
     radius.value = newRadius
   }
-  const theme = shallowRef<Theme>('zinc')
+  const theme = shallowRef<Theme>(DEFAULT_THEME)
   function setTheme(newTheme: Theme) {
     theme.value = newTheme
   }
