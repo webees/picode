@@ -9,7 +9,7 @@ import YAML from "yaml";
 
 const PICODE = "/Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js";
 const REPO = "/tmp/picode-dogfood";
-const RUN = "run-2026-08-13T17-25-34-974Z";
+const RUN = "run-2026-08-13T18-29-39-276Z";
 const RUN_DIR = `${REPO}/.picode/runs/${RUN}`;
 
 const CHUNKS = {
@@ -201,6 +201,16 @@ const CHUNKS = {
   "lifecycle-docs": {
     first: "docs/DECISIONS.md",
     write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-13T17-25-34-974Z.md"],
+    skills: "docs,spec",
+  },
+  "continuation-semantic": {
+    first: "packages/orchestrator/src/continuation.ts",
+    write: ["packages/orchestrator/src/continuation.ts", "packages/orchestrator/src/continuation.test.ts"],
+    skills: "typescript,state-machine",
+  },
+  "semantic-docs": {
+    first: "docs/DECISIONS.md",
+    write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-13T18-29-39-276Z.md"],
     skills: "docs,spec",
   },
 };
