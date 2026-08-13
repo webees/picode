@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { AlertTriangleIcon, LoaderCircleIcon } from '@lucide/vue'
+import { AlertTriangleIcon } from '@lucide/vue'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -39,10 +40,17 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
     </AlertDescription>
   </Alert>
 
-  <div v-else-if="isLoading" class="flex items-center justify-center py-16 text-muted-foreground">
-    <LoaderCircleIcon class="mr-2 size-4 animate-spin" />
-    加载中…
-  </div>
+  <Card v-else-if="isLoading" class="p-0">
+    <div class="space-y-3 p-4">
+      <div class="flex items-center gap-3">
+        <Skeleton class="h-4 w-24" />
+        <Skeleton class="h-4 w-16" />
+        <Skeleton class="h-4 w-32" />
+        <Skeleton class="h-4 w-20" />
+      </div>
+      <Skeleton v-for="i in 5" :key="i" class="h-10 w-full" />
+    </div>
+  </Card>
 
   <Card v-else class="p-0">
     <Table>
