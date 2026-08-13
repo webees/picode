@@ -1,6 +1,8 @@
+import { loadConfig, runsRoot } from "@picode/core";
 import { SessionStore } from "../session-store.js";
 import { applyEvent, drainSessionCommands, rosterSnapshot } from "../rules-engine.js";
 import { sleepAgent, terminateAgent, wakeAgent } from "../pi-adapter.js";
+import { cleanResidual, deriveAuditReport } from "../session-audit.js";
 import type { Command, CommandContext } from "./types.js";
 import { need, unknownSub } from "./util.js";
 
@@ -99,6 +101,25 @@ export const sessionCommands: Command[] = [
     usage: "picode session roster --repo <path> --run <id>",
     run: async (ctx: CommandContext) => {
       console.log(JSON.stringify(rosterSnapshot(ctx.dir!), null, 2));
+    },
+  },
+  {
+    domain: "session",
+    path: ["session", "audit"],
+    summary: "跨 run 会话残留审计（C2；--clean 清理终态 run 残留，--run 过滤单 run）",
+    usage:
+      "picode session audit --repo <path> [--clean] [--run <id>]",
+    noRun: true,
+    run: async (ctx: CommandContext) => {
+      const config = loadConfig(ctx.repo);
+      const root = runsRoot(ctx.repo, config);
+      const opts = { runId: ctx.arg("--run") };
+      if (ctx.has("--clean")) {
+        const res = await cleanResidual(root, config, opts);
+        console.log(JSON.stringify({ ...deriveAuditReport(root, config, opts), clean: res }, null, 2));
+        return;
+      }
+      console.log(JSON.stringify(deriveAuditReport(root, config, opts), null, 2));
     },
   },
 ];
