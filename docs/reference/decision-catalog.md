@@ -419,10 +419,10 @@
 
 |选项|说明|
 |------|------|
-|**`max_per_session` 有界正数（保守默认）** ★|每会话累计续跑次数上限；耗尽即停（耗尽 ≠ 成功），靠既有 idle-sleep/budgets 停靠|
-|0 = 不限|关掉续跑预算闸（风险自担）|
+|**`max_per_session` 有界正数（保守默认 5）** ★|每会话累计续跑次数上限；耗尽即停（耗尽 ≠ 成功），靠既有 idle-sleep/budgets 停靠|
+|0 = 不限|关掉续跑预算闸（风险自担，须显式声明）|
 
-**已定：保守有界默认**（具体默认值见 `config.ts` `self_evolve.continuation.max_per_session`）。
+**已定：保守有界默认 = 5**（R2-C2：默认 0=不限 曾使无任务席位被无界续跑烧 token，改有界；`config.ts` `self_evolve.continuation.max_per_session`）。长时自治 run 可显式调大，0 = 不限须显式声明。
 
 ### 12.2 续跑空闲间隔
 

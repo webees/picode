@@ -164,9 +164,9 @@ test("C1: validateConfig rejects invalid refine_gate values", () => {
   }
 });
 
-test("C1: self_evolve.continuation conservative defaults (0 = unlimited, idle_sec 5 min)", () => {
+test("C1: self_evolve.continuation conservative defaults (bounded 5, idle_sec 5 min)", () => {
   const c = getDefaultConfig().self_evolve.continuation;
-  assert.equal(c.max_per_session, 0, "N2: 默认 0=不限，靠既有 idle-sleep/budgets 停靠");
+  assert.equal(c.max_per_session, 5, "R2-C2: 默认有界 5，任务缺席会话不能无界烧 token");
   assert.equal(c.idle_sec, 300);
 });
 
@@ -177,8 +177,8 @@ test("C1: continuation overridable via project yaml", () => {
   const c = loadConfig(dir).self_evolve.continuation;
   assert.equal(c.max_per_session, 10);
   assert.equal(c.idle_sec, 60);
-  // untouched defaults survive the merge
-  assert.equal(getDefaultConfig().self_evolve.continuation.max_per_session, 0);
+  // untouched defaults survive the merge (bounded 5 default, R2-C2)
+  assert.equal(getDefaultConfig().self_evolve.continuation.max_per_session, 5);
   assert.equal(getDefaultConfig().self_evolve.continuation.idle_sec, 300);
 });
 
