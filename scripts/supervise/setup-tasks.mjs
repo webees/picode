@@ -9,7 +9,7 @@ import YAML from "yaml";
 
 const PICODE = "/Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js";
 const REPO = "/tmp/picode-dogfood";
-const RUN = "run-2026-08-13T15-08-28-705Z";
+const RUN = "run-2026-08-13T17-25-34-974Z";
 const RUN_DIR = `${REPO}/.picode/runs/${RUN}`;
 
 const CHUNKS = {
@@ -186,6 +186,21 @@ const CHUNKS = {
   "ui-docs": {
     first: "docs/DECISIONS.md",
     write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "README.md"],
+    skills: "docs,spec",
+  },
+  "run-close": {
+    first: "packages/orchestrator/src/self-drive.ts",
+    write: ["packages/orchestrator/src/self-drive.ts", "packages/orchestrator/src/self-drive.test.ts", "packages/orchestrator/src/commands/goal.ts", "packages/orchestrator/src/commands/goal.test.ts"],
+    skills: "typescript,state-machine",
+  },
+  "session-audit": {
+    first: "packages/orchestrator/src/session-audit.ts",
+    write: ["packages/orchestrator/src/session-audit.ts", "packages/orchestrator/src/session-audit.test.ts", "packages/orchestrator/src/commands/session.ts", "packages/orchestrator/src/cli.test.ts"],
+    skills: "typescript,cli",
+  },
+  "lifecycle-docs": {
+    first: "docs/DECISIONS.md",
+    write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-13T17-25-34-974Z.md"],
     skills: "docs,spec",
   },
 };
