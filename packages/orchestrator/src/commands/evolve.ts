@@ -1,4 +1,4 @@
-import { evolveWritePaths } from "@picode/core";
+import { PicodeError, ErrorCode, evolveWritePaths } from "@picode/core";
 import { readGoal } from "../run-store.js";
 import { writeEvolveKnowledgeLog } from "../evolve-run.js";
 import { refineEvolveKnowledge } from "../evolve-refine.js";
@@ -34,11 +34,20 @@ export const evolveCommands: Command[] = [
   {
     domain: "evolve",
     path: ["evolve", "refine"],
-    summary: "从任务证据自动提炼 lesson 草稿，--approve 才落盘（E6 升级）",
-    usage: "picode evolve refine --repo <path> --run <id> [--approve]",
+    summary: "从任务证据提炼 lesson；--approve 人工落盘，--auto 按评审门自动落盘（C1）",
+    usage: "picode evolve refine --repo <path> --run <id> [--approve|--auto]",
     run: async (ctx: CommandContext) => {
+      const approve = ctx.has("--approve");
+      const auto = ctx.has("--auto");
+      if (approve && auto) {
+        throw new PicodeError(
+          ErrorCode.USAGE,
+          "--approve and --auto are mutually exclusive — see: picode evolve refine --help",
+        );
+      }
       const result = refineEvolveKnowledge(ctx.repo, ctx.dir!, ctx.config!, {
-        approve: ctx.has("--approve"),
+        approve,
+        auto,
       });
       console.log(JSON.stringify(result, null, 2));
     },

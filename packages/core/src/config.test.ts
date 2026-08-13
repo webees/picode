@@ -127,3 +127,39 @@ test("C1: validateConfig rejects invalid budgets values", () => {
     assert.throws(() => validateConfig(cfg as typeof base), Error, `expected rejection for ${JSON.stringify(patch)}`);
   }
 });
+
+test("C1: self_evolve.refine_gate conservative defaults (heuristic, evidence+noise filter on)", () => {
+  const g = getDefaultConfig().self_evolve.refine_gate;
+  assert.equal(g.mode, "heuristic");
+  assert.equal(g.require_evidence, true);
+  assert.equal(g.reject_noise, true);
+});
+
+test("C1: refine_gate overridable via project yaml", () => {
+  const dir = tmpRepoWithConfig(
+    "self_evolve:\n  refine_gate:\n    mode: none\n    require_evidence: false\n    reject_noise: false\n",
+  );
+  const g = loadConfig(dir).self_evolve.refine_gate;
+  assert.equal(g.mode, "none");
+  assert.equal(g.require_evidence, false);
+  assert.equal(g.reject_noise, false);
+  // untouched defaults survive the merge
+  assert.equal(getDefaultConfig().self_evolve.refine_gate.mode, "heuristic");
+});
+
+test("C1: validateConfig rejects invalid refine_gate values", () => {
+  const base = getDefaultConfig();
+  const refine_gate = base.self_evolve.refine_gate;
+  const patches: Array<Record<string, unknown>> = [
+    { mode: "llm" },
+    { mode: "heuristic", require_evidence: "yes" },
+    { mode: "heuristic", reject_noise: 1 },
+  ];
+  for (const patch of patches) {
+    const cfg = {
+      ...base,
+      self_evolve: { ...base.self_evolve, refine_gate: { ...refine_gate, ...patch } },
+    };
+    assert.throws(() => validateConfig(cfg as typeof base), Error, `expected rejection for ${JSON.stringify(patch)}`);
+  }
+});

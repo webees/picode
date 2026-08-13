@@ -158,6 +158,21 @@ export interface EvolveBudgetsConfig {
   gate_commands: string[];
 }
 
+/**
+ * C1 auto-refine review gate (Q2 / refinement.ts): rule-based review of the
+ * evidence trajectory before a lesson is distilled/written. Default is the
+ * "heuristic" mode — evidence must actually contain evidence (exit_code,
+ * log_ref, changed files) or the draft is rejected as noise/empty.
+ */
+export interface AutoRefineGateConfig {
+  /** 评审器: "heuristic"（内置规则，默认）| "none"（关闭评审门，全部放行）。 */
+  mode: "heuristic" | "none";
+  /** evidence 须含证据（exit_code/log_ref/变更文件）才提炼 lesson。 */
+  require_evidence: boolean;
+  /** 噪音/空轨迹（无命令、无 log_ref、无变更文件）拒绝提炼。 */
+  reject_noise: boolean;
+}
+
 /** self_evolve config (19 §10 draft). */
 export interface SelfEvolveConfig {
   /** Reserved (D055): enabled is declared per 19 §10; goal.kind drives evolution, not this flag. */
@@ -179,6 +194,8 @@ export interface SelfEvolveConfig {
   /** §4 MUST: target_repo must contain one of these markers. */
   platform_root_markers: string[];
   forbidden_path_globs: string[];
+  /** C1 auto-refine gate (Q2): refine 前对 evidence 轨迹做规则评审。 */
+  refine_gate: AutoRefineGateConfig;
 }
 
 export interface PicodeConfig {
@@ -421,6 +438,13 @@ export const DEFAULTS: PicodeConfig = {
     knowledge_log_glob: "docs/knowledge/evolve/",
     platform_root_markers: ["package.json"],
     forbidden_path_globs: ["**/.env", "**/.env.*", "**/secrets/**", "**/*.pem"],
+    // C1 auto-refine gate conservative defaults: heuristic on, evidence+noise
+    // filtering on — noise/empty trajectories never get distilled into lessons.
+    refine_gate: {
+      mode: "heuristic",
+      require_evidence: true,
+      reject_noise: true,
+    },
   },
 };
 
@@ -611,6 +635,20 @@ export function validateConfig(config: PicodeConfig): void {
     configError(
       "self_evolve.budgets.gate_commands must be an array of command strings",
     );
+  }
+  const gate = config.self_evolve.refine_gate;
+  if (gate.mode !== "heuristic" && gate.mode !== "none") {
+    configError(
+      'self_evolve.refine_gate.mode must be "heuristic" or "none" (C1 auto-refine gate)',
+    );
+  }
+  for (const [key, val] of [
+    ["require_evidence", gate.require_evidence],
+    ["reject_noise", gate.reject_noise],
+  ] as const) {
+    if (typeof val !== "boolean") {
+      configError(`self_evolve.refine_gate.${key} must be a boolean (C1)`);
+    }
   }
 }
 

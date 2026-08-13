@@ -14,6 +14,7 @@ import {
   extractLessons,
   refineEvolveKnowledge,
   renderLessonsSection,
+  reviewLesson,
   upsertLessonsSection,
 } from "./evolve-refine.js";
 
@@ -173,6 +174,7 @@ test("refine: upsertLessonsSection 替换既有节不残留旧内容", () => {
       commits: ["abc fix"],
       write_paths: ["src/**"],
       lesson: "正例",
+      review: { decision: "approved", reason: "证据充分：1 条命令 exit_code 已记录 + log_ref" },
     },
   ]);
   const md = "header\n\n## Lessons（auto-refine 草稿）\n\nold stale content\n";
@@ -180,4 +182,97 @@ test("refine: upsertLessonsSection 替换既有节不残留旧内容", () => {
   assert.ok(!out.includes("old stale content"));
   assert.match(out, /### t1/);
   assert.equal((out.match(/## Lessons（auto-refine 草稿）/g) ?? []).length, 1);
+});
+
+test("C1 gate: 证据充分（exit_code + log_ref + 变更文件）→ approved", () => {
+  const { repo, dir, config, taskId } = setup();
+  submitEvidence(dir, taskId, {
+    cmds: [{ cmd: "npm test", exit_code: 0, log_ref: `tasks/${taskId}/evidence/test.log` }],
+    by: `sdet@${taskId}`,
+  });
+  const lessons = extractLessons(repo, dir, config);
+  assert.equal(lessons[0].review.decision, "approved");
+  assert.match(lessons[0].review.reason, /exit_code 已记录/);
+  assert.match(lessons[0].review.reason, /log_ref/);
+  // 变更文件: 任务分支上的 commit 同样构成证据（有 evidence 也不依赖）
+  const s2 = setup();
+  const branch = `picode/${path.basename(s2.dir)}/${s2.taskId}`;
+  execFileSync("git", ["checkout", "-b", branch], { cwd: s2.repo });
+  fs.mkdirSync(path.join(s2.repo, "src", "module-a"), { recursive: true });
+  fs.writeFileSync(path.join(s2.repo, "src", "module-a", "x.ts"), "export const x = 1;\n");
+  execFileSync("git", ["add", "src/module-a/x.ts"], { cwd: s2.repo });
+  execFileSync("git", ["commit", "-qm", "feat(module-a): add x"], { cwd: s2.repo });
+  execFileSync("git", ["checkout", "main"], { cwd: s2.repo });
+  const withCommits = extractLessons(s2.repo, s2.dir, s2.config);
+  assert.equal(withCommits[0].review.decision, "approved");
+  assert.match(withCommits[0].review.reason, /commit/);
+});
+
+test("C1 gate: 噪音（无命令/无 log_ref/无变更文件）→ rejected；空轨迹 → rejected", () => {
+  // 噪音: evidence.yaml 存在但无任何证据（空命令、无 log_ref、无 commit）
+  const s2 = setup();
+  submitEvidence(s2.dir, s2.taskId, { cmds: [], by: `sdet@${s2.taskId}` });
+  const noise = extractLessons(s2.repo, s2.dir, s2.config);
+  assert.equal(noise[0].review.decision, "rejected");
+  assert.match(noise[0].review.reason, /噪音轨迹/);
+
+  // 空轨迹: 无 evidence.yaml（task 目录存在但证据缺失）
+  const s3 = setup();
+  const empty = extractLessons(s3.repo, s3.dir, s3.config);
+  assert.equal(empty[0].review.decision, "rejected");
+  assert.match(empty[0].review.reason, /空轨迹/);
+});
+
+test("C1 gate: mode=none 关闭评审门 → 全部 approved", () => {
+  const gate = { mode: "none", require_evidence: true, reject_noise: true } as const;
+  assert.equal(reviewLesson([], null, gate).decision, "approved");
+  assert.equal(reviewLesson([], null, gate).reason, "gate mode=none：评审门关闭，全部放行");
+});
+
+test("C1 --auto: 跳过人工 --approve，approved 落盘 / rejected 不落盘", () => {
+  const { repo, dir, config, taskId } = setup();
+  const evPath = path.join(repo, "docs", "knowledge", "evolve", `${path.basename(dir)}.md`);
+
+  // approved-only: 证据充分 → --auto 直接落盘
+  submitEvidence(dir, taskId, {
+    cmds: [{ cmd: "npm test", exit_code: 0, log_ref: "t.log" }],
+    by: `sdet@${taskId}`,
+  });
+  const r = refineEvolveKnowledge(repo, dir, config, { auto: true });
+  assert.equal(r.auto, true);
+  assert.equal(r.approved, true);
+  assert.ok(r.written);
+  assert.ok(fs.existsSync(evPath));
+  const md = fs.readFileSync(evPath, "utf8");
+  assert.match(md, /### task-chunk-a/);
+  assert.match(md, /review: approved/);
+
+  // 全部 rejected（无任何证据）→ 不落盘
+  const s2 = setup();
+  const r2 = refineEvolveKnowledge(s2.repo, s2.dir, s2.config, { auto: true });
+  assert.equal(r2.approved, false);
+  assert.equal(r2.written, null);
+  const s2Ev = path.join(s2.repo, "docs", "knowledge", "evolve", `${path.basename(s2.dir)}.md`);
+  assert.ok(!fs.existsSync(s2Ev), "all-rejected run must not write any file");
+
+  // 混合: approved + rejected → 只写 approved，rejected 不进文件
+  const s3 = setup();
+  submitEvidence(s3.dir, s3.taskId, {
+    cmds: [{ cmd: "npm test", exit_code: 0, log_ref: "t.log" }],
+    by: `sdet@${s3.taskId}`,
+  });
+  addChunkAndTask(s3.repo, s3.dir, s3.config, {
+    chunkId: "chunk-b",
+    writePaths: ["src/module-b/**"],
+  });
+  const r3 = refineEvolveKnowledge(s3.repo, s3.dir, s3.config, { auto: true });
+  assert.equal(r3.approved, true);
+  assert.equal(r3.lessons.length, 2);
+  const decisions = r3.lessons.map((l) => l.review.decision);
+  assert.ok(decisions.includes("approved"));
+  assert.ok(decisions.includes("rejected"));
+  const s3Ev = path.join(s3.repo, "docs", "knowledge", "evolve", `${path.basename(s3.dir)}.md`);
+  const md3 = fs.readFileSync(s3Ev, "utf8");
+  assert.match(md3, /### task-chunk-a/);
+  assert.ok(!md3.includes("task-chunk-b"), "rejected lesson must not be written");
 });
