@@ -93,7 +93,7 @@ export const staffingCommands: Command[] = [
     usage: "picode staffing score --repo <path> --run <id> --task <task_id> [--by people-qa] [--note \"...\"]",
     run: async (ctx: CommandContext) => {
       const taskId = need(ctx, "--task");
-      const r = scoreTask(ctx.repo, ctx.dir!, ctx.config!, taskId, {
+      const r = await scoreTask(ctx.repo, ctx.dir!, ctx.config!, taskId, {
         by: ctx.arg("--by"),
         note: ctx.arg("--note"),
       });

@@ -143,6 +143,18 @@ export function approveBrief(dir: string, taskId: string, by: string): void {
   writeYamlFile(p, brief);
 }
 
+/**
+ * 单一判据（P1：原 self-drive/staffing 各自实现且判据不一致）：
+ * brief 已批准 = status==="approved" ∧（配置要求时）approved_by 存在。
+ */
+export function isBriefApproved(dir: string, taskId: string, config: PicodeConfig): boolean {
+  if (!config.work_brief.require_run_lead_approval) return true;
+  const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");
+  if (!fs.existsSync(p)) return false;
+  const b = readYamlFile<{ status?: string; approved_by?: string }>(p);
+  return b?.status === "approved" && !!b.approved_by;
+}
+
 export function assertBriefApproved(dir: string, taskId: string, config: PicodeConfig): void {
   if (!config.work_brief.require_run_lead_approval) return;
   const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");

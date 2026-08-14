@@ -1,5 +1,5 @@
 import path from "node:path";
-import { assertSafeName, ensureDir, readYamlFile, writeYamlFile, type PicodeConfig } from "@picode/core";
+import { assertSafeName, ensureDir, readYamlFile, withFileLock, writeYamlFile, type PicodeConfig } from "@picode/core";
 import type { Seat } from "./staffing.js";
 
 /**
@@ -141,38 +141,42 @@ function computeTalentSummary(records: TalentRecord[]): TalentSummary {
  * Upsert talent records (idempotent, keyed by run_id+task_id+seat — re-scoring
  * a task overwrites its own records) and persist the pool with a fresh summary.
  */
-export function appendTalentRecords(
+export async function appendTalentRecords(
   repoRoot: string,
   config: PicodeConfig,
   records: TalentRecord[],
-): TalentPool {
-  const pool = readTalentPool(repoRoot, config);
-  const key = (r: TalentRecord) => `${r.run_id}\u0000${r.task_id}\u0000${r.seat}`;
-  const seen = new Set(pool.records.map(key));
-  for (const rec of records) {
-    // codename/team_name double as knowledge file names — never let an override escape.
-    assertSafeName(rec.codename, "codename");
-    assertSafeName(rec.team_name, "team_name");
-    if (seen.has(key(rec))) {
-      pool.records[pool.records.findIndex((r) => key(r) === key(rec))] = rec;
-    } else {
-      pool.records.push(rec);
-      seen.add(key(rec));
+): Promise<TalentPool> {
+  // 并发安全（P1）：pool 读-改-写持锁，多个进程并发评分不互相覆盖
+  const file = talentPoolPath(repoRoot, config);
+  return withFileLock(`${file}.lock`, () => {
+    const pool = readTalentPool(repoRoot, config);
+    const key = (r: TalentRecord) => `${r.run_id}\u0000${r.task_id}\u0000${r.seat}`;
+    const seen = new Set(pool.records.map(key));
+    for (const rec of records) {
+      // codename/team_name double as knowledge file names — never let an override escape.
+      assertSafeName(rec.codename, "codename");
+      assertSafeName(rec.team_name, "team_name");
+      if (seen.has(key(rec))) {
+        pool.records[pool.records.findIndex((r) => key(r) === key(rec))] = rec;
+      } else {
+        pool.records.push(rec);
+        seen.add(key(rec));
+      }
     }
-  }
-  pool.records.sort((a, b) => (a.at < b.at ? -1 : 1));
-  pool.summary = computeTalentSummary(pool.records);
-  pool.updated_at = new Date().toISOString();
-  ensureDir(path.dirname(talentPoolPath(repoRoot, config)));
-  writeYamlFile(talentPoolPath(repoRoot, config), pool);
-  return pool;
+    pool.records.sort((a, b) => (a.at < b.at ? -1 : 1));
+    pool.summary = computeTalentSummary(pool.records);
+    pool.updated_at = new Date().toISOString();
+    ensureDir(path.dirname(file));
+    writeYamlFile(file, pool);
+    return pool;
+  });
 }
 
 /**
  * Upsert ledger entries (idempotent, keyed by kind+name+run_id). Approving the
  * same triad twice must not duplicate its identity records.
  */
-export function appendLedgerEntries(
+export async function appendLedgerEntries(
   repoRoot: string,
   config: PicodeConfig,
   entries: Array<{
@@ -182,23 +186,27 @@ export function appendLedgerEntries(
     task_id: string;
     seat: Seat | null;
   }>,
-): NameLedger {
-  const ledger = readNameLedger(repoRoot, config);
-  const now = new Date().toISOString();
-  const key = (e: LedgerEntry) => `${e.kind}\u0000${e.name}\u0000${e.run_id}`;
-  const seen = new Set(ledger.entries.map(key));
-  for (const en of entries) {
-    assertSafeName(en.name, en.kind === "codename" ? "codename" : "team_name");
-    const entry: LedgerEntry = { ...en, first_used_at: now };
-    if (seen.has(key(entry))) continue;
-    ledger.entries.push(entry);
-    seen.add(key(entry));
-  }
-  ledger.entries.sort((a, b) => (a.first_used_at < b.first_used_at ? -1 : 1));
-  ledger.updated_at = now;
-  ensureDir(path.dirname(nameLedgerPath(repoRoot, config)));
-  writeYamlFile(nameLedgerPath(repoRoot, config), ledger);
-  return ledger;
+): Promise<NameLedger> {
+  // 并发安全（P1）：ledger 读-改-写持锁
+  const file = nameLedgerPath(repoRoot, config);
+  return withFileLock(`${file}.lock`, () => {
+    const ledger = readNameLedger(repoRoot, config);
+    const now = new Date().toISOString();
+    const key = (e: LedgerEntry) => `${e.kind}\u0000${e.name}\u0000${e.run_id}`;
+    const seen = new Set(ledger.entries.map(key));
+    for (const en of entries) {
+      assertSafeName(en.name, en.kind === "codename" ? "codename" : "team_name");
+      const entry: LedgerEntry = { ...en, first_used_at: now };
+      if (seen.has(key(entry))) continue;
+      ledger.entries.push(entry);
+      seen.add(key(entry));
+    }
+    ledger.entries.sort((a, b) => (a.first_used_at < b.first_used_at ? -1 : 1));
+    ledger.updated_at = now;
+    ensureDir(path.dirname(file));
+    writeYamlFile(file, ledger);
+    return ledger;
+  });
 }
 
 /**

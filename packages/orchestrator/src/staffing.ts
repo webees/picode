@@ -18,6 +18,7 @@ import {
 } from "@picode/core";
 import { SESSION_EVENTS } from "@picode/core";
 import { readGoal } from "./run-store.js";
+import { isBriefApproved } from "./task.js";
 import { SessionStore } from "./session-store.js";
 import { sleepAgent } from "./pi-adapter.js";
 import { applyEvent } from "./rules-engine.js";
@@ -314,13 +315,6 @@ export function assertStaffingApproved(
   }
 }
 
-function briefApproved(dir: string, taskId: string, config: PicodeConfig): boolean {
-  if (!config.work_brief.require_run_lead_approval) return true;
-  const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");
-  if (!fs.existsSync(p)) return false;
-  const b = readYamlFile<{ status?: string; approved_by?: string }>(p)!;
-  return b.status === "approved" && !!b.approved_by;
-}
 
 /**
  * `staffing approve`: people-qa check → lock staffing.yaml → register triad
@@ -392,7 +386,7 @@ export async function approveStaffing(
 
   // Identity registry (16 §9.3): record every locked codename/team_name in the
   // name ledger so future same-run hires never reuse a name (TC-03/TC-12).
-  appendLedgerEntries(repoRoot, config, [
+  await appendLedgerEntries(repoRoot, config, [
     { kind: "team_name", name: teamName, run_id: runId, task_id: taskId, seat: null },
     ...codenames.map((c) => ({
       kind: "codename" as const,
@@ -429,7 +423,7 @@ export async function approveStaffing(
   // but wake rejections are surfaced to the caller — observability, not silence.
   let wokeSquad = false;
   const wokeErrors: Array<{ agent_id: string; reason: string }> = [];
-  if (briefApproved(dir, taskId, config)) {
+  if (isBriefApproved(dir, taskId, config)) {
     const ev = await applyEvent(dir, config, SESSION_EVENTS.TASK_READY, { taskId });
     wokeSquad = true;
     for (const a of ev.actions) {

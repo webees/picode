@@ -61,7 +61,7 @@ test("score: happy path yields ~100 team/persona and persists scores.yaml + know
   const staffing = await hire(repo, dir, config, taskId);
   finishTask(dir, taskId);
 
-  const scores = scoreTask(repo, dir, config, taskId, { by: "people-qa", note: "clean run" });
+  const scores = await scoreTask(repo, dir, config, taskId, { by: "people-qa", note: "clean run" });
   // base 50 + evidence 30 + dissolved 10 + ack 5 + retries 0 + handoff 0 = 95
   assert.equal(scores.team_score, 95);
   assert.equal(scores.team_name, staffing.team_name);
@@ -97,8 +97,8 @@ test("score: re-scoring is idempotent (archive records keyed by task+seat)", asy
   const { repo, dir, config, taskId } = await setup();
   const staffing = await hire(repo, dir, config, taskId);
   finishTask(dir, taskId);
-  scoreTask(repo, dir, config, taskId);
-  scoreTask(repo, dir, config, taskId);
+  await scoreTask(repo, dir, config, taskId);
+  await scoreTask(repo, dir, config, taskId);
   const tArch = YAML.parse(
     fs.readFileSync(path.join(repo, "docs/knowledge/hr/teams", `${staffing.team_name}.yaml`), "utf8"),
   ) as { records: unknown[]; summary: { count: number } };
@@ -119,7 +119,7 @@ test("score: failed evidence and retries drag the score down", async () => {
     by: `sdet@${taskId}`,
   });
 
-  const scores = scoreTask(repo, dir, config, taskId);
+  const scores = await scoreTask(repo, dir, config, taskId);
   // base 50 + evidence −30 + failed −10 + ack 0 + retries −10 = 0; sdet seat −5 (fail)
   assert.equal(scores.team_score, 0);
   const sdet = scores.persona_scores.find((p) => p.seat === "sdet")!;
@@ -129,12 +129,12 @@ test("score: failed evidence and retries drag the score down", async () => {
 
 test("score: refuses without approved staffing", async () => {
   const { repo, dir, config, taskId } = await setup();
-  assert.throws(() => scoreTask(repo, dir, config, taskId), /staffing not approved/);
+  await assert.rejects(scoreTask(repo, dir, config, taskId), /staffing not approved/);
 });
 
 test("score: refuses a task that has not finished (16 §9 P07 gate)", async () => {
   const { repo, dir, config, taskId } = await setup();
   await hire(repo, dir, config, taskId);
   // task.status is still "queued" (never dissolved) → must refuse
-  assert.throws(() => scoreTask(repo, dir, config, taskId), /not finished/);
+  await assert.rejects(scoreTask(repo, dir, config, taskId), /not finished/);
 });

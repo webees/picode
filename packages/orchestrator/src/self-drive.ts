@@ -9,6 +9,7 @@ import {
   type ApplyResult,
 } from "./rules-engine.js";
 import { sweepDraftPark, readGoal } from "./run-store.js";
+import { isBriefApproved } from "./task.js";
 import { sweepProgress, type SweepResult } from "./progress.js";
 import { sleepAgent, buildPiEnv } from "./pi-adapter.js";
 import { OpencodeSpawner } from "./opencode-adapter.js";
@@ -78,13 +79,6 @@ function readRunState(dir: string): { halt?: boolean } | null {
   return readYamlFile<{ halt?: boolean }>(p);
 }
 
-function briefApproved(dir: string, taskId: string): boolean {
-  const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");
-  if (!fs.existsSync(p)) return false;
-  const b = readYamlFile<{ status?: string }>(p);
-  return b?.status === "approved";
-}
-
 function seatIdsOf(task: TaskMeta): string[] | null {
   if (!task.triad) return null;
   return [task.triad["squad-lead"], task.triad.engineer, task.triad.sdet];
@@ -126,7 +120,7 @@ export function deriveEvents(dir: string, config: PicodeConfig): DerivedEvent[] 
       if (!registered) continue;
       const alreadyStarted = seats.some((id) => sessionById.get(id)?.state === "awake");
       if (alreadyStarted) continue;
-      if (config.work_brief.require_run_lead_approval && !briefApproved(dir, chunk.task_id)) {
+      if (config.work_brief.require_run_lead_approval && !isBriefApproved(dir, chunk.task_id, config)) {
         continue;
       }
       events.push({ event: SESSION_EVENTS.TASK_READY, taskId: chunk.task_id });

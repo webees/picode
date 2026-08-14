@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { assertSafeName, ensureDir, readYamlFile, writeYamlFile, type PicodeConfig } from "@picode/core";
+import { assertSafeName, ensureDir, readYamlFile, withFileLock, writeYamlFile, type PicodeConfig } from "@picode/core";
 import {
   HANDOFF_FILES,
   handoffDir,
@@ -144,13 +144,13 @@ export function readScores(dir: string, taskId: string): TaskScores | null {
  * staffing (team_name + personas). Writes scores.yaml and upserts the
  * knowledge-base archives for every codename and the team name.
  */
-export function scoreTask(
+export async function scoreTask(
   repoRoot: string,
   dir: string,
   config: PicodeConfig,
   taskId: string,
   opts: { by?: string; note?: string } = {},
-): TaskScores {
+): Promise<TaskScores> {
   const staffing = readStaffing(dir, taskId);
   if (!staffing || staffing.status !== "approved") {
     throw new Error(`staffing not approved for ${taskId}; cannot score`);
@@ -213,57 +213,60 @@ export function scoreTask(
     team_breakdown: shared,
     persona_scores: personaScores,
   };
-  ensureDir(path.dirname(scoresPath(dir, taskId)));
-  writeYamlFile(scoresPath(dir, taskId), scores);
+  // 写段持锁（P1）：同 task 并发评分不互相覆盖（scores + archives + pool）
+  return withFileLock(path.join(dir, "tasks", taskId, ".score.lock"), async () => {
+    ensureDir(path.dirname(scoresPath(dir, taskId)));
+    writeYamlFile(scoresPath(dir, taskId), scores);
 
-  // Knowledge-base aggregation for later optimization.
-  const runId = path.basename(dir);
-  const recordBase = {
-    at: scores.scored_at,
-    run_id: runId,
-    task_id: taskId,
-    result: task.status,
-    note: opts.note,
-  };
-  for (const ps of personaScores) {
-    assertSafeName(ps.codename, "codename");
+    // Knowledge-base aggregation for later optimization.
+    const runId = path.basename(dir);
+    const recordBase = {
+      at: scores.scored_at,
+      run_id: runId,
+      task_id: taskId,
+      result: task.status,
+      note: opts.note,
+    };
+    for (const ps of personaScores) {
+      assertSafeName(ps.codename, "codename");
+      upsertArchive(
+        path.join(repoRoot, config.paths.knowledge_root, "hr", "personas", `${ps.codename}.yaml`),
+        {
+          kind: "persona",
+          key: ps.codename,
+          seat: ps.seat,
+          records: [{ ...recordBase, score: ps.score, seat: ps.seat }],
+        },
+      );
+    }
     upsertArchive(
-      path.join(repoRoot, config.paths.knowledge_root, "hr", "personas", `${ps.codename}.yaml`),
+      path.join(repoRoot, config.paths.knowledge_root, "hr", "teams", `${staffing.team_name}.yaml`),
       {
-        kind: "persona",
-        key: ps.codename,
-        seat: ps.seat,
-        records: [{ ...recordBase, score: ps.score, seat: ps.seat }],
+        kind: "team",
+        key: staffing.team_name,
+        records: [{ ...recordBase, score: teamScore }],
       },
     );
-  }
-  upsertArchive(
-    path.join(repoRoot, config.paths.knowledge_root, "hr", "teams", `${staffing.team_name}.yaml`),
-    {
-      kind: "team",
-      key: staffing.team_name,
-      records: [{ ...recordBase, score: teamScore }],
-    },
-  );
 
-  // Talent pool (16 §9.3 / talent.md): one record per (task, seat) with the
-  // score, quality grade and the skills wanted from the staffing request —
-  // the "产出质量等级由评分流程回写" promise of the 人才库主档 (TC-11).
-  const request = readStaffingRequest(dir, taskId);
-  const records: TalentRecord[] = personaScores.map((ps) => ({
-    at: scores.scored_at,
-    run_id: runId,
-    task_id: taskId,
-    team_name: staffing.team_name,
-    seat: ps.seat,
-    codename: ps.codename,
-    skills: request?.skills_wanted ?? [],
-    score: ps.score,
-    grade: gradeFor(ps.score),
-    result: task.status,
-  }));
-  appendTalentRecords(repoRoot, config, records);
-  return scores;
+    // Talent pool (16 §9.3 / talent.md): one record per (task, seat) with the
+    // score, quality grade and the skills wanted from the staffing request —
+    // the "产出质量等级由评分流程回写" promise of the 人才库主档 (TC-11).
+    const request = readStaffingRequest(dir, taskId);
+    const records: TalentRecord[] = personaScores.map((ps) => ({
+      at: scores.scored_at,
+      run_id: runId,
+      task_id: taskId,
+      team_name: staffing.team_name,
+      seat: ps.seat,
+      codename: ps.codename,
+      skills: request?.skills_wanted ?? [],
+      score: ps.score,
+      grade: gradeFor(ps.score),
+      result: task.status,
+    }));
+    await appendTalentRecords(repoRoot, config, records);
+    return scores;
+  });
 }
 
 /** Append one record to an HR archive, recomputing the summary (idempotent per task_id). */
