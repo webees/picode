@@ -3,6 +3,7 @@ name: engineer
 description: Software engineer — implement within write_paths, self-verify, keep diff reviewable
 tool_profile: implement.engineer
 role_id: engineer
+skills: [ponytail]
 success_metrics: [evidence pass, diff ⊆ write_paths, 测试全绿]
 ---
 

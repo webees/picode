@@ -21,6 +21,48 @@ export interface OpencodeHandle {
 }
 
 /**
+ * C2（D082-3/4）：把技能索引（env 注入）渲染成系统 prompt 的 skills 段。
+ * 只渲染 metadata（name/description/path），不渲染 SKILL.md 正文；无 env 时返回空串，
+ * 保证系统 prompt 逐字节不变。
+ */
+export function renderSkillsSection(env: Record<string, string>): string {
+  const indexRaw = env.PICODE_SKILLS_INDEX;
+  const declaredRaw = env.PICODE_PERSONA_SKILLS;
+  if (!indexRaw && !declaredRaw) return "";
+  const index = safeJson<SkillMeta[]>(indexRaw, []);
+  const declared = safeJson<string[]>(declaredRaw, []);
+  const lines: string[] = [];
+  if (index.length > 0) {
+    lines.push("## 可用技能（metadata）");
+    for (const s of index) {
+      lines.push(`- ${s.name}: ${s.description} (${s.path})`);
+    }
+  }
+  if (declared.length > 0) {
+    lines.push("## 本会话声明技能");
+    for (const p of declared) {
+      lines.push(`- ${p}`);
+    }
+  }
+  return lines.length > 0 ? `\n\n${lines.join("\n")}` : "";
+}
+
+interface SkillMeta {
+  name: string;
+  description: string;
+  path: string;
+}
+
+function safeJson<T>(raw: string | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
  * Client-side guard for ERR-01 (serve stream hang): a serve that never flushes
  * its response must not hang spawn forever. `requestWithRetry` bounds total
  * latency while retrying transient failures (timeout / network glitch) with a
@@ -147,7 +189,7 @@ export class OpencodeSpawner {
     extraText?: string,
   ): ReadyMessage {
     const persona = env.PICODE_PERSONA ? `\n\nRole prompt:\n${env.PICODE_PERSONA}` : "";
-    const system = `${this.config.opencode.system_prompt_prefix}${persona}`;
+    const system = `${this.config.opencode.system_prompt_prefix}${persona}${renderSkillsSection(env)}`;
     const parts: Array<{ type: string; text: string }> = [
       { type: "text", text: READY_MESSAGE_TEXT },
     ];
