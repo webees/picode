@@ -60,7 +60,7 @@
 |D052|**SessionStore.register 无锁审计结论**（I10/A4）：`register` 为 check-then-write 无 flock；因同 agentId 记录内容确定性 + writeAtomic 原子替换，并发重复注册为良性 last-wins，无撕裂状态；跨进程重复注册由调用方（init/CLI）保证单次。transition/attachPiSession/setError 均持锁串行，已加并发测试|
 |D053|**文档↔实现偏差记录**（不改 spec 正文）：(1) 18 阶段 A 内联会话样例无 `error` 字段，实现与 `reference/schemas/session.yaml` 均含——以 schema 样例为准；(2) 13 §5 `hr.default_mode` vs 实现键 `staffing.mode=real_recruit`；(3) 13 §7 `prompts.root` vs 实现键 `paths.prompts_root`；(4) 13 未列 `product.require_acceptance_before_active`（见 D034）。实现键全部以 `PicodeConfig` 类型为准|
 |D054|**命名律复核结论**（glossary §0）：R1（role∩room=∅）与 id 字符集（`^[a-z][a-z0-9-]*$`，因 id 用作文件名）机械强制；R2–R7 为新增 ID 的约定（前缀/后缀/四字），机械全量强制会产生误报，不加入校验器|
-|D055|**死配置键标记**（质量重构）：以下键按 13/17/19 声明于 `PicodeConfig` 与默认值，但实现零读取——保留以维持配置面兼容并在类型注释中标 `Reserved (D055)`：`sess_mgr.enabled/idle_sleep_sec/allow_orch_force_wake`、`paths.prompts_root`、`git.rebase_on_merge/merge_serial/force_dissolve_autocommit`、`scheduler.max_parallel_triads`、`timeouts.progress_interval_sec/cross_room_ttl_sec`、`models.*`、`info_pipeline.*`、`cross_room.*`、`work_brief.seat_slicing/require_docs_assemble/allow_research_attach`、`features` 四键（除 `allow_implement_before_active`）、`bus.adapter`、`i18n.locale`、`self_evolve.enabled/require_sponsor_merge/knowledge_log_glob`；override 后统一 validateConfig 已防降级（D3 测试）——`paths.skills_root` 已于 D082 激活移除本标记，其余死键不动|
+|D055|**死配置键标记**（质量重构）：以下键按 13/17/19 声明于 `PicodeConfig` 与默认值，但实现零读取——保留以维持配置面兼容并在类型注释中标 `Reserved (D055)`：`sess_mgr.enabled/idle_sleep_sec/allow_orch_force_wake`、`paths.prompts_root`、`git.rebase_on_merge/merge_serial/force_dissolve_autocommit`、`scheduler.max_parallel_triads`、`timeouts.progress_interval_sec/cross_room_ttl_sec`、`models.*`、`info_pipeline.*`、`cross_room.*`、`work_brief.seat_slicing/require_docs_assemble/allow_research_attach`、`features` 四键（除 `allow_implement_before_active`）、`bus.adapter`、`i18n.locale`、`self_evolve.enabled/require_sponsor_merge/knowledge_log_glob`；override 后统一 validateConfig 已防降级（D3 测试）——`paths.skills_root` 已于 D084 激活移除本标记，其余死键不动|
 |D056|**CLI 流程清晰化**（方向 E）：命令注册表驱动 `picode --help` 按域分组（run/goal/session/staffing/task/merge/memory/evolve/window/status）；每命令 `--help` 显示 usage；缺失参数/未知命令抛 `USAGE` 码并附「下一步」提示；全部错误统一 `[picode] ERROR: <CODE>: <msg>`；文档地图与 GETTING_STARTED 补全新命令域（E4）|
 |D057|**真 LLM 闭环验证修复**（验收测试发现）：(1) `loader.ts` 补 13 §2 第 2 层「用户全局 ~/.picode/config.yaml」（原实现缺失），业务仓免配 LLM 后端；(2) 新增统一会话入口 `wakeAgent/sleepAgent/terminateAgent`，CLI 与规则引擎（applyEvent/drain/staffing/closure）共用——opencode/pi 配置下规则引擎 wake 真实建会话（原为纯状态机，导致「已 awake 无法补 spawn」死角），默认配置行为不变；(3) `npm test` 隔离 HOME（mktemp），单元测试不再受用户全局配置污染；(4) 新增 `npm run test:e2e`（scripts/e2e/smoke.sh + docs/guides/e2e-smoke.md）：临时仓完整交付闭环 + 真实 LLM 会话 + 串行 merge 合入 main|
 |D058|**opencode serve v1.18 API 契约实测**（E2E 专用测试 key 验证）：(1) `POST /session` 仅接受 `{parentID?, title?}`——provider/model/system/tools 均不在会话级，多余字段被忽略；(2) 模型在**消息级**指定：`POST /session/{id}/message` body `{model: {providerID, modelID}, parts: [{type:"text",text}]}`，`model` 必须是对象（纯字符串或 `p/id` 格式均 400），不带则回退 serve 默认模型（本机 `gpt-5.6-luna` → 区域 403）；(3) 响应为单条 JSON `{info, parts}` 而非 SSE；(4) picode 适配器（D044）契约正确无需改，`smoke.sh` 第 7 步已补 model 对象并强化断言（上游错误/空响应即失败）；(5) E2E 偶发唤醒失败（三角 2/3）：applyEvent 的 wake 失败仅置 `result.rejected` 不抛、approve 不感知——smoke.sh 断言三角会话 `error` 字段兜底，产品行为暂不改（留观察）|
@@ -283,13 +283,14 @@
 - 边界：stripNoise 缺省 = 现行为（零回归）；仅剔 `READY_MESSAGE_TEXT`，不剔 `CONTINUATION_PROMPT`（re-spawn 不经 feed 路径，口径与 D077 feed 一致）
 - commit: 3eb8434（C2 task-respawn-stripnoise 合并）
 
-|D084|**缓项：checkpoint 快照 / maxTokens 真计量**（E7 缓项延续）：会话 checkpoint 快照先定「快照只读、文件为准」边界；maxTokens 待 serve token 契约（D058）就绪|
-|D085|**Skill harness 落地（技能承载体系）**：锚定 agentskills spec——① 新增 `skill-lint`（镜像 persona-lint 数据优先设计）校验 `skills_root` 下全部 `**/SKILL.md` frontmatter：`name` 必填匹配 `SAFE_ID_RE` 且等于目录名、`description` 必填（>1024 仅 warning）、`license`/`allowed-tools`/`compatibility`/`argument-hint`/`metadata` 白名单、未知键 warning；② **激活** `paths.skills_root`（D055 死键局部解除，默认 `skills` 不变，`validateConfig` 补相对路径校验禁绝对/`..` 逃逸），新增纯模块 `skills.ts`（`resolveSkillsRoot`/`discoverSkills`/`buildSkillIndex`/`personaDeclaredSkills`），未配置时 harness 空转零行为变更；③ **persona skills[] 接线**：`buildPiEnv` 注入 `PICODE_SKILLS_INDEX` + `PICODE_PERSONA_SKILLS`（读人设 frontmatter `skills[]`，实例人设/平台席模板），`buildReadyMessage` 系统 prompt 追加 skills 段；④ **渐进披露三层**：metadata（启动注入，有界截断）→ instructions（激活时 `repo_read` SKILL.md 正文）→ resources（按需），SKILL.md 正文绝不进系统 prompt；⑤ `npm run check` 追加 skill-lint；两个种子角色模板（engineer/run-lead）声明 `skills: [ponytail]` dogfood 接线。缓项：D086 skills-ref 官方工具接入、D087 打包/导入双轨机械实现、D088 skill-creator 评价循环（拒）、D089 allowed-tools 机械强制（拒）|
-|D086|**缓项：skills-ref 官方校验工具接入**（agentskills spec 工具链）：官方工具为 npm 包需联网安装/运行，picode 无裸网（D010 信息控制）；自研 skill-lint 覆盖等价语义（name/desc/命名），后续可对齐。留档|
-|D087|**缓项：skill 打包/导入双轨**（mattpocock M6：托管只读 vs 可编辑副本）：已以文档约定存在（skills/README M6 双轨）；机械实现依赖 CLI 下载器（需网），本轮不做。留档|
-|D088|**拒：skill-creator / 评价循环**（anthropics 全套 evals/benchmark/variance）：依赖 LLM 评价循环，超出「承载体系」边界；后续独立 run 立项|
-|D089|**拒：allowed-tools 字段机械强制**（skill 级工具白名单 vs picode tool_profile）：与 09 tool-profiles ACL 关系未定，强制可能破坏现有权限模型；本轮仅解析不强制。留档待设计|
-## D085 — Skill harness 落地（技能承载体系）
+|D084|**Skill harness 落地（技能承载体系）**：锚定 agentskills spec——① 新增 `skill-lint`（镜像 persona-lint 数据优先设计）校验 `skills_root` 下全部 `**/SKILL.md` frontmatter：`name` 必填匹配 `SAFE_ID_RE` 且等于目录名、`description` 必填（>1024 仅 warning）、`license`/`allowed-tools`/`compatibility`/`argument-hint`/`metadata` 白名单、未知键 warning；② **激活** `paths.skills_root`（D055 死键局部解除，默认 `skills` 不变，`validateConfig` 补相对路径校验禁绝对/`..` 逃逸），新增纯模块 `skills.ts`（`resolveSkillsRoot`/`discoverSkills`/`buildSkillIndex`/`personaDeclaredSkills`），未配置时 harness 空转零行为变更；③ **persona skills[] 接线**：`buildPiEnv` 注入 `PICODE_SKILLS_INDEX` + `PICODE_PERSONA_SKILLS`（读人设 frontmatter `skills[]`，实例人设/平台席模板），`buildReadyMessage` 系统 prompt 追加 skills 段；④ **渐进披露三层**：metadata（启动注入，有界截断）→ instructions（激活时 `repo_read` SKILL.md 正文）→ resources（按需），SKILL.md 正文绝不进系统 prompt；⑤ `npm run check` 追加 skill-lint；两个种子角色模板（engineer/run-lead）声明 `skills: [ponytail]` dogfood 接线。缓项：D085 skills-ref 官方工具接入、D086 打包/导入双轨机械实现、D087 skill-creator 评价循环（拒）、D088 allowed-tools 机械强制（拒）|
+|D085|**缓项：skills-ref 官方校验工具接入**（agentskills spec 工具链）：官方工具为 npm 包需联网安装/运行，picode 无裸网（D010 信息控制）；自研 skill-lint 覆盖等价语义（name/desc/命名），后续可对齐。留档|
+|D086|**缓项：skill 打包/导入双轨**（mattpocock M6：托管只读 vs 可编辑副本）：已以文档约定存在（skills/README M6 双轨）；机械实现依赖 CLI 下载器（需网），本轮不做。留档|
+|D087|**拒：skill-creator / 评价循环**（anthropics 全套 evals/benchmark/variance）：依赖 LLM 评价循环，超出「承载体系」边界；后续独立 run 立项|
+|D088|**拒：allowed-tools 字段机械强制**（skill 级工具白名单 vs picode tool_profile）：与 09 tool-profiles ACL 关系未定，强制可能破坏现有权限模型；本轮仅解析不强制。留档待设计|
+|D089|**决策编号全局分配器（watermark ledger + reserve 脚本）**：`docs/decisions/watermark.yaml`（schema v1：`next_number` + `reservations[]`）+ `docs/decisions/reserve.mjs`（`--reserve --run <id> --count N` 领取连续编号段 / `--land` 标记占用 / `--status` 只读快照；复用 `@picode/core` `withFileLock`+`writeAtomic`，flock 临界区原子 read-modify-write，同 run 重复 reserve 幂等返回既有预留）；DECISIONS 顶部加水位说明。**勿手改 watermark（机器状态）**——新决策先 `--reserve` 领号、落地后 `--land` 标记占用|
+|D090|**decision-lint 决策编号完整性校验**：镜像 persona-lint 数据优先设计（`checkDecisions` 返回 `{ok, problems, files}` + CLI），校验 ①表行编号唯一（DUP_TABLE）②详条编号唯一（DUP_SECTION）③详条↔表行对应（TABLE_SECTION_MISMATCH）④watermark 水位一致（WATERMARK_DRIFT）⑤docs/** D0xx 引用可解析（REF_UNRESOLVED warning）⑥reservations 幂等/无冲突（RESERVATION_COLLISION）；`--plan <file>` 规划期预检；`npm run check` 接线三 lint（persona-lint + skill-lint + decision-lint）|
+## D084 — Skill harness 落地（技能承载体系）
 - 2026-08-14 · 来源：run-lead 自治规划 run-2026-08-13T23-50-59-484Z（从 anthropics/skills + agentskills spec 学习，改 picode 自身技能承载体系）
 - 问题：`paths.skills_root` 是 D055 死键（声明零读取），两个种子 SKILL.md 无任何校验守卫，新 skill 可任意书写；`Persona.skills[]` 是必填维度但零消费；ready 消息若硬注入 skill 正文会爆 context
 - 决定（C1 spec + C2 wiring 落地）：
@@ -300,24 +301,51 @@
   - **⑤ 校验/等价检查**：`npm run check` 追加 skill-lint（persona-lint + skill-lint 双通过）；单测覆盖 discover/buildSkillIndex/personaDeclaredSkills 与 skill-lint 全错误码及 validateConfig 路径逃逸拒绝
   - **⑥ 种子声明**：`.picode/agents/engineer.md` 与 `run-lead.md` frontmatter 增可选 `skills: [ponytail]`（dogfood 接线；persona-lint TEMPLATE_REQUIRED 不含 skills，加字段不破坏）
 - 实现：C1 `packages/core`（skills.ts + skill-lint + config 激活 + index 导出 + package.json check 接线，884af8d）；C2 `packages/orchestrator`（pi-adapter buildPiEnv + opencode-adapter renderSkillsSection + 2 角色模板，d5d3aeb，含冲突修复 3ddabcc）；C3 本文档 + skill-spec.md + skill-harness.md + catalog §15 + E11 纪要
-- 边界：未知 skill 名 → index 标记 unavailable 不阻断 spawn；allowed-tools 仅解析不强制（D089 拒）；agent 激活为模型自主（D003 编排器无 LLM）
-- 缓项：D089 skills-ref 官方工具接入（需网）、D087 打包/导入双轨机械实现（需网下载器）；拒项：D088 skill-creator 评价循环、D089 allowed-tools 机械强制
+- 边界：未知 skill 名 → index 标记 unavailable 不阻断 spawn；allowed-tools 仅解析不强制（D088 拒）；agent 激活为模型自主（D003 编排器无 LLM）
+- 缓项：D085 skills-ref 官方工具接入（需网）、D086 打包/导入双轨机械实现（需网下载器）；拒项：D087 skill-creator 评价循环、D088 allowed-tools 机械强制
 
-## D086 — 缓项：skills-ref 官方校验工具接入
+## D085 — 缓项：skills-ref 官方校验工具接入
 - 2026-08-14 · 来源：run-2026-08-13T23-50-59-484Z 决策清单 (d) 1
 - 事实：agentskills spec 官方校验工具为 npm 包，需联网安装/运行，picode 无裸网（D010 信息控制）
 - 处置：自研 skill-lint 已覆盖等价语义（name/desc/命名）；后续 picode 信息控制允许后接官方工具或对齐其语义。留档
 
-## D087 — 缓项：skill 打包/导入双轨机械实现
+## D086 — 缓项：skill 打包/导入双轨机械实现
 - 2026-08-14 · 来源：run-2026-08-13T23-50-59-484Z 决策清单 (d) 2
 - 事实：mattpocock M6 双轨（托管只读 vs 可编辑副本）已以文档约定存在（skills/README M6），机械实现依赖 CLI 下载器（需网）
 - 处置：本轮不做；后续独立任务实现托管/可编辑安装器。留档
 
-## D088 — 拒：skill-creator / 评价循环
+## D087 — 拒：skill-creator / 评价循环
 - 2026-08-14 · 来源：run-2026-08-13T23-50-59-484Z 决策清单
 - 决定：anthropics skill-creator 全套（evals/benchmark/variance）依赖 LLM 评价循环，超出本轮「承载体系」边界——本轮只做规格+校验+注入；后续独立 run 立项
 
-## D089 — 拒：allowed-tools 字段机械强制
+## D088 — 拒：allowed-tools 字段机械强制
 - 2026-08-14 · 来源：run-2026-08-13T23-50-59-484Z 决策清单
 - 决定：skill 级工具白名单与 picode ACL（09 tool-profiles 六层）关系未定，强制可能破坏现有权限模型；本轮仅解析不强制，留档待设计
 - 纪律：未立项不实现
+
+## D089 — 决策编号全局分配器（watermark ledger + reserve 脚本，C1 task-decision-reserve）
+- 2026-08-14 · 来源：run-lead 自治规划 run-2026-08-14T07-27-45-654Z（并行 run 决策编号冲突修复）
+- 问题：并行 run 各自向 DECISIONS 追加决策时按「当前最大编号+1」取号会撞号（D084-D089 曾因 skill docs 与 checkpoint docs 并行合并冲突重排，重复编号进入 main 无人拦截）；碰撞只能事后人工平移
+- 决定：引入机器状态水位 ledger 全局分配决策编号——
+  - `docs/decisions/watermark.yaml`（schema v1）：`next_number` + `reservations[]`（`run` + 编号区间，`status: reserved|landed`）
+  - `docs/decisions/reserve.mjs`：`--reserve --run <id> --count N` 领取连续编号段并推进水位 / `--land --run <id>` 标记占用 / `--status` 只读快照；复用 `@picode/core` `withFileLock`+`writeAtomic`，flock 临界区原子 read-modify-write；同 run 重复 `--reserve` 幂等返回既有预留
+  - `docs/DECISIONS.md` 顶部加水位说明：**勿手改 watermark（机器状态）**，新决策先 `--reserve` 领号、落地后 `--land` 标记占用
+  - 预留字段名：C1 reserve.mjs 写 `from`/`count`，C2 decision-lint 解析 `start`/`count`——两实现不一致（见 E12 剩余风险），本 run 落地按 lint 兼容 `start`/`count`
+- 实现：`docs/decisions/{watermark.yaml,reserve.mjs,reserve.test.mjs}`（9 用例：幂等/并发区间不重叠/land 幂等/损坏文件拒读）+ DECISIONS 顶部说明
+- 验证：npm run build + npm test 全绿（429 断言）+ reserve.test.mjs 9/9 通过
+- commit: 2d39b37 / 4e004c0（C1 task-decision-reserve 合并）
+
+## D090 — decision-lint 决策编号完整性校验（C2 task-decision-lint）
+- 2026-08-14 · 来源：run-lead 规划 run-2026-08-14T07-27-45-654Z C2 + D089 设备（碰撞「从事后人工平移」变「机器门禁」）
+- 问题：D089 水位 ledger 管分配，但 DECISIONS 的**完整性**（编号唯一/详条↔表行对应/水位一致/引用可解析/预留不冲突）仍无校验——损坏状态会再次静默进入 main
+- 决定：`packages/core/src/validate/decision-lint.ts`（镜像 persona-lint 数据优先设计，损坏输入不抛错，返回结构化 `{ok, problems, files}` + CLI），校验六项：
+  1. 表行编号唯一（DUP_TABLE，error）
+  2. 详条编号唯一（DUP_SECTION，error）
+  3. 详条↔表行对应（TABLE_SECTION_MISMATCH，error）
+  4. watermark 水位一致（WATERMARK_DRIFT，error：max 表号 ≤ next_number-1）
+  5. docs/** D0xx 引用可解析（REF_UNRESOLVED，warning——历史债不阻断）
+  6. reservations 幂等/无冲突（RESERVATION_COLLISION，error：与既有 DECISIONS 编号/互相重叠）
+  - `--plan <file>` 规划期预检：plan 文件 D0xx 引用对「DECISIONS ∪ 预留」解析，run-lead 写 plan 前即可拦截碰撞
+- 实现：`decision-lint.ts` + `decision-lint.test.ts`（全错误码覆盖 + 合法 fixture 零报错 + `--plan` 预检 + 修复前损坏样本报 DUP 防回归）+ `index.ts` 导出 + `npm run check` 接线（persona-lint + skill-lint + decision-lint 三 lint）
+- 验证：npm run build + npm test 全绿；decision-lint 对修复前损坏 DECISIONS 报 6 error（C3 修复后清零）
+- commit: a20dbd8 / 8460427（C2 task-decision-lint 合并）

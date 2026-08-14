@@ -1,7 +1,30 @@
 # 运维规程（serve/会话/续跑/guardian 重启/会话生命周期/真相关于文件）
 
-> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）+ D072/D073（run 收尾自动休眠 + session audit 跨 run 残留审计）+ D077/D078（摘要窗口去噪 / 平台席预算分流）+ D082（会话 checkpoint）+ D083（re-spawn 摘要去噪）。
+> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）+ D072/D073（run 收尾自动休眠 + session audit 跨 run 残留审计）+ D077/D078（摘要窗口去噪 / 平台席预算分流）+ D082（会话 checkpoint）+ D083（re-spawn 摘要去噪）+ D089/D090（决策编号全局分配器 + decision-lint）。
 > 遵循本规程可避免已知的 serve 类故障人工踩坑，并正确观察/调整续跑、重启守护热载、管理 run 收尾与跨 run 会话残留。
+
+## 决策编号规程（D089 / D090）
+
+新决策编号由机器状态水位 ledger 全局分配（`docs/decisions/watermark.yaml` + `docs/decisions/reserve.mjs`，D089），完整性由 decision-lint 机器校验（D090）。**run-lead 在规划前须先领号，决策落地后标记占用**，避免并行 run 撞号（D084-089 曾因并行合并冲突重排）。
+
+```
+1. 规划前领号：   node docs/decisions/reserve.mjs --reserve --run <run-id> --count N
+                  # 领取 N 个连续编号段并推进水位；同 run 重复 reserve 幂等返回既有预留
+2. 引用/落地：    plan 与 DECISIONS 的 D0xx 引用用预留编号；决策写入 docs/DECISIONS.md（表行 + 详条）
+3. 标记占用：     node docs/decisions/reserve.mjs --land --run <run-id>
+4. 完整性验证：   node packages/core/dist/validate/decision-lint.js <repo>
+                  # 全绿（0 error）：表行/详条唯一 + 详条↔表行对应 + 水位一致 + 引用可解析
+```
+
+要点：
+
+- `watermark.yaml` 是**机器状态**，勿手改；规划前未领号就落地决策会触发 `RESERVATION_COLLISION`
+- `decision-lint` 是 `npm run check` 的一环（persona-lint + skill-lint + decision-lint 三 lint），
+  `--plan <file>` 可在写 plan 前对 plan 的 D0xx 引用预检碰撞
+- 编号冲突/重复/水位漂移（DUP_TABLE / DUP_SECTION / WATERMARK_DRIFT / RESERVATION_COLLISION）是
+  **error**，须在 merge 前清零；docs/** 的过期引用为 warning（历史债不阻断）
+- 排查：`node docs/decisions/reserve.mjs --status` 查看水位与全部预留；watermark 损坏时 reserve.mjs
+  以初始状态引导（next_number=90）
 
 ## serve 重启规程（ERR-04 缓解）
 

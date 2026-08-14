@@ -721,3 +721,41 @@ terminology §3），面板不引入新端点、不改 API 契约。
 |------|------|
 |**仅解析不强制** ★|`skill-lint` 校验形状（非空 string[]），但不限制 agent 工具面——ACL 仍由 tool_profile 六层决定（09 tool-profiles）|
 |机械强制 skill 级工具白名单|**拒（D088）**：与现有 ACL 关系未定，强制可能破坏权限模型，留档待设计|
+
+---
+
+## 16. 决策编号管理（D089 / D090）
+
+权威正文：`docs/decisions/watermark.yaml`（机器状态水位 ledger）+ `docs/decisions/reserve.mjs`（分配器 CLI，D089）；
+编号完整性校验：`packages/core/src/validate/decision-lint.ts` + CLI `node packages/core/dist/validate/decision-lint.js`（D090）。
+
+### 16.1 编号分配方式
+
+|选项|说明|
+|------|------|
+|**机器状态水位（watermark.yaml）全局分配** ★|`node docs/decisions/reserve.mjs --reserve --run <run-id> --count N` 在 flock 临界区领取连续编号段并推进水位；`--land` 标记占用；`--status` 只读快照；同 run 重复 reserve 幂等；**勿手改 watermark（机器状态）**|
+|人工数「当前最大编号+1」|并行 run 各取号会撞号（D084-089 曾因 skill docs 与 checkpoint docs 并行合并冲突重排），不采用|
+
+**已定（D089）：机器水位全局分配。** DECISIONS 顶部水位说明要求：新决策先 `--reserve` 领号、落地后 `--land` 标记占用。
+
+### 16.2 编号完整性校验
+
+|选项|说明|
+|------|------|
+|**decision-lint 六项校验** ★|`npm run check` 内含（persona-lint + skill-lint + decision-lint 三 lint）。校验 ①表行编号唯一（DUP_TABLE）②详条编号唯一（DUP_SECTION）③详条↔表行对应（TABLE_SECTION_MISMATCH）④watermark 水位一致（WATERMARK_DRIFT）⑤docs/** D0xx 引用可解析（REF_UNRESOLVED warning）⑥reservations 幂等/无冲突（RESERVATION_COLLISION）|
+|事后人工平移修复|碰撞/损坏只能事后救火、无人拦截，不采用|
+
+**已定（D090）：机器门禁。** `--plan <file>` 预检模式把 plan 文件的 D0xx 引用对「DECISIONS ∪ 预留」解析，run-lead 写 plan 前即可拦截碰撞；错误（DUP/DRIFT/COLLISION/MISMATCH）须在 merge 前清零，引用缺失为 warning（历史债不阻断）。
+
+### 16.3 领号 / 落地流程
+
+```
+1. 规划前领号：   node docs/decisions/reserve.mjs --reserve --run <run-id> --count N
+2. 决策落地：     把预留编号写入 docs/DECISIONS.md（表行 + 详条），plan/文档引用用同一编号
+3. 标记占用：     node docs/decisions/reserve.mjs --land --run <run-id>
+4. 完整性验证：   node packages/core/dist/validate/decision-lint.js <repo>    # 全绿（0 error）
+```
+
+- 预留未落地（status: reserved）即被写入 DECISIONS → `RESERVATION_COLLISION` 错误；`--land` 后方可豁免
+- watermark 损坏/缺文件：reserve.mjs 以初始状态引导（`next_number=90`），`--status` 可查当前水位与全部预留
+- 本 run 自身的 D089/D090 即按本流程领取编号 89–90 并标记 landed（dogfood 验证）
