@@ -43,11 +43,7 @@ try {
 // 2. product acceptance（幂等：重复写覆盖）
 console.log(picode(`goal set-product-acceptance --repo ${REPO} --run ${runId} --acceptance "${ACCEPTANCE.join("; ")}"`));
 
-// 3. status active（幂等：active 再设 active 会报错则跳过）
-try {
-  console.log(JSON.parse(picode(`goal set-status --repo ${REPO} --run ${runId} --status active`)).status);
-} catch (e) {
-  console.log("status:", String(e.stderr || e.message).trim().slice(0, 80));
-}
+// 3. status active（setGoalStatus 已幂等，重复激活不再报错；真错误必须暴露）
+console.log(JSON.parse(picode(`goal set-status --repo ${REPO} --run ${runId} --status active`)).status);
 
 console.log("RUN_ID=" + runId);
