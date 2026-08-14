@@ -9,7 +9,7 @@ import YAML from "yaml";
 
 const PICODE = "/Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js";
 const REPO = "/tmp/picode-dogfood";
-const RUN = "run-2026-08-14T07-27-45-654Z";
+const RUN = "run-2026-08-14T08-55-08-366Z";
 const RUN_DIR = `${REPO}/.picode/runs/${RUN}`;
 
 const CHUNKS = {
@@ -271,6 +271,21 @@ const CHUNKS = {
   "decision-docs": {
     first: "docs/DECISIONS.md",
     write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-14T07-27-45-654Z.md"],
+    skills: "docs,spec",
+  },
+  "checkpoint-auto": {
+    first: "packages/orchestrator/src/self-drive.ts",
+    write: ["packages/orchestrator/src/self-drive.ts", "packages/orchestrator/src/self-drive.test.ts", "packages/orchestrator/src/checkpoint-store.ts", "packages/orchestrator/src/checkpoint-store.test.ts", "packages/orchestrator/src/merge.ts", "packages/orchestrator/src/merge.test.ts", "packages/core/src/config.ts", "packages/core/src/config.test.ts"],
+    skills: "typescript,state-machine",
+  },
+  "decision-reserve-schema": {
+    first: "docs/decisions/reserve.mjs",
+    write: ["docs/decisions/reserve.mjs", "docs/decisions/reserve.test.mjs", "docs/decisions/watermark.yaml"],
+    skills: "scripting",
+  },
+  "ckauto-docs": {
+    first: "docs/DECISIONS.md",
+    write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-14T08-55-08-366Z.md"],
     skills: "docs,spec",
   },
 };
