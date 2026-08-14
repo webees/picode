@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import {
+  PicodeError,
+  ErrorCode,
   assertEvolveTargetRoot,
   ensureDir,
   loadConfig,
@@ -246,16 +248,17 @@ export function setGoalStatus(
   if (goal.status === status) return goal;
   // 状态机迁移校验（P1）：禁任意跳转/回退（completed→active、intake→completed）
   if (!GOAL_TRANSITIONS[goal.status].includes(status)) {
-    throw new Error(
+    throw new PicodeError(
+      ErrorCode.ILLEGAL_STATE,
       `goal status transition not allowed: ${goal.status} → ${status} (allowed: ${GOAL_TRANSITIONS[goal.status].join(" | ") || "terminal"})`,
     );
   }
   if (status === "active") {
     if (goal.open_questions.length > 0 && !opts?.clearOpenQuestions) {
-      throw new Error("open_questions non-empty; cannot activate");
+      throw new PicodeError(ErrorCode.ILLEGAL_STATE, "open_questions non-empty; cannot activate");
     }
     if (goal.product_acceptance.length === 0 && !opts?.skipProductAcceptanceCheck) {
-      throw new Error("no product acceptance criteria; cannot activate (P01)");
+      throw new PicodeError(ErrorCode.ILLEGAL_STATE, "no product acceptance criteria; cannot activate (P01)");
     }
     goal.user_confirmed_at = new Date().toISOString();
   }
@@ -271,7 +274,7 @@ export function setGoalStatus(
 export function parkGoal(dir: string, reason = "draft-idle"): GoalState {
   const goal = readGoal(dir);
   if (goal.status !== "draft") {
-    throw new Error(`only draft goals can be parked (current: ${goal.status})`);
+    throw new PicodeError(ErrorCode.ILLEGAL_STATE, `only draft goals can be parked (current: ${goal.status})`);
   }
   goal.parked_at = new Date().toISOString();
   goal.park_reason = reason;
@@ -322,6 +325,6 @@ export function resolveRunDir(
 ): { dir: string; config: ReturnType<typeof loadConfig> } {
   const config = loadConfig(repoRoot, runId);
   const dir = runDir(repoRoot, config, runId);
-  if (!fs.existsSync(dir)) throw new Error(`run not found: ${runId}`);
+  if (!fs.existsSync(dir)) throw new PicodeError(ErrorCode.NOT_FOUND, `run not found: ${runId}`);
   return { dir, config };
 }

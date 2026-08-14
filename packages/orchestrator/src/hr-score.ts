@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import YAML from "yaml";
 import { assertSafeName, ensureDir, readYamlFile, withFileLock, writeYamlFile, type PicodeConfig } from "@picode/core";
 import {
   HANDOFF_FILES,
@@ -155,9 +154,9 @@ export async function scoreTask(
   if (!staffing || staffing.status !== "approved") {
     throw new Error(`staffing not approved for ${taskId}; cannot score`);
   }
-  const task = YAML.parse(
-    fs.readFileSync(path.join(dir, "tasks", taskId, "task.yaml"), "utf8"),
-  ) as { status: string; retries?: number };
+  const task = readYamlFile<{ status: string; retries?: number }>(
+    path.join(dir, "tasks", taskId, "task.yaml"),
+  )!;
   // 16 §9: score after the task is over (P07 dissolve / P14 force dissolve) —
   // scoring a running task would pollute pool_reuse / self-evolution reference data.
   if (!["dissolved", "failed", "cancelled"].includes(task.status)) {

@@ -2,6 +2,7 @@ import { ErrorCode, PicodeError, type PicodeConfig } from "@picode/core";
 import { SessionStore } from "./session-store.js";
 import { TranscriptStore } from "./transcript-store.js";
 import { READY_MESSAGE_TEXT, SUMMARY_STRIP_NOISE } from "./summary-noise.js";
+import { delay } from "./timing.js";
 export { READY_MESSAGE_TEXT };
 
 /**
@@ -165,7 +166,7 @@ export class OpencodeSpawner {
     let lastErr: unknown;
     for (let attempt = 0; attempt < policy.attempts; attempt++) {
       if (attempt > 0) {
-        await new Promise((r) => setTimeout(r, policy.backoffMs));
+        await delay(policy.backoffMs);
       }
       try {
         return await this.request<T>(method, urlPath, body, policy.timeoutMs);

@@ -6,6 +6,7 @@ import { ErrorCode, PicodeError, readRunSecret, worktreePath, type PicodeConfig,
 import { issueToken } from "@picode/bus";
 import { SessionStore } from "./session-store.js";
 import { OpencodeSpawner, wakeWithOpencode } from "./opencode-adapter.js";
+import { delay } from "./timing.js";
 
 /**
  * Pi spawn adapter (18 phase C). Interface-isolated so a real `pi` binary,
@@ -283,7 +284,7 @@ export function piPidOf(piSessionId: string): number {
 }
 
 async function waitAlive(spawner: PiSpawner, handle: PiHandle, ms: number): Promise<boolean> {
-  await new Promise((r) => setTimeout(r, ms));
+  await delay(ms);
   return spawner.isAlive(handle);
 }
 

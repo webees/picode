@@ -16,6 +16,7 @@ import { OpencodeSpawner } from "./opencode-adapter.js";
 import { TranscriptStore } from "./transcript-store.js";
 import { sweepContinuationsGated } from "./continuation-gate.js";
 import { taskIdOfAgent } from "./continuation.js";
+import { delay } from "./timing.js";
 import {
   captureDueGuardianCheckpoints,
   type GuardianCheckpointCaptureResult,
@@ -617,10 +618,6 @@ export interface GuardianSummary {
   ticks: number;
   halted: boolean;
   ticksRun: GuardianTickResult[];
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 /**

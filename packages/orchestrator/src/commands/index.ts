@@ -43,6 +43,7 @@ export const COMMANDS: Command[] = [
 /** Domain ordering for the grouped help (E2). */
 export const DOMAIN_ORDER = [
   "run",
+  "board",
   "goal",
   "status",
   "session",

@@ -90,10 +90,10 @@ export function readTaskYaml(dir: string, taskId: string): {
   triad: Record<string, string>;
   work_room: string;
 } {
-  const task = YAML.parse(
-    fs.readFileSync(path.join(dir, "tasks", taskId, "task.yaml"), "utf8"),
-  );
-  return task as {
+  const task = readYamlFile<Record<string, unknown>>(
+    path.join(dir, "tasks", taskId, "task.yaml"),
+  )!;
+  return task as unknown as {
     id: string;
     write_paths: string[];
     read_paths: string[];

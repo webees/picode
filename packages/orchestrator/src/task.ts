@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import YAML from "yaml";
 import {
   branchName,
   ensureDir,
@@ -190,9 +189,9 @@ export function prepareTask(
   // P05 double latch: goal active ∧ work brief approved ∧ staffing approved.
   assertPrepareAllowed(repoRoot, dir, config, taskId);
 
-  const task = YAML.parse(
-    fs.readFileSync(path.join(dir, "tasks", taskId, "task.yaml"), "utf8"),
-  ) as TaskState;
+  const task = readYamlFile<TaskState>(
+    path.join(dir, "tasks", taskId, "task.yaml"),
+  )!;
 
   const wt = worktreePath(repoRoot, config, path.basename(dir), taskId);
   const branch = branchName(config, path.basename(dir), taskId);
@@ -250,15 +249,13 @@ export function printSpawnEnv(
   seat: "squad-lead" | "engineer" | "sdet",
   extensionPath: string,
 ): string {
-  const triad = YAML.parse(
-    fs.readFileSync(path.join(dir, "tasks", taskId, "triad.yaml"), "utf8"),
-  ) as {
+  const triad = readYamlFile<{
     worktree_path: string;
     seats: Record<string, { agent_id: string; token: string }>;
-  };
-  const task = YAML.parse(
-    fs.readFileSync(path.join(dir, "tasks", taskId, "task.yaml"), "utf8"),
-  ) as TaskState;
+  }>(path.join(dir, "tasks", taskId, "triad.yaml"))!;
+  const task = readYamlFile<TaskState>(
+    path.join(dir, "tasks", taskId, "task.yaml"),
+  )!;
   const seatInfo = triad.seats[seat];
   const profile =
     seat === "squad-lead"
