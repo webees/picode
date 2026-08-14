@@ -27,7 +27,8 @@ import { TranscriptStore } from "./transcript-store.js";
  * - `listTaskCheckpoints` / `latestTaskCheckpoint` / `listCheckpointTasks`：
  *   只读查询（ts 排序）。
  *
- * 无守护自动写：MVP 仅显式 CLI `picode checkpoint capture` 触发。
+ * 自动捕获：guardian 周期捕获（captureDueGuardianCheckpoints）默认随 config 开启
+ * （C2 enabled 默认 true），仅写观测文件；显式 CLI `picode checkpoint capture` 仍可用。
  */
 
 export const CHECKPOINT_SCHEMA_VERSION = "1";
@@ -233,7 +234,8 @@ export interface GuardianCheckpointCaptureResult {
 
 /**
  * C1 checkpoint-auto: guardian 周期捕获。仅当 config.self_evolve.checkpoints.enabled
- * 时工作（默认关闭 → 空结果，行为与 D082 一致）。对每个已登记 task：
+ * 时工作（C2 默认翻转：默认开启 → guardian_tick 捕获默认生效；显式 enabled=false 关闭）。
+ * 对每个已登记 task：
  *  task.yaml 存在、status 非终态（TERMINAL_TASK_STATUSES）、距上次 guardian 捕获
  *  超过 interval（或从未捕获）→ captureTaskCheckpoint(boundary=guardian)。
  * 快照只读边界不变：只写观测文件，不读 checkpoint 驱动任何状态决策。

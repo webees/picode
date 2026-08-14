@@ -193,9 +193,9 @@ export interface ContinuationConfig {
   gate_commands: string[];
 }
 
-/** C1 checkpoint-auto: checkpoint 自动捕获（guardian 周期捕获 + merge 前捕获）。默认关闭（D082 显式捕获行为不变）。 */
+/** C1 checkpoint-auto: checkpoint 自动捕获（guardian 周期捕获 + merge 前捕获）。默认开启（C2 翻转：观测价值验证后默认自动捕获）。 */
 export interface CheckpointCaptureConfig {
-  /** 自动捕获总开关；false（默认）= 行为与 D082 一致（仅显式 capture 命令）。 */
+  /** 自动捕获总开关；true（默认）= guardian 周期捕获 + merge 前捕获生效（C2 默认翻转）。 */
   enabled: boolean;
   /** guardian 周期捕获间隔（秒）；0 = 每次 tick 都捕获；>0 = 距上次 guardian 捕获不足该秒则跳过。 */
   guardian_interval_sec: number;
@@ -512,8 +512,10 @@ export const DEFAULTS: PicodeConfig = {
     },
     // C1 checkpoint-auto 保守默认：关闭自动捕获（D082 显式捕获行为不变）；
     // guardian 周期默认 600s 节流、merge 前捕获默认开启但受 enabled 总开关约束。
+    // C2 checkpoint-auto-default：enabled 默认翻转评估 → 默认开启（自动捕获生效），
+    // guardian_interval_sec/pre_merge 默认不变；需显式捕获行为可配置 enabled=false。
     checkpoints: {
-      enabled: false,
+      enabled: true,
       guardian_interval_sec: 600,
       pre_merge: true,
     },

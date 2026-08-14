@@ -244,14 +244,15 @@ async function sleepSquad(dir: string, taskId: string): Promise<void> {
   }
 }
 
-test("C1 checkpoint-auto: 默认配置（enabled=false）→ 成功 merge 后 out.checkpoint===null（回归）", async () => {
+test("C1 checkpoint-auto: 显式 enabled=false → 成功 merge 后 out.checkpoint===null（C2 默认翻转后的禁用回归）", async () => {
   const { repo, dir, config, taskId, worktree } = await setupPreparedTask();
+  config.self_evolve.checkpoints.enabled = false;
   commitOnWorktree(worktree, "src/module-a/a.ts", "export const a = 1;\n", "feat: module-a");
   await enqueueMerge(dir, taskId, "release-eng");
   await sleepSquad(dir, taskId);
   const out = await mergeNext(repo, dir, config);
   assert.ok(out.merged, "前置：merge 成功");
-  assert.equal(out.checkpoint, null, "默认关闭 → checkpoint 必须为 null");
+  assert.equal(out.checkpoint, null, "enabled=false → checkpoint 必须为 null");
 });
 
 test("C1 checkpoint-auto: 早退路径（squad 仍 awake）checkpoint===null（回归）", async () => {

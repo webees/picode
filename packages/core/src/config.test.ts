@@ -246,23 +246,23 @@ test("C2: validateConfig rejects invalid max_per_session_platform values", () =>
   }
 });
 
-test("C1: self_evolve.checkpoints 保守默认（关闭自动捕获，D082 显式捕获行为不变）", () => {
+test("C1: self_evolve.checkpoints 默认开启（C2 翻转：自动捕获默认生效）", () => {
   const c = getDefaultConfig().self_evolve.checkpoints;
-  assert.equal(c.enabled, false, "D082: 默认仅显式捕获，自动捕获关闭");
+  assert.equal(c.enabled, true, "C2: 默认自动捕获开启（guardian 周期捕获生效）");
   assert.equal(c.guardian_interval_sec, 600, "guardian 周期默认 600s 节流");
   assert.equal(c.pre_merge, true, "merge 前捕获默认开启但受 enabled 总开关约束");
 });
 
 test("C1: checkpoints overridable via project yaml", () => {
   const dir = tmpRepoWithConfig(
-    "self_evolve:\n  checkpoints:\n    enabled: true\n    guardian_interval_sec: 60\n    pre_merge: false\n",
+    "self_evolve:\n  checkpoints:\n    enabled: false\n    guardian_interval_sec: 60\n    pre_merge: false\n",
   );
   const c = loadConfig(dir).self_evolve.checkpoints;
-  assert.equal(c.enabled, true);
+  assert.equal(c.enabled, false);
   assert.equal(c.guardian_interval_sec, 60);
   assert.equal(c.pre_merge, false);
-  // untouched defaults survive the merge
-  assert.equal(getDefaultConfig().self_evolve.checkpoints.enabled, false);
+  // untouched defaults survive the merge (C2: enabled 默认 true)
+  assert.equal(getDefaultConfig().self_evolve.checkpoints.enabled, true);
   assert.equal(getDefaultConfig().self_evolve.checkpoints.guardian_interval_sec, 600);
   assert.equal(getDefaultConfig().self_evolve.checkpoints.pre_merge, true);
 });

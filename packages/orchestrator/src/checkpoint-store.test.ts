@@ -353,11 +353,12 @@ test("C1 checkpoint-auto: 边界常量导出（guardian / pre_merge）", () => {
   assert.equal(PRE_MERGE_CHECKPOINT_BOUNDARY, "pre_merge");
 });
 
-test("C1 checkpoint-auto: 默认配置（enabled=false）→ 空结果（D082 显式捕获行为不变）", () => {
+test("C1 checkpoint-auto: 默认配置（enabled=true）→ 无登记 task 时仍空结果（C2 翻转后回归）", () => {
   const { dir, config } = setupRun();
+  assert.equal(config.self_evolve.checkpoints.enabled, true, "C2: 默认自动捕获开启");
   const r = captureDueGuardianCheckpoints(dir, config);
   assert.deepEqual(r, { boundary: GUARDIAN_CHECKPOINT_BOUNDARY, captured: [] });
-  assert.ok(!fs.existsSync(path.join(dir, "checkpoints")), "默认关闭不得落任何 checkpoint");
+  assert.ok(!fs.existsSync(path.join(dir, "checkpoints")), "无登记 task 不得落任何 checkpoint");
 });
 
 test("C1 checkpoint-auto: enabled + interval=0 → 捕获每个非终态已登记 task（boundary=guardian）", () => {
