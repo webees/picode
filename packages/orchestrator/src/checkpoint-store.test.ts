@@ -15,9 +15,13 @@ import {
   CHECKPOINT_NOISE,
   CHECKPOINT_SCHEMA_VERSION,
   DEFAULT_CHECKPOINT_BOUNDARY,
+  GUARDIAN_CHECKPOINT_BOUNDARY,
+  PRE_MERGE_CHECKPOINT_BOUNDARY,
+  captureDueGuardianCheckpoints,
   captureTaskCheckpoint,
   checkpointDigest,
   deriveTaskCheckpoint,
+  guardianCaptureDue,
   latestTaskCheckpoint,
   listCheckpointTasks,
   listTaskCheckpoints,
@@ -328,4 +332,118 @@ test("C1-e: capture 落盘后 status --task 可读到最新 checkpoint；缺失 
     [{ task_id: "task-x", count: 1 }],
     "listCheckpointTasks 函数与 CLI 输出一致",
   );
+});
+
+// ---------------------------------------------------------------------------
+// C1 checkpoint-auto（task-checkpoint-auto）：guardian 周期捕获 + merge 前捕获
+// ---------------------------------------------------------------------------
+
+/** 在 chunks.yaml 登记一个 chunk → task 映射（captureDueGuardianCheckpoints 的数据源）。 */
+function writeChunk(dir: string, chunkId: string, taskId: string): void {
+  const chunksPath = path.join(dir, "chunks.yaml");
+  const data = readYamlFile<{ chunks?: Array<Record<string, unknown>> }>(chunksPath)!;
+  data.chunks!.push({ id: chunkId, task_id: taskId, status: "ready" });
+  writeYamlFile(chunksPath, data);
+}
+
+test("C1 checkpoint-auto: 边界常量导出（guardian / pre_merge）", () => {
+  assert.equal(GUARDIAN_CHECKPOINT_BOUNDARY, "guardian");
+  assert.equal(PRE_MERGE_CHECKPOINT_BOUNDARY, "pre_merge");
+});
+
+test("C1 checkpoint-auto: 默认配置（enabled=false）→ 空结果（D082 显式捕获行为不变）", () => {
+  const { dir, config } = setupRun();
+  const r = captureDueGuardianCheckpoints(dir, config);
+  assert.deepEqual(r, { boundary: GUARDIAN_CHECKPOINT_BOUNDARY, captured: [] });
+  assert.ok(!fs.existsSync(path.join(dir, "checkpoints")), "默认关闭不得落任何 checkpoint");
+});
+
+test("C1 checkpoint-auto: enabled + interval=0 → 捕获每个非终态已登记 task（boundary=guardian）", () => {
+  const { dir, config, store } = setupRun();
+  config.self_evolve.checkpoints.enabled = true;
+  config.self_evolve.checkpoints.guardian_interval_sec = 0;
+  writeTask(dir, "task-x", "assigned");
+  writeTask(dir, "task-y", "queued");
+  writeChunk(dir, "chunk-x", "task-x");
+  writeChunk(dir, "chunk-y", "task-y");
+  void registerTriadSessions(store);
+
+  const now = new Date("2026-08-14T01:00:00.000Z");
+  const r = captureDueGuardianCheckpoints(dir, config, { now });
+  assert.deepEqual(r, { boundary: GUARDIAN_CHECKPOINT_BOUNDARY, captured: ["task-x", "task-y"] });
+  for (const taskId of ["task-x", "task-y"]) {
+    const cps = listTaskCheckpoints(dir, taskId);
+    assert.equal(cps.length, 1, `${taskId} 必须恰好捕获一次`);
+    assert.equal(cps[0].boundary, GUARDIAN_CHECKPOINT_BOUNDARY, `${taskId} 边界必须为 guardian`);
+  }
+});
+
+test("C1 checkpoint-auto: 终态 task（merged）跳过不捕获", () => {
+  const { dir, config, store } = setupRun();
+  config.self_evolve.checkpoints.enabled = true;
+  config.self_evolve.checkpoints.guardian_interval_sec = 0;
+  writeTask(dir, "task-x", "merged");
+  writeChunk(dir, "chunk-x", "task-x");
+  void registerTriadSessions(store);
+  const r = captureDueGuardianCheckpoints(dir, config, { now: new Date("2026-08-14T01:00:00.000Z") });
+  assert.deepEqual(r.captured, []);
+  assert.ok(!fs.existsSync(path.join(dir, "checkpoints")), "终态任务不得捕获");
+});
+
+test("C1 checkpoint-auto: 节流 —— interval=600 首次捕获、立即重跑跳过、超间隔再捕获", () => {
+  const { dir, config, store } = setupRun();
+  config.self_evolve.checkpoints.enabled = true;
+  config.self_evolve.checkpoints.guardian_interval_sec = 600;
+  writeTask(dir, "task-x", "assigned");
+  writeChunk(dir, "chunk-x", "task-x");
+  void registerTriadSessions(store);
+
+  const t0 = new Date("2026-08-14T01:00:00.000Z");
+  const first = captureDueGuardianCheckpoints(dir, config, { now: t0 });
+  assert.deepEqual(first.captured, ["task-x"], "从未捕获 → due");
+
+  const second = captureDueGuardianCheckpoints(dir, config, { now: t0 });
+  assert.deepEqual(second.captured, [], "距上次捕获不足 600s → 跳过");
+
+  const t1 = new Date(t0.getTime() + 601_000);
+  const third = captureDueGuardianCheckpoints(dir, config, { now: t1 });
+  assert.deepEqual(third.captured, ["task-x"], "超过 600s → 再次捕获");
+  assert.equal(listTaskCheckpoints(dir, "task-x").length, 2, "不可变：两次捕获两个 ts 文件");
+});
+
+test("C1 checkpoint-auto: 无 task.yaml → 跳过不崩溃", () => {
+  const { dir, config } = setupRun();
+  config.self_evolve.checkpoints.enabled = true;
+  config.self_evolve.checkpoints.guardian_interval_sec = 0;
+  writeChunk(dir, "chunk-ghost", "task-ghost");
+  const r = captureDueGuardianCheckpoints(dir, config, { now: new Date("2026-08-14T01:00:00.000Z") });
+  assert.deepEqual(r.captured, []);
+});
+
+test("C1 checkpoint-auto: guardianCaptureDue 纯函数（interval=0 恒 due；从未捕获 → due；pre_merge 不重置时钟）", () => {
+  const { dir, store } = setupRun();
+  writeTask(dir, "task-x", "assigned");
+  void registerTriadSessions(store);
+  const now = new Date("2026-08-14T01:00:00.000Z");
+  // 无 checkpoint → due（interval 任意）
+  assert.equal(guardianCaptureDue(dir, "task-x", 600, now), true, "从未捕获 → due");
+  // 捕获一次（boundary=guardian）后：interval=0 → 恒 due
+  captureTaskCheckpoint(dir, "task-x", { now, boundary: GUARDIAN_CHECKPOINT_BOUNDARY });
+  assert.equal(guardianCaptureDue(dir, "task-x", 0, now), true, "interval=0 → 恒 due");
+  // interval=600：同 now → 不足 → false；now+601s → true
+  assert.equal(guardianCaptureDue(dir, "task-x", 600, now), false);
+  assert.equal(guardianCaptureDue(dir, "task-x", 600, new Date(now.getTime() + 601_000)), true);
+  // 非 guardian 边界（pre_merge）不参与 guardian 节流
+  captureTaskCheckpoint(dir, "task-x", { now: new Date(now.getTime() + 1000), boundary: PRE_MERGE_CHECKPOINT_BOUNDARY });
+  assert.equal(guardianCaptureDue(dir, "task-x", 600, now), false, "pre_merge 捕获不得重置 guardian 时钟");
+});
+
+test("C1 checkpoint-auto: merge 前捕获边界 → boundary=pre_merge", () => {
+  const { dir, store } = setupRun();
+  writeTask(dir, "task-x", "assigned");
+  void registerTriadSessions(store);
+  const now = new Date("2026-08-14T01:00:00.000Z");
+  const r = captureTaskCheckpoint(dir, "task-x", { now, boundary: PRE_MERGE_CHECKPOINT_BOUNDARY });
+  assert.ok(r, "pre_merge 捕获必须成功");
+  assert.equal(r.checkpoint.boundary, PRE_MERGE_CHECKPOINT_BOUNDARY);
 });

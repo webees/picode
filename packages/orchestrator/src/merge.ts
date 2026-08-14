@@ -12,6 +12,10 @@ import {
 } from "@picode/core";
 import { isEvolveRun, runVerifyCommands } from "./evolve-run.js";
 import { SessionStore } from "./session-store.js";
+import {
+  captureTaskCheckpoint,
+  PRE_MERGE_CHECKPOINT_BOUNDARY,
+} from "./checkpoint-store.js";
 
 /**
  * Serial merge queue (18 phase F): runs/<id>/merge_queue.jsonl + merge.lock.
@@ -126,6 +130,8 @@ export interface MergeOutcome {
   skipped_due_to_active: boolean;
   /** 11 stage 7: head of queue has unmerged dependencies (topological order). */
   skipped_due_to_deps: boolean;
+  /** C1 checkpoint-auto pre-merge capture file path, or null when disabled/not captured. */
+  checkpoint: string | null;
 }
 
 /**
@@ -161,7 +167,7 @@ export async function mergeNext(
     const queued = (q: MergeRequest) => q.status === "queued";
     const remaining = () => queue.filter(queued).length;
     const idx = queue.findIndex(queued);
-    if (idx === -1) return { merged: null, remaining: remaining(), skipped_due_to_active: false, skipped_due_to_deps: false };
+    if (idx === -1) return { merged: null, remaining: remaining(), skipped_due_to_active: false, skipped_due_to_deps: false, checkpoint: null };
 
     const req = queue[idx];
     const branch = branchName(config, path.basename(dir), req.task_id);
@@ -170,7 +176,7 @@ export async function mergeNext(
     const agents = [`squad-lead@${req.task_id}`, `engineer@${req.task_id}`, `sdet@${req.task_id}`];
     const awake = agents.some((a) => store.get(a)?.state === "awake");
     if (awake) {
-      return { merged: null, remaining: remaining(), skipped_due_to_active: true, skipped_due_to_deps: false };
+      return { merged: null, remaining: remaining(), skipped_due_to_active: true, skipped_due_to_deps: false, checkpoint: null };
     }
     // 11 stage 7: topological order — dependencies must merge first
     const deps = taskDependencies(dir, req.task_id)
@@ -187,7 +193,17 @@ export async function mergeNext(
             .join(", ")}`,
         );
       }
-      return { merged: null, remaining: remaining(), skipped_due_to_active: false, skipped_due_to_deps: true };
+      return { merged: null, remaining: remaining(), skipped_due_to_active: false, skipped_due_to_deps: true, checkpoint: null };
+    }
+    // C1 checkpoint-auto: merge 前捕获（enabled && pre_merge 时，boundary=pre_merge）。
+    // best-effort：捕获失败绝不阻断 merge（checkpoint 是观测产物，D082 快照只读边界）。
+    let checkpoint: string | null = null;
+    if (config.self_evolve.checkpoints.enabled && config.self_evolve.checkpoints.pre_merge) {
+      try {
+        checkpoint = captureTaskCheckpoint(dir, req.task_id, { boundary: PRE_MERGE_CHECKPOINT_BOUNDARY })?.file ?? null;
+      } catch {
+        checkpoint = null;
+      }
     }
     let status: MergeRequest["status"] = "merged";
     let error: string | null = null;
@@ -247,6 +263,7 @@ export async function mergeNext(
       remaining: remaining(),
       skipped_due_to_active: false,
       skipped_due_to_deps: false,
+      checkpoint,
     };
   });
 }

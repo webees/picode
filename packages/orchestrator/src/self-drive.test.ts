@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { readYamlFile } from "@picode/core";
 import { createRun, resolveRunDir } from "./run-store.js";
 import { addChunkAndTask, approveBrief, draftBrief } from "./task.js";
 import { SessionStore } from "./session-store.js";
@@ -20,6 +21,7 @@ import {
 } from "./self-drive.js";
 import { sweepContinuations } from "./continuation.js";
 import { selfDriveCommands } from "./commands/self-drive.js";
+import { listTaskCheckpoints } from "./checkpoint-store.js";
 
 function tmpGitRepo(): string {
   const dir = gitInit({ prefix: "picode-selfdrive-" });
@@ -798,4 +800,47 @@ test("R2-C3: runGuardian 未提供 baseSha 时启动即记录当前 HEAD（初�
   const summary = await runGuardian(dir, config, { maxTicks: 1, intervalMs: 5 });
   assert.equal(summary.ticks, 1);
   assert.equal(summary.ticksRun[0].code_updated, null, "启动即记录 base = 当前 HEAD");
+});
+
+// ---------------------------------------------------------------------------
+// C1 checkpoint-auto（task-checkpoint-auto）：guardianTick 接线
+// ---------------------------------------------------------------------------
+
+test("C1 checkpoint-auto: guardianTick 默认（checkpoints 关闭）→ checkpoints 恒空（回归）", async () => {
+  const { dir, config } = setupRun();
+  const res = await guardianTick(dir, config);
+  assert.deepEqual(res.checkpoints, { boundary: "guardian", captured: [] });
+});
+
+test("C1 checkpoint-auto: enabled + interval=0 → guardianTick 捕获已登记非终态 task；只写不读、不驱动决策", async () => {
+  const { repo, dir, config, store } = setupRun();
+  activateGoal(dir);
+  const { taskId } = addChunkAndTask(repo, dir, config, {
+    chunkId: "chunk-a",
+    writePaths: ["src/module-a/**"],
+  });
+  registerTriad(store, taskId);
+  config.self_evolve = structuredClone(config.self_evolve);
+  config.self_evolve.checkpoints.enabled = true;
+  config.self_evolve.checkpoints.guardian_interval_sec = 0;
+
+  const res = await guardianTick(dir, config);
+  assert.deepEqual(res.checkpoints.boundary, "guardian");
+  assert.ok(res.checkpoints.captured.includes(taskId));
+
+  // 只写观测文件：checkpoint 落盘到 checkpoints/<taskId>/
+  const cps = listTaskCheckpoints(dir, taskId);
+  assert.equal(cps.length, 1, "guardian tick 必须捕获一次");
+  assert.equal(cps[0].boundary, "guardian");
+
+  // 不驱动任何状态决策：task 仍 queued、三角会话仍 sleeping、无 task_ready
+  const task = readYamlFile<{ status?: string }>(path.join(dir, "tasks", taskId, "task.yaml"));
+  assert.equal(task?.status, "queued", "捕获不得改变 task 状态（只写观测文件）");
+  assert.equal(store.get(`squad-lead@${taskId}`)?.state, "sleeping", "捕获不得唤醒会话");
+  assert.equal(store.get(`engineer@${taskId}`)?.state, "sleeping");
+  assert.equal(store.get(`sdet@${taskId}`)?.state, "sleeping");
+  assert.ok(
+    !res.events.some((e) => e.event === "task_ready"),
+    "捕获不得驱动 task_ready 事件（checkpoint 不参与状态决策）",
+  );
 });

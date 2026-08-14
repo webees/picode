@@ -15,6 +15,10 @@ import { OpencodeSpawner } from "./opencode-adapter.js";
 import { TranscriptStore } from "./transcript-store.js";
 import { sweepContinuationsGated } from "./continuation-gate.js";
 import { taskIdOfAgent } from "./continuation.js";
+import {
+  captureDueGuardianCheckpoints,
+  type GuardianCheckpointCaptureResult,
+} from "./checkpoint-store.js";
 
 // C2 (chunk-continuation-recovery): 把 continuation 机制经本模块透出到包公共面，
 // 供 mcp-server 的 continuation_status / continuation_feed 包装（index.ts 在 T06
@@ -339,6 +343,8 @@ export interface GuardianTickResult {
     fed: string[];
     gate: Array<{ agent_id: string; reason: string; ran: boolean; passed: boolean }>;
   };
+  /** C1 checkpoint-auto: 本轮 guardian 周期捕获的 task（boundary=guardian）；默认关闭 → 空。 */
+  checkpoints: GuardianCheckpointCaptureResult;
   /**
    * R2-C3: 守护启动后 main HEAD 是否前移（合并落地 → 需重启热载）。
    * null = 基线不可得/代码未变（幂等）；非 null = detected 且含 base/head SHA。
@@ -543,6 +549,10 @@ export async function guardianTick(
 
   const budgets = await checkBudgets(dir, config);
 
+  // C1 checkpoint-auto: guardian 周期捕获（enabled 时对非终态任务追加只读观测快照；
+  // 默认关闭 → 空。只写不读，快照只读边界不变 D082）。
+  const checkpoints = captureDueGuardianCheckpoints(dir, config);
+
   // C1 continuation (N1/N2/N3): 在 checkBudgets 之后、probeServeHealth 之前，
   // 对空闲 awake 的 opencode 会话有界投喂续跑 prompt（C2 顺序契约）。
   // R3-C2: 投喂前先跑可选 gate（gate_commands 非空才启用）；gate 启用时
@@ -574,6 +584,7 @@ export async function guardianTick(
     serve,
     budgets,
     continuation,
+    checkpoints,
     code_updated,
     slept_platform,
     halt: runState?.halt ?? false,

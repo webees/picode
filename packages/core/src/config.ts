@@ -193,6 +193,16 @@ export interface ContinuationConfig {
   gate_commands: string[];
 }
 
+/** C1 checkpoint-auto: checkpoint 自动捕获（guardian 周期捕获 + merge 前捕获）。默认关闭（D082 显式捕获行为不变）。 */
+export interface CheckpointCaptureConfig {
+  /** 自动捕获总开关；false（默认）= 行为与 D082 一致（仅显式 capture 命令）。 */
+  enabled: boolean;
+  /** guardian 周期捕获间隔（秒）；0 = 每次 tick 都捕获；>0 = 距上次 guardian 捕获不足该秒则跳过。 */
+  guardian_interval_sec: number;
+  /** merge 前捕获：true = mergeNext 实际合并前对入队任务捕获一次（boundary=pre_merge）；enabled 时才生效。 */
+  pre_merge: boolean;
+}
+
 /**
  * C1 auto-refine review gate (Q2 / refinement.ts): rule-based review of the
  * evidence trajectory before a lesson is distilled/written. Default is the
@@ -233,6 +243,8 @@ export interface SelfEvolveConfig {
   refine_gate: AutoRefineGateConfig;
   /** C1 session continuation (N1/N2/N3): 空闲会话有界自动投喂续跑 prompt。 */
   continuation: ContinuationConfig;
+  /** C1 checkpoint-auto: checkpoint 自动捕获（guardian 周期捕获 + merge 前捕获）。 */
+  checkpoints: CheckpointCaptureConfig;
 }
 
 export interface PicodeConfig {
@@ -498,6 +510,13 @@ export const DEFAULTS: PicodeConfig = {
       platform_seats: "skip",
       gate_commands: [],
     },
+    // C1 checkpoint-auto 保守默认：关闭自动捕获（D082 显式捕获行为不变）；
+    // guardian 周期默认 600s 节流、merge 前捕获默认开启但受 enabled 总开关约束。
+    checkpoints: {
+      enabled: false,
+      guardian_interval_sec: 600,
+      pre_merge: true,
+    },
   },
 };
 
@@ -740,6 +759,18 @@ export function validateConfig(config: PicodeConfig): void {
     configError(
       "self_evolve.continuation.gate_commands must be an array of command strings (R3-C2 gate)",
     );
+  }
+  const cp = config.self_evolve.checkpoints;
+  if (typeof cp.enabled !== "boolean") {
+    configError("self_evolve.checkpoints.enabled must be a boolean");
+  }
+  if (!Number.isInteger(cp.guardian_interval_sec) || cp.guardian_interval_sec < 0) {
+    configError(
+      "self_evolve.checkpoints.guardian_interval_sec must be a non-negative integer (0 = every tick)",
+    );
+  }
+  if (typeof cp.pre_merge !== "boolean") {
+    configError("self_evolve.checkpoints.pre_merge must be a boolean");
   }
 }
 

@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { ensureDir, readYamlFile, writeYamlFile } from "@picode/core";
+import { ensureDir, readYamlFile, writeYamlFile, type PicodeConfig } from "@picode/core";
 import {
   captureGitWorktreeSnapshot,
   repoRootOf,
   snapshotFingerprint,
 } from "./continuation-gate.js";
-import { CONTINUATION_PROMPT } from "./continuation.js";
+import { CONTINUATION_PROMPT, TERMINAL_TASK_STATUSES } from "./continuation.js";
 import { READY_MESSAGE_TEXT } from "./opencode-adapter.js";
 import { SessionStore } from "./session-store.js";
 import { TranscriptStore } from "./transcript-store.js";
@@ -34,6 +34,11 @@ export const CHECKPOINT_SCHEMA_VERSION = "1";
 
 /** 捕获边界（D082-3 预留字段；本轮仅 manual）。 */
 export const DEFAULT_CHECKPOINT_BOUNDARY = "manual";
+
+/** 捕获边界（D082 预留扩展）：guardian 周期捕获。 */
+export const GUARDIAN_CHECKPOINT_BOUNDARY = "guardian";
+/** 捕获边界：merge 前捕获。 */
+export const PRE_MERGE_CHECKPOINT_BOUNDARY = "pre_merge";
 
 /** historySummary 剔除的机械投喂模板噪音（口径同 D077 feed 路径）。 */
 export const CHECKPOINT_NOISE: readonly string[] = [
@@ -198,4 +203,59 @@ export function listCheckpointTasks(
       const all = listTaskCheckpoints(dir, taskId);
       return { task_id: taskId, count: all.length, latest: all[0] ?? null };
     });
+}
+
+interface ChunkMeta { task_id?: string }
+
+/** 从 chunks.yaml 读出已登记 task id（去重）。chunks.yaml 缺失 → []。 */
+function readChunkTaskIds(dir: string): string[] {
+  const p = path.join(dir, "chunks.yaml");
+  if (!fs.existsSync(p)) return [];
+  const data = readYamlFile<{ chunks?: ChunkMeta[] }>(p);
+  return [...new Set((data?.chunks ?? []).map((c) => c.task_id).filter((t): t is string => Boolean(t)))];
+}
+
+/** 纯函数：距上次 boundary=guardian 捕获是否已超过 intervalSec（0 = 恒 due；从未捕获 → due）。 */
+export function guardianCaptureDue(
+  dir: string,
+  taskId: string,
+  intervalSec: number,
+  now: Date,
+): boolean {
+  const latest = listTaskCheckpoints(dir, taskId).find((c) => c.boundary === GUARDIAN_CHECKPOINT_BOUNDARY);
+  if (!latest) return true;
+  if (intervalSec <= 0) return true;
+  return now.getTime() - Date.parse(latest.captured_at) >= intervalSec * 1000;
+}
+
+export interface GuardianCheckpointCaptureResult {
+  boundary: string;
+  captured: string[];
+}
+
+/**
+ * C1 checkpoint-auto: guardian 周期捕获。仅当 config.self_evolve.checkpoints.enabled
+ * 时工作（默认关闭 → 空结果，行为与 D082 一致）。对每个已登记 task：
+ *  task.yaml 存在、status 非终态（TERMINAL_TASK_STATUSES）、距上次 guardian 捕获
+ *  超过 interval（或从未捕获）→ captureTaskCheckpoint(boundary=guardian)。
+ * 快照只读边界不变：只写观测文件，不读 checkpoint 驱动任何状态决策。
+ */
+export function captureDueGuardianCheckpoints(
+  dir: string,
+  config: PicodeConfig,
+  opts: { now?: Date } = {},
+): GuardianCheckpointCaptureResult {
+  const c = config.self_evolve.checkpoints;
+  if (!c.enabled) return { boundary: GUARDIAN_CHECKPOINT_BOUNDARY, captured: [] };
+  const now = opts.now ?? new Date();
+  const captured: string[] = [];
+  for (const taskId of readChunkTaskIds(dir)) {
+    const task = readYamlFile<{ status?: string }>(path.join(dir, "tasks", taskId, "task.yaml"));
+    if (task === null) continue;
+    if (task.status && TERMINAL_TASK_STATUSES.has(task.status)) continue;
+    if (!guardianCaptureDue(dir, taskId, c.guardian_interval_sec, now)) continue;
+    const r = captureTaskCheckpoint(dir, taskId, { now, boundary: GUARDIAN_CHECKPOINT_BOUNDARY });
+    if (r) captured.push(taskId);
+  }
+  return { boundary: GUARDIAN_CHECKPOINT_BOUNDARY, captured };
 }

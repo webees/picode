@@ -232,6 +232,66 @@ test("merge queue detects a dependency cycle among queued tasks", async () => {
   await assert.rejects(() => mergeNext(repo, dir, config), /dependency cycle/);
 });
 
+// ---------------------------------------------------------------------------
+// C1 checkpoint-auto（task-checkpoint-auto）：merge 前捕获
+// ---------------------------------------------------------------------------
+
+/** 把入队任务的 squad 全部休眠（放行 mergeNext 的 awake 检查）。 */
+async function sleepSquad(dir: string, taskId: string): Promise<void> {
+  const sessions = new SessionStore(dir);
+  for (const s of [`squad-lead@${taskId}`, `engineer@${taskId}`, `sdet@${taskId}`]) {
+    await sessions.sleep(s, "handoff");
+  }
+}
+
+test("C1 checkpoint-auto: 默认配置（enabled=false）→ 成功 merge 后 out.checkpoint===null（回归）", async () => {
+  const { repo, dir, config, taskId, worktree } = await setupPreparedTask();
+  commitOnWorktree(worktree, "src/module-a/a.ts", "export const a = 1;\n", "feat: module-a");
+  await enqueueMerge(dir, taskId, "release-eng");
+  await sleepSquad(dir, taskId);
+  const out = await mergeNext(repo, dir, config);
+  assert.ok(out.merged, "前置：merge 成功");
+  assert.equal(out.checkpoint, null, "默认关闭 → checkpoint 必须为 null");
+});
+
+test("C1 checkpoint-auto: 早退路径（squad 仍 awake）checkpoint===null（回归）", async () => {
+  const { repo, dir, config, taskId, worktree } = await setupPreparedTask();
+  commitOnWorktree(worktree, "src/module-a/a.ts", "export const a = 1;\n", "feat: module-a");
+  await enqueueMerge(dir, taskId, "release-eng");
+  // squad still awake → skipped_due_to_active
+  const skip = await mergeNext(repo, dir, config);
+  assert.equal(skip.skipped_due_to_active, true);
+  assert.equal(skip.checkpoint, null);
+});
+
+test("C1 checkpoint-auto: enabled + pre_merge=true → 成功 merge 落 pre_merge checkpoint 且文件存在", async () => {
+  const { repo, dir, config, taskId, worktree } = await setupPreparedTask();
+  config.self_evolve.checkpoints.enabled = true;
+  config.self_evolve.checkpoints.pre_merge = true;
+  commitOnWorktree(worktree, "src/module-a/a.ts", "export const a = 1;\n", "feat: module-a");
+  await enqueueMerge(dir, taskId, "release-eng");
+  await sleepSquad(dir, taskId);
+  const out = await mergeNext(repo, dir, config);
+  assert.ok(out.merged, "前置：merge 成功");
+  assert.ok(out.checkpoint, "enabled + pre_merge → checkpoint 必须非 null");
+  assert.ok(fs.existsSync(out.checkpoint!), "checkpoint 文件必须存在");
+  const cp = readYamlFile<{ boundary?: string; task_id?: string }>(out.checkpoint!)!;
+  assert.equal(cp.boundary, "pre_merge", "merge 前捕获边界必须为 pre_merge");
+  assert.equal(cp.task_id, taskId);
+});
+
+test("C1 checkpoint-auto: enabled + pre_merge=false → checkpoint null", async () => {
+  const { repo, dir, config, taskId, worktree } = await setupPreparedTask();
+  config.self_evolve.checkpoints.enabled = true;
+  config.self_evolve.checkpoints.pre_merge = false;
+  commitOnWorktree(worktree, "src/module-a/a.ts", "export const a = 1;\n", "feat: module-a");
+  await enqueueMerge(dir, taskId, "release-eng");
+  await sleepSquad(dir, taskId);
+  const out = await mergeNext(repo, dir, config);
+  assert.ok(out.merged, "前置：merge 成功");
+  assert.equal(out.checkpoint, null, "pre_merge=false → 不捕获");
+});
+
 test("failed merge aborts and leaves the working tree clean (11 stage 7)", async () => {
   const { repo, dir, config, taskId, worktree } = await setupPreparedTask();
   // second task touching the same file to force a conflict — its branch is

@@ -245,3 +245,43 @@ test("C2: validateConfig rejects invalid max_per_session_platform values", () =>
     assert.throws(() => validateConfig(cfg as typeof base), Error, `expected rejection for ${JSON.stringify(patch)}`);
   }
 });
+
+test("C1: self_evolve.checkpoints 保守默认（关闭自动捕获，D082 显式捕获行为不变）", () => {
+  const c = getDefaultConfig().self_evolve.checkpoints;
+  assert.equal(c.enabled, false, "D082: 默认仅显式捕获，自动捕获关闭");
+  assert.equal(c.guardian_interval_sec, 600, "guardian 周期默认 600s 节流");
+  assert.equal(c.pre_merge, true, "merge 前捕获默认开启但受 enabled 总开关约束");
+});
+
+test("C1: checkpoints overridable via project yaml", () => {
+  const dir = tmpRepoWithConfig(
+    "self_evolve:\n  checkpoints:\n    enabled: true\n    guardian_interval_sec: 60\n    pre_merge: false\n",
+  );
+  const c = loadConfig(dir).self_evolve.checkpoints;
+  assert.equal(c.enabled, true);
+  assert.equal(c.guardian_interval_sec, 60);
+  assert.equal(c.pre_merge, false);
+  // untouched defaults survive the merge
+  assert.equal(getDefaultConfig().self_evolve.checkpoints.enabled, false);
+  assert.equal(getDefaultConfig().self_evolve.checkpoints.guardian_interval_sec, 600);
+  assert.equal(getDefaultConfig().self_evolve.checkpoints.pre_merge, true);
+});
+
+test("C1: validateConfig rejects invalid checkpoints values", () => {
+  const base = getDefaultConfig();
+  const checkpoints = base.self_evolve.checkpoints;
+  const patches: Array<Record<string, unknown>> = [
+    { enabled: "yes" },
+    { enabled: 1 },
+    { guardian_interval_sec: -1 },
+    { guardian_interval_sec: 1.5 },
+    { pre_merge: "on" },
+  ];
+  for (const patch of patches) {
+    const cfg = {
+      ...base,
+      self_evolve: { ...base.self_evolve, checkpoints: { ...checkpoints, ...patch } },
+    };
+    assert.throws(() => validateConfig(cfg as typeof base), Error, `expected rejection for ${JSON.stringify(patch)}`);
+  }
+});
