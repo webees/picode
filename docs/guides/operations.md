@@ -1,6 +1,6 @@
 # 运维规程（serve/会话/续跑/guardian 重启/会话生命周期/真相关于文件）
 
-> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）+ D072/D073（run 收尾自动休眠 + session audit 跨 run 残留审计）+ D077/D078（摘要窗口去噪 / 平台席预算分流）+ D082/D091（会话 checkpoint 显式 + 自动捕获）+ D083（re-spawn 摘要去噪）+ D089/D090（决策编号全局分配器 + decision-lint）。
+> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）+ D072/D073（run 收尾自动休眠 + session audit 跨 run 残留审计）+ D077/D078（摘要窗口去噪 / 平台席预算分流）+ D082/D091（会话 checkpoint 显式 + 自动捕获）+ D083/D092（re-spawn 摘要去噪 + 剔噪口径统一）+ D089/D090（决策编号全局分配器 + decision-lint）+ D093（supervise 监控命令正式化）。
 > 遵循本规程可避免已知的 serve 类故障人工踩坑，并正确观察/调整续跑、重启守护热载、管理 run 收尾与跨 run 会话残留。
 
 ## 决策编号规程（D089 / D090）
@@ -106,11 +106,44 @@ picode checkpoint status --repo <path> --run <id>                    # 全部有
 - self-drive tick 内置 probeServeHealth：serve 失联时标记 awake opencode 会话 error（不自动重 spawn 防风暴）
 - 排查顺序：serve 日志 → 会话 tokens（0 = 消息未处理）→ 权限 ask（GET /permission）→ key（auth.json）
 
+## 监督观测（supervise，D093）
+
+`picode supervise` 把监控循环正式化为产品命令（取代硬编码 dogfood 脚本），操作者前台调用、
+**无 daemon**（D037 不变量延续）——每次观测独立派生，不写状态、不持锁。复用 statusSnapshot
+纯读投影 + live tokens（serve 契约 D058），live tokens 原语自 dashboard-server 上移至
+orchestrator（dashboard-server 改薄壳 re-export，dashboard 与 supervise 共用）。
+
+```bash
+picode supervise --repo <path> --run <id>                # 单次观测（默认 --once）输出 JSON
+picode supervise --repo <path> --run <id> --interval 300 # 每 300s 观测一次，空闲判定 STOPPED 退出
+picode supervise --repo <path> --run <id> --once --log /tmp/supervise.jsonl  # 观测追加 JSONL
+```
+
+观测输出要点（`deriveSuperviseObservation`）：
+
+| 字段 | 含义 |
+|---|---|
+| `agents[]` | 每会话 `{agent_id, state, tokens}`；非 awake / POLL_FAIL → `tokens: null` |
+| `total` | 全体 awake 会话 tokens 汇总；**POLL_FAIL 不计入** |
+| `worktrees` | worktree 下 `.ts` 文件数（任务推进粗度量） |
+| `tasks` / `merge_queue` | 复用 statusSnapshot 的任务与 merge 队列投影 |
+
+**STOPPED 空闲判定（`isIdleStopped`）**：`total` 连续 3 轮零增长（窗口 4 条等值样本）→
+输出 `{stopped:true, rounds, total}` 退出 0。注意：**total=0 不判空闲**（无会话成功采样 /
+全 POLL_FAIL = 轮询失败或 serve 失联，需 operator 介入而非自动 STOPPED）。STOPPED 仅是
+退出信号，不驱动任何状态变更。
+
+- 排查：观测无 tokens 但会话 awake → 先查 serve 在线（`curl 127.0.0.1:7788/`）与会话
+  `pi_session_id`（`sessions/<agent>.yaml`，D044 契约）；`--interval` 循环在前台进程运行，
+  中断即停止观测
+- 与 dashboard 的关系：两者共用 orchestrator 的 live tokens 实现，dashboard 走 HTTP 端点、
+  supervise 走 CLI，数据源一致
+
 ## 续跑（continuation，D066）
 
 续跑 = guardian 对「已 awake ∧ 无 error ∧ 任务未终态 ∧ 预算未耗尽 ∧ 空闲超 `idle_sec`」的 opencode 会话按 D061 noReply 语义投喂续跑 prompt。全部状态落盘、幂等、可恢复。
 
-续跑 prompt 含上一回合要点摘要（`transcripts/<agent>.jsonl` 启发式派生，无 LLM，D076）。转录归档因此也是语义续跑的唯一数据源。摘要窗口可配（`summary_entries` 默认 8）且投喂时剔除固定模板文本噪音（`stripNoise`，D077），避免摘要被机械投喂记录淹没；serve 重启后重 spawn（`wakeWithOpencode`）的恢复摘要同样剔除 ready 模板句（D083），与 feed 路径口径一致。
+续跑 prompt 含上一回合要点摘要（`transcripts/<agent>.jsonl` 启发式派生，无 LLM，D076）。转录归档因此也是语义续跑的唯一数据源。摘要窗口可配（`summary_entries` 默认 8）且投喂时剔除固定模板文本噪音（`stripNoise`，D077），避免摘要被机械投喂记录淹没。**剔噪口径统一（D092）**：`packages/orchestrator/src/summary-noise.ts`（零依赖）导出 `SUMMARY_STRIP_NOISE` 统一剔噪清单，feed / checkpoint / re-spawn（serve 重启后 `wakeWithOpencode` 恢复摘要）三处一致剔除 ready + 续跑模板句，不再各自维护清单（D083 起 re-spawn 已剔 ready；D092 起与 feed/checkpoint 同口径）。
 
 ### 观察续跑状态
 

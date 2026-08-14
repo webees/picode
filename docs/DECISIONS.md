@@ -291,6 +291,9 @@
 |D089|**决策编号全局分配器（watermark ledger + reserve 脚本）**：`docs/decisions/watermark.yaml`（schema v1：`next_number` + `reservations[]`）+ `docs/decisions/reserve.mjs`（`--reserve --run <id> --count N` 领取连续编号段 / `--land` 标记占用 / `--status` 只读快照；复用 `@picode/core` `withFileLock`+`writeAtomic`，flock 临界区原子 read-modify-write，同 run 重复 reserve 幂等返回既有预留）；DECISIONS 顶部加水位说明。**勿手改 watermark（机器状态）**——新决策先 `--reserve` 领号、落地后 `--land` 标记占用|
 |D090|**decision-lint 决策编号完整性校验**：镜像 persona-lint 数据优先设计（`checkDecisions` 返回 `{ok, problems, files}` + CLI），校验 ①表行编号唯一（DUP_TABLE）②详条编号唯一（DUP_SECTION）③详条↔表行对应（TABLE_SECTION_MISMATCH）④watermark 水位一致（WATERMARK_DRIFT）⑤docs/** D0xx 引用可解析（REF_UNRESOLVED warning）⑥reservations 幂等/无冲突（RESERVATION_COLLISION）；`--plan <file>` 规划期预检；`npm run check` 接线三 lint（persona-lint + skill-lint + decision-lint）|
 |D091|**checkpoint 自动捕获接线（guardian 周期捕获 + merge 前捕获，boundary 扩展，快照只读边界不变）**：新增 `self_evolve.checkpoints` 配置（`enabled` 默认 false = D082 显式捕获行为不变；`guardian_interval_sec` 默认 600s 节流；`pre_merge` 默认 true 但受 `enabled` 总开关约束）；checkpoint-store 新增 `GUARDIAN`/`PRE_MERGE` 边界常量 + `guardianCaptureDue` 纯函数 + `captureDueGuardianCheckpoints`（仅写观测文件，跳过终态/缺失 task，节流复用）；self-drive `guardianTick` 在 `checkBudgets` 之后接线周期捕获（`GuardianTickResult.checkpoints` 仅作观测回报，**不驱动任何状态决策**）；merge `mergeNext` 实际合并前 best-effort 捕获（`enabled && pre_merge`，try/catch 绝不阻断 merge，`MergeOutcome.checkpoint` 纯观测）；**快照只读/文件为准边界（D082）不变**。同 run 一并落地 reserve.mjs 预留字段对齐（`from`→`start`）+ `--plan` 预检（E12 剩余风险 #1 闭环）|
+|D092|**摘要剔噪口径统一收敛到 `summary-noise.ts`（零依赖下沉 + `SUMMARY_STRIP_NOISE` 三处统一）**：新建 `packages/orchestrator/src/summary-noise.ts`（**零 import 零依赖**）收敛 `READY_MESSAGE_TEXT`/`CONTINUATION_PROMPT`/`CONTINUATION_SUMMARY_HEADER` 常量 + 导出统一剔噪清单 `SUMMARY_STRIP_NOISE`（`[READY_MESSAGE_TEXT, CONTINUATION_PROMPT]`）；feed（`feedContinuation`）/ checkpoint（`CHECKPOINT_NOISE`）/ re-spawn（`wakeWithOpencode` 摘要）**三处统一消费**，剔噪口径单一来源，根治「re-spawn（D083）只剔 ready、feed/checkpoint（D077/D082）剔 ready+续跑」的口径漂移；`opencode-adapter.ts`/`continuation.ts` 从该模块导入并**保留 re-export**，既有引用路径零改动；re-spawn 摘要由仅剔 ready 改为统一剔 ready+续跑模板（行为对齐）|
+|D093|**`picode supervise` 监控命令正式化（live tokens 原语上移 + `--once`/`--interval` + STOPPED 判定）**：`fetchLiveTokens`/`lastTokenSample`/`serveSessionIdOf`/`stripOcPrefix` 自 dashboard-server **原样上移** `orchestrator/live.ts`（dashboard-server `live.ts` 改薄壳 `export * from "@picode/orchestrator"`）；新增 `supervise.ts`——`deriveSuperviseObservation`（statusSnapshot + 每 awake 会话 `fetchLiveTokens` + worktree `.ts` 计数，纯读、fetchImpl 可注入）输出 `{ts,agents,total,worktrees,tasks,merge_queue}` + `isIdleStopped` 纯函数（total 连续 3 轮零增长判定，**POLL_FAIL 不计入**）；CLI `picode supervise --once`（默认单次 JSON）/ `--interval <sec>` 循环 + STOPPED 退出 0 / `--log` JSONL 追加；命令表注册 + DOMAIN_ORDER。**无 daemon（D037）不变量延续**——操作者前台调用，非平台守护|
+|D094|**缓项留档：feed 映射文档化 / checkpoint 进 status 三面等**：① summary-noise 消费方（feed/re-spawn/checkpoint）剔噪口径映射图鉴文档化（现仅散见 DECISIONS/catalog）；② checkpoint 进 statusSnapshot 三面（MVP 仅 CLI 消费面，三面同源需动 status 契约 + mcp-server，E13 候选 1）；③ 自动捕获默认开启评估（观测价值验证后考虑翻转 `checkpoints.enabled` 默认值）；④ 摘要语义化/关键动作提取（D080 延续）。均留档待评估，未立项不实现，实施须重新立项并走 D089 领号|
 ## D084 — Skill harness 落地（技能承载体系）
 - 2026-08-14 · 来源：run-lead 自治规划 run-2026-08-13T23-50-59-484Z（从 anthropics/skills + agentskills spec 学习，改 picode 自身技能承载体系）
 - 问题：`paths.skills_root` 是 D055 死键（声明零读取），两个种子 SKILL.md 无任何校验守卫，新 skill 可任意书写；`Persona.skills[]` 是必填维度但零消费；ready 消息若硬注入 skill 正文会爆 context
@@ -364,3 +367,39 @@
 - 实现：`packages/core/src/config.ts`（CheckpointCaptureConfig + 校验 + DEFAULTS）、`packages/orchestrator/src/checkpoint-store.ts`（GUARDIAN/PRE_MERGE 常量 + guardianCaptureDue + captureDueGuardianCheckpoints）、`self-drive.ts`（guardianTick 接线）、`merge.ts`（mergeNext 前捕获）+ 对应测试；`docs/decisions/reserve.mjs` + `reserve.test.mjs`
 - 验证：npm run build + npm test 445 断言全绿（core 111 / orchestrator 282），tsc -b 干净；D082 边界由 sdet 独立审计 PASS（checkpoint 仅写不读）；reserve.test.mjs 12/12（领号→lint 闭环 + 未预留 REF_UNRESOLVED + plan 缺失 PLAN_MISSING）
 - commit: 7860df0（C1 task-checkpoint-auto 合并）/ 3b99888（C2 task-decision-reserve-schema 合并）
+
+## D092 — 摘要剔噪口径统一收敛到 summary-noise.ts（C1 task-summary-noise-unify）
+- 2026-08-14 · 来源：run-lead 规划 run-2026-08-14T10-07-06-439Z（C1 摘要剔噪口径统一，宽松目标）
+- 问题：`READY_MESSAGE_TEXT` 定义在 `opencode-adapter.ts`、`CONTINUATION_PROMPT` 定义在 `continuation.ts`，两处分别维护 stripNoise 清单导致**口径漂移**——re-spawn（D083）只剔 ready 模板，feed/checkpoint（D077/D082）剔 ready+续跑模板，同一份转录在不同消费方产出不同摘要，噪音过滤语义不一致
+- 决定：
+  - 新建 `packages/orchestrator/src/summary-noise.ts`（**零 import、零依赖**）：收敛 `READY_MESSAGE_TEXT`/`CONTINUATION_PROMPT`/`CONTINUATION_SUMMARY_HEADER` 常量 + 导出统一剔噪清单 `SUMMARY_STRIP_NOISE`（`[READY_MESSAGE_TEXT, CONTINUATION_PROMPT]`）；零依赖模块可被 orchestrator 任意模块引用而不引入循环依赖
+  - `opencode-adapter.ts`/`continuation.ts` 从该模块导入并**保留 re-export**，既有引用路径（checkpoint-store / 测试）零改动
+  - feed（`feedContinuation`）/ checkpoint（`CHECKPOINT_NOISE`）/ re-spawn（`wakeWithOpencode` 摘要）**三处统一消费** `SUMMARY_STRIP_NOISE`，剔噪口径单一来源
+  - **re-spawn 行为变更**：`wakeWithOpencode` 摘要由仅剔 `READY_MESSAGE_TEXT` 改为统一剔 ready+续跑模板，与 feed/checkpoint 语义对齐（opencode-adapter.test 断言扩为双剔除）
+- 实现：`summary-noise.ts` + `summary-noise.test.ts`（常量语义 + `SUMMARY_STRIP_NOISE` 组成 + **零 import 结构校验**）+ `opencode-adapter.ts`/`continuation.ts`/`checkpoint-store.ts` 接线 + checkpoint-store.test 追加 `CHECKPOINT_NOISE === SUMMARY_STRIP_NOISE` 统一口径断言
+- 验证：npm run build 全量通过；npm test 全绿（core 111 / orchestrator 285 / mcp-server 17 / dashboard-server 16，0 fail）；tsc 干净
+- 边界：summary-noise 零依赖下沉不改变任何消费方对外契约（re-export 兼容既有 import 路径）；剔噪口径从此以 `SUMMARY_STRIP_NOISE` 为单一事实源
+- commit: ea6982e（C1 task-summary-noise-unify 合并，main = b2a0321）
+
+## D093 — `picode supervise` 监控命令正式化（C2 task-supervise-command）
+- 2026-08-14 · 来源：run-lead 规划 run-2026-08-14T10-07-06-439Z（C2 监控守护正式化，宽松目标）
+- 问题：`scripts/supervise/supervise.mjs` 监控循环（token/会话/worktree/任务轮询 + STOPPED 判定）仍为硬编码 dogfood 脚本，无产品出口；`fetchLiveTokens` 仅存于 `dashboard-server`，orchestrator 反向依赖破坏包边界
+- 决定：
+  - **live tokens 原语上移**：`packages/orchestrator/src/live.ts` 自 dashboard-server **原样迁移** `fetchLiveTokens`/`lastTokenSample`/`serveSessionIdOf`/`stripOcPrefix`，index re-export；dashboard-server `live.ts` 改薄壳 `export * from "@picode/orchestrator"`（router/index.test 同步改从 orchestrator 导入）
+  - **supervise 观测纯函数**：`supervise.ts` `deriveSuperviseObservation`（statusSnapshot + 每 awake 会话 `fetchLiveTokens` + worktree `.ts` 计数，`fetchImpl` 可注入，纯读）输出 `{ts,agents,total,worktrees,tasks,merge_queue}`；`isIdleStopped` 纯函数——total 连续 3 轮零增长判定，**POLL_FAIL 不计入 total、不参与空闲判定**（轮询失败非空闲信号）
+  - **CLI 出口**：`picode supervise --once`（默认单次观测 JSON）/ `--interval <sec>` 循环 + STOPPED 判定退出 0 / `--log <path>` 每次观测追加 JSONL（与 --once/--interval 均兼容）；`commands/index.ts` 注册 + DOMAIN_ORDER 加 supervise；cli.test --help 命令表断言
+  - **无 daemon 不变量（D037）延续**：supervise 为**操作者前台调用**，每次观测独立派生，非平台守护进程
+- 实现：`live.ts` + `live.test.ts`、`supervise.ts` + `supervise.test.ts`、`commands/supervise.ts`、`commands/index.ts`、dashboard-server `live.ts` 薄壳 + `index.test.ts` 同步
+- 验证：npm run build && npm test 全绿（478 断言，orchestrator 298）；npm run check 三 lint 0 error；对真实 run 仓 `--once` 实测输出观测（含本会话 live tokens）
+- 边界：STOPPED 仅是退出信号，不驱动任何状态变更；tokens=0（无会话成功采样/全 POLL_FAIL）不判空闲——需 operator 介入而非自动 STOPPED
+- commit: b2a0321（C2 task-supervise-command 合并，main）
+
+## D094 — 缓项：feed 映射文档化 / checkpoint 进 status 三面等（后续候选）
+- 2026-08-14 · 来源：run-2026-08-14T10-07-06-439Z（D092/D093 决策边界）+ E13 后续候选延续
+- 事实：本轮落地 D092（摘要剔噪口径统一）+ D093（supervise 命令正式化）；以下项未立项、留档：
+  1. **feed 映射文档化**：summary-noise 消费方（feed/re-spawn/checkpoint 三处）的剔噪口径映射与机制说明现仅散见 DECISIONS/catalog，未成单一图鉴文档——待独立 docs 任务收敛
+  2. **checkpoint 进 statusSnapshot 三面**：MVP 仅 CLI 消费面；三面（status/CLI/MCP）同源需动 status 契约 + mcp-server（E13 后续候选 1 延续）
+  3. **自动捕获默认开启评估**：观测价值验证后考虑翻转 `checkpoints.enabled` 默认值（现保守默认 false，E13 后续候选 2 延续）
+  4. **摘要语义化/关键动作提取**（D080 延续）：stripNoise 仅精确剔模板句，摘要可读但不含「关键动作」语义（仍启发式，不引 LLM，D003 不变量不变）
+- 处置：未立项不实现；实施须重新立项并走 D089 领号（`--reserve` → 落地 → `--land` → decision-lint 全绿）
+- 纪律：缓项只记录不实现，避免范围蔓延

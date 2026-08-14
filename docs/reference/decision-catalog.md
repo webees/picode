@@ -512,15 +512,17 @@ re-spawn（wakeWithOpencode）同款消费已复用。预算/幂等/纯函数语
 |------|------|
 |**`summary_entries` 可配（默认 8）+ `stripNoise` 去噪** ★|`historySummary` 取最近 N 条作要点；生成 outgoing 要点前删除命中子串（feed 传 `[READY_MESSAGE_TEXT, CONTINUATION_PROMPT]`），删空条目整条跳过；条数统计仍基于原始转录；`maxEntries<=0` = 摘要窗口关闭返回 null（回退固定模板）|
 |固定硬编码 8（D076）|摘要被每次投喂的机械模板噪音淹没、窗口无法调优（D077 前的问题）|
-|re-spawn 去噪（wakeWithOpencode stripNoise）|**已定（D083）**：重 spawn 摘要剔除 `READY_MESSAGE_TEXT` 模板句，与 feed 路径口径一致（D079 落地；`maxEntries` 仍默认 20）|
+|re-spawn 去噪（wakeWithOpencode stripNoise）|**已定（D083 → D092 统一）**：重 spawn 摘要剔除 ready + 续跑模板句，与 feed/checkpoint 口径一致（D079 落地；`maxEntries` 仍默认 20）|
 
-**已定（D077 + D083）：`summary_entries` 默认 8（非负整数，0 = 窗口关闭）**；
+**已定（D077 + D083 + D092）：`summary_entries` 默认 8（非负整数，0 = 窗口关闭）**；
 `feedContinuation` 传 `stripNoise: [READY_MESSAGE_TEXT, CONTINUATION_PROMPT]`
 剔除固定投喂模板文本，避免摘要被重复噪音淹没。提取 `CONTINUATION_SUMMARY_HEADER`
 常量供 `composeContinuationPrompt`/re-spawn 复用。摘要仍为确定性启发式（D076 不变，
-非 LLM 精炼）。**re-spawn 去噪已一致化（D083）**：`wakeWithOpencode` 重 spawn 摘要同样
-剔除 `READY_MESSAGE_TEXT` 模板句，与 feed 路径口径一致；`maxEntries` 保持默认 20
-（全量恢复语义）。
+非 LLM 精炼）。**剔噪口径已统一收敛（D092）**：新建 `packages/orchestrator/src/summary-noise.ts`
+（零 import 零依赖）收敛模板常量 + 导出 `SUMMARY_STRIP_NOISE` 统一剔噪清单，
+feed / checkpoint（`CHECKPOINT_NOISE`）/ re-spawn 三处统一消费——re-spawn
+`wakeWithOpencode` 摘要由仅剔 `READY_MESSAGE_TEXT`（D083）升级为同剔续跑模板，
+与 feed/checkpoint 语义对齐；`maxEntries` 保持默认 20（全量恢复语义）。
 
 ### 12.9 会话 checkpoint（D082）
 
@@ -537,7 +539,7 @@ CLI：`picode checkpoint capture` / `picode checkpoint status`。
 |------|------|
 |**显式捕获** ★|`picode checkpoint capture --task <id>` 显式触发；`boundary: manual` 默认|
 |**只读查询** ★|`picode checkpoint status [--task <id>]`：列某 task 全部（最新在前）或缺省列全部有 checkpoint 的 task 概览（count + 最新）|
-|**捕获内容（schema v1）**|task.yaml `status` + 三角各会话 state/budget + 各会话 `historySummary`（stripNoise 剔模板）+ git worktree 指纹（非 git 仓 → null）+ `captured_at` + 自指纹 sha256|
+|**捕获内容（schema v1）**|task.yaml `status` + 三角各会话 state/budget + 各会话 `historySummary`（`CHECKPOINT_NOISE` = `SUMMARY_STRIP_NOISE`（D092）剔模板）+ git worktree 指纹（非 git 仓 → null）+ `captured_at` + 自指纹 sha256|
 |**纯函数 + 不可变落盘**|`captureTaskCheckpoint(dir, taskId, {now?, boundary?})` 同输入同输出（now 注入确定性）；落盘 `runs/<id>/checkpoints/<taskId>/checkpoint-<ts>.yaml`；重复捕获产生新 ts 文件不覆盖；task 不存在 → null|
 |**自动捕获（D091）** ★|`self_evolve.checkpoints`：`enabled`（默认 **false**，开启后自动捕获生效，D082 显式捕获行为不变）+ `guardian_interval_sec`（默认 600s 节流，0 = 每次 tick）+ `pre_merge`（默认 true，受 `enabled` 总开关约束）。guardian 周期捕获（`boundary: guardian`，guardianTick 在 checkBudgets 后接线，仅写观测文件、跳过终态/缺失 task）；merge 前捕获（`boundary: pre_merge`，mergeNext 实际合并前 best-effort，try/catch 绝不阻断 merge）。两者均只写不读，**快照只读边界（D082）不变**|
 |checkpoint 进 statusSnapshot 三面|**缓**：MVP 仅 CLI 消费面；三面同源需动 status 契约 + mcp-server|
@@ -759,3 +761,26 @@ terminology §3），面板不引入新端点、不改 API 契约。
 - 预留未落地（status: reserved）即被写入 DECISIONS → `RESERVATION_COLLISION` 错误；`--land` 后方可豁免
 - watermark 损坏/缺文件：reserve.mjs 以初始状态引导（`next_number=90`），`--status` 可查当前水位与全部预留
 - 本 run 自身的 D089/D090 即按本流程领取编号 89–90 并标记 landed（dogfood 验证）
+
+## 17. 监督观测（supervise，D093）
+
+权威正文：`packages/orchestrator/src/supervise.ts` + `packages/orchestrator/src/live.ts` +
+`commands/supervise.ts`；CLI：`picode supervise [--once|--interval <sec>] [--log <path>]`。
+
+**无 daemon（D037）不变量延续。** supervise 是**操作者前台调用的观测命令**——每次观测独立
+派生（statusSnapshot + 每 awake 会话 serve live tokens + worktree `.ts` 计数），非平台守护
+进程、不写状态。live tokens 原语（`fetchLiveTokens`/`serveSessionIdOf`/`stripOcPrefix`）自
+dashboard-server 上移至 orchestrator（dashboard-server 改薄壳 re-export），dashboard 与
+supervise 共用同一实现（D093-1）。
+
+|选项|说明|
+|------|------|
+|**`picode supervise --once`（默认）** ★|单次观测输出 JSON：`{ts, run_id, goal_status, agents[], total, worktrees, tasks, merge_queue}`；`agents[]` 每会话 `{agent_id, state, tokens}`（非 awake / POLL_FAIL → `tokens: null`）；`total` = 全体 awake 会话 tokens 汇总（**POLL_FAIL 不计入**）|
+|**`picode supervise --interval <sec>` 循环 + STOPPED** ★|循环观测；`isIdleStopped` 纯函数判定——`total` 连续 3 轮零增长（窗口 `rounds+1` 条等值）→ 输出 `{stopped:true, rounds, total}` 退出 0；**total=0（全 POLL_FAIL/空观测）不判空闲**（轮询失败非空闲信号，需 operator 介入）|
+|**`picode supervise --log <path>`** ★|每次观测追加一行 JSONL（与 --once/--interval 均兼容），供后台归档/回放|
+|硬编码 dogfood 脚本 `scripts/supervise/supervise.mjs`|无产品出口、与 dashboard-server 各自维护 tokens 轮询（D093 前的问题），已被命令正式化取代|
+|平台 daemon 常驻监控|违背「无 daemon、状态文件化」（sys-arch 评估 / D037），不采用|
+
+**已定（D093）：命令正式化。** STOPPED 仅是退出信号，不驱动任何状态变更；
+`--interval` 循环在操作者前台进程中运行，中断即停止观测。tokens 数据源 = serve 契约
+（D058，消息级 `info.tokens.total`）。
