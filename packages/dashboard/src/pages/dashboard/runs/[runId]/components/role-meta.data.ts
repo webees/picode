@@ -67,6 +67,16 @@ export const PHASE_META: Record<string, string> = {
   handing_over: '交接中',
 }
 
+/**
+ * 任务进度阶段 → 进度条百分比（单一来源，审计 P2-11：progress-view 与
+ * tasks-board 此前各自映射 — 同一"验证中"一个 50% 一个 75%）。
+ */
+export const PHASE_PROGRESS: Record<string, number> = {
+  running: 40,
+  verifying: 75,
+  handing_over: 100,
+}
+
 /** 任务进度阶段 → 徽章变体（语义色：进行=蓝、验证=天蓝、交接=紫）。 */
 export const PHASE_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {
   running: 'default',

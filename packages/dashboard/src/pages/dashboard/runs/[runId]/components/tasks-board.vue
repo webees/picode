@@ -8,6 +8,7 @@ import { useBoard, useTasks } from '@/services/api/picode.api'
 import { BOARD_COLUMN_ZH } from '@/utils/labels'
 
 import { BOARD_COLUMN_META } from './tasks-board.data'
+import { PHASE_PROGRESS } from './role-meta.data'
 
 const props = defineProps<{ runId: string }>()
 
@@ -43,11 +44,7 @@ function cardPhase(card: { id: string }) {
 function phaseValue(phase: string | undefined): number {
   if (!phase)
     return 0
-  if (phase === 'handing_over')
-    return 100
-  if (phase === 'verifying')
-    return 75
-  return 40
+  return PHASE_PROGRESS[phase] ?? 0
 }
 
 function phaseLabel(phase: string | undefined): string {

@@ -20,6 +20,14 @@ import { useTasks } from '@/services/api/picode.api'
 import { label, TASK_STATUS } from '@/utils/labels'
 
 import { deriveProgress } from './views.data'
+import { PHASE_PROGRESS } from './role-meta.data'
+
+function phaseValue(phase: string | null | undefined): number {
+  if (phase === null || phase === undefined)
+    return 0
+  return PHASE_PROGRESS[phase] ?? 0
+}
+
 
 const props = defineProps<{ runId: string }>()
 
@@ -122,7 +130,7 @@ function formatTime(iso: string | null) {
             </TableCell>
             <TableCell class="min-w-32">
               <Progress
-                :model-value="row.phase === null ? 0 : row.phase === 'handing_over' ? 100 : 50"
+                :model-value="phaseValue(row.phase)"
                 class="h-1.5"
               />
             </TableCell>
