@@ -4,6 +4,7 @@
  * Pure module: no node:fs / yaml file I/O — loading lives in `loader.ts`
  * (方向 B1). Everything here is deterministic and testable in isolation.
  */
+import path from "node:path";
 import { ErrorCode, PicodeError } from "./errors.js";
 import { SESSION_EVENTS } from "./session.js";
 
@@ -246,7 +247,7 @@ export interface PicodeConfig {
   };
   paths: {
     runs_root: string;
-    /** Reserved (D055): skills root declared per 13 §9; evolve globs are hardcoded in evolve.ts. */
+    /** Skills root (D082): skill harness root — discovery/injection (default "skills"). */
     skills_root: string;
     knowledge_root: string;
     /** Reserved (D055): 13 §7 declares `prompts.root`; the implementation key is `paths.prompts_root`. */
@@ -642,6 +643,18 @@ export function validateConfig(config: PicodeConfig): void {
   }
   if (!Number.isInteger(config.sess_mgr.max_awake) || config.sess_mgr.max_awake < 1) {
     configError("sess_mgr.max_awake must be a positive integer");
+  }
+  // D082: skills_root is now an active config key — it must be a non-empty
+  // relative path that cannot escape the repo (absolute / `..` traversal).
+  const skillsRoot = config.paths.skills_root;
+  if (typeof skillsRoot !== "string" || skillsRoot.trim() === "") {
+    configError("paths.skills_root must be a non-empty string");
+  }
+  if (path.isAbsolute(skillsRoot) || /^[A-Za-z]:[\\/]/.test(skillsRoot)) {
+    configError(`paths.skills_root must be a relative path (got absolute: "${skillsRoot}")`);
+  }
+  if (skillsRoot.split(/[\\/]+/).includes("..")) {
+    configError(`paths.skills_root must not escape the repo (got ".." segment: "${skillsRoot}")`);
   }
   if (config.features.allow_implement_before_active) {
     console.warn("[picode] WARNING: allow_implement_before_active=true");

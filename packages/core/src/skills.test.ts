@@ -1,0 +1,135 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {
+  discoverSkills,
+  buildSkillIndex,
+  personaDeclaredSkills,
+  resolveSkillsRoot,
+} from "./skills.js";
+import { getDefaultConfig, validateConfig, type PicodeConfig } from "./config.js";
+
+function tmpDir(prefix: string): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), `picode-${prefix}-`));
+}
+
+function writeSkill(root: string, dir: string, name: string, description: string): void {
+  const skillDir = path.join(root, dir);
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(skillDir, "SKILL.md"),
+    `---\nname: ${name}\ndescription: ${description}\n---\n\nbody\n`,
+  );
+}
+
+test("discoverSkills 在 skills/ 找到 ponytail/ponytail-review 且 name==目录名（C1-b）", () => {
+  const root = tmpDir("skills-disc");
+  writeSkill(root, "engineering/ponytail", "ponytail", "Lazy senior dev");
+  writeSkill(root, "engineering/ponytail-review", "ponytail-review", "Over-engineering review");
+  const metas = discoverSkills(root);
+  assert.equal(metas.length, 2);
+  const names = metas.map((m) => m.name).sort();
+  assert.deepEqual(names, ["ponytail", "ponytail-review"]);
+  for (const m of metas) {
+    assert.equal(m.name, m.dir, `name should equal dir for ${m.name}`);
+    assert.ok(m.description.length > 0);
+    assert.ok(m.relPath.endsWith("SKILL.md"));
+  }
+});
+
+test("discoverSkills 缺失/空目录返回空数组", () => {
+  assert.deepEqual(discoverSkills(path.join(tmpDir("skills-none"), "nope")), []);
+  assert.deepEqual(discoverSkills(tmpDir("skills-empty")), []);
+});
+
+test("buildSkillIndex 输出 name: desc (path) 且 max 截断生效（C1-b）", () => {
+  const root = tmpDir("skills-index");
+  writeSkill(root, "a-one", "one", "First skill");
+  writeSkill(root, "b-two", "two", "Second skill");
+  writeSkill(root, "c-three", "three", "Third skill");
+  const metas = discoverSkills(root);
+  assert.equal(metas.length, 3);
+
+  const full = buildSkillIndex(metas);
+  for (const m of metas) {
+    assert.ok(full.includes(`${m.name}: ${m.description} (${m.relPath})`), full);
+  }
+
+  const capped = buildSkillIndex(metas, { max: 2 });
+  const cappedLines = capped.split("\n").filter((l) => l.length > 0);
+  assert.equal(cappedLines.length, 3); // 2 skills + ellipsis
+  assert.ok(capped.includes("one"));
+  assert.ok(capped.includes("… and 1 more skill(s)"));
+  assert.ok(!capped.includes("three"), "capped index must omit the 3rd skill body");
+
+  const noCap = buildSkillIndex(metas, { max: 0 });
+  assert.equal(noCap.split("\n").filter((l) => l.length > 0).length, 3);
+});
+
+test("personaDeclaredSkills 解析 frontmatter skills[]，未知名返回 unavailable 不抛错（C1-d）", () => {
+  const root = tmpDir("skills-decl");
+  writeSkill(root, "ponytail", "ponytail", "Lazy senior dev");
+  const metas = discoverSkills(root);
+  assert.equal(metas.length, 1);
+
+  const persona = path.join(tmpDir("skills-persona"), "persona.md");
+  fs.mkdirSync(path.dirname(persona), { recursive: true });
+  fs.writeFileSync(
+    persona,
+    "---\nname: eng\nskills:\n  - ponytail\n  - ghost-skill\n---\n\nbody\n",
+  );
+  const declared = personaDeclaredSkills(persona, metas);
+  assert.equal(declared.length, 2);
+  const byName = new Map(declared.map((d) => [d.name, d]));
+  assert.equal(byName.get("ponytail")?.available, true);
+  assert.ok(byName.get("ponytail")?.path?.endsWith("SKILL.md"));
+  assert.equal(byName.get("ghost-skill")?.available, false);
+  assert.equal(byName.get("ghost-skill")?.path, null);
+});
+
+test("personaDeclaredSkills 缺文件/无 skills 返回空，单字符串也解析（C1-d）", () => {
+  assert.deepEqual(personaDeclaredSkills(path.join(tmpDir("skills-none"), "x.md"), []), []);
+
+  const root = tmpDir("skills-decl2");
+  writeSkill(root, "ponytail", "ponytail", "Lazy senior dev");
+  const metas = discoverSkills(root);
+
+  const noSkills = path.join(tmpDir("skills-decl2"), "persona.md");
+  fs.mkdirSync(path.dirname(noSkills), { recursive: true });
+  fs.writeFileSync(noSkills, "---\nname: eng\n---\n\nbody\n");
+  assert.deepEqual(personaDeclaredSkills(noSkills, metas), []);
+
+  const singleStr = path.join(tmpDir("skills-decl3"), "persona.md");
+  fs.mkdirSync(path.dirname(singleStr), { recursive: true });
+  fs.writeFileSync(singleStr, "---\nskills: ponytail\n---\n\nbody\n");
+  const declared = personaDeclaredSkills(singleStr, metas);
+  assert.equal(declared.length, 1);
+  assert.equal(declared[0].name, "ponytail");
+  assert.equal(declared[0].available, true);
+});
+
+test("resolveSkillsRoot 解析相对 skills_root 到 repoRoot（C1）", () => {
+  const cfg = getDefaultConfig();
+  assert.equal(resolveSkillsRoot("/repo", cfg), path.resolve("/repo", "skills"));
+});
+
+test("validateConfig 拒绝绝对/逃逸 skills_root，默认合法（C1-e）", () => {
+  const ok = getDefaultConfig();
+  assert.doesNotThrow(() => validateConfig(ok));
+
+  for (const bad of ["/abs/path", "C:\\abs", "..", "skills/../escape", "a/../../b"]) {
+    const cfg: PicodeConfig = getDefaultConfig();
+    cfg.paths.skills_root = bad;
+    assert.throws(
+      () => validateConfig(cfg),
+      (e: unknown) => e instanceof Error && /skills_root/.test(e.message),
+      `skills_root "${bad}" must be rejected`,
+    );
+  }
+
+  const okDeep = getDefaultConfig();
+  okDeep.paths.skills_root = "vendor/skills";
+  assert.doesNotThrow(() => validateConfig(okDeep));
+});
