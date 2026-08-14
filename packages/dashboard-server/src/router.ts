@@ -10,12 +10,13 @@ import {
   BOARD_COLUMNS,
   SessionStore,
   buildBoard,
+  fetchLiveTokens,
   readGoal,
   readMergeQueue,
   readProgress,
   statusSnapshot,
+  type LiveOptions,
 } from "@picode/orchestrator";
-import { fetchLiveTokens, type LiveOptions } from "./live.js";
 
 /**
  * 只读路由面（D7 / D070）：全部 GET、无副作用、不写状态文件、不持锁。

@@ -4,9 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { loadConfig } from "@picode/core";
-import { BOARD_COLUMNS } from "@picode/orchestrator";
+import { BOARD_COLUMNS, fetchLiveTokens } from "@picode/orchestrator";
 import { DashboardRouter, type RouteResult } from "./router.js";
-import { fetchLiveTokens } from "./live.js";
 
 /** Minimal-but-real run fixture: everything the projections derive from. */
 function buildFixture(repo: string, runId: string): string {

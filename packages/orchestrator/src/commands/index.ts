@@ -18,6 +18,7 @@ import { statusCommands } from "./status.js";
 import { intakeCommands } from "./intake.js";
 import { selfDriveCommands, selfDriveFallback } from "./self-drive.js";
 import { checkpointCommands } from "./checkpoint.js";
+import { superviseCommands } from "./supervise.js";
 
 export type { Command, CommandContext } from "./types.js";
 
@@ -36,6 +37,7 @@ export const COMMANDS: Command[] = [
   ...statusCommands,
   ...intakeCommands,
   ...selfDriveCommands,
+  ...superviseCommands,
 ];
 
 /** Domain ordering for the grouped help (E2). */
@@ -53,6 +55,7 @@ export const DOMAIN_ORDER = [
   "window",
   "intake",
   "self-drive",
+  "supervise",
 ];
 
 /**

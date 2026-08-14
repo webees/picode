@@ -42,3 +42,6 @@ export * from "./board.js";
 export * from "./status.js";
 export * from "./progress.js";
 export * from "./window-store.js";
+// supervise (D093): live tokens 平台原语 + 监督观测/STOPPED 判定
+export * from "./live.js";
+export * from "./supervise.js";
