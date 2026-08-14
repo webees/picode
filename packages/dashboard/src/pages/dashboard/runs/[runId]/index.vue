@@ -16,8 +16,9 @@ import SessionsLive from './components/sessions-live.vue'
 import TasksBoard from './components/tasks-board.vue'
 
 const route = useRoute()
-const params = route.params as Record<string, string>
-const runId = computed(() => params.runId ?? '')
+// 审计 P1：route.params 每次导航返回新对象，setup 时快照会导致 runId 无响应式
+// 依赖（URL 变化页面仍显示旧 run 数据）——必须在 computed 内取值
+const runId = computed(() => String((route.params as Record<string, string>).runId ?? ''))
 
 const tabs = [
   { name: '概览', value: 'overview' },

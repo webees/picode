@@ -281,6 +281,10 @@ export function useRuns() {
   return useQuery({
     queryKey: ['picode', 'runs'],
     queryFn: () => fetchRuns(),
+    // 列表页也自动刷新（盯屏期间新 run 可见，审计 P1）
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    staleTime: LIVE_POLL_INTERVAL_MS,
   })
 }
 
@@ -299,6 +303,10 @@ export function useBoard(runId: string) {
     queryKey: ['picode', 'board', runId],
     queryFn: () => fetchBoard(runId),
     enabled: !!runId,
+    // 监控面板核心诉求：盯屏期间自动刷新（审计 P1）
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    staleTime: LIVE_POLL_INTERVAL_MS,
   })
 }
 
@@ -308,6 +316,10 @@ export function useChunks(runId: string) {
     queryKey: ['picode', 'chunks', runId],
     queryFn: () => fetchChunks(runId),
     enabled: !!runId,
+    // 监控面板核心诉求：盯屏期间自动刷新（审计 P1）
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    staleTime: LIVE_POLL_INTERVAL_MS,
   })
 }
 
@@ -317,6 +329,10 @@ export function useTasks(runId: string) {
     queryKey: ['picode', 'tasks', runId],
     queryFn: () => fetchTasks(runId),
     enabled: !!runId,
+    // 监控面板核心诉求：盯屏期间自动刷新（审计 P1）
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    staleTime: LIVE_POLL_INTERVAL_MS,
   })
 }
 
@@ -326,6 +342,10 @@ export function useSessions(runId: string) {
     queryKey: ['picode', 'sessions', runId],
     queryFn: () => fetchSessions(runId),
     enabled: !!runId,
+    // 监控面板核心诉求：盯屏期间自动刷新（审计 P1）
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    staleTime: LIVE_POLL_INTERVAL_MS,
   })
 }
 
@@ -335,6 +355,10 @@ export function useMerge(runId: string) {
     queryKey: ['picode', 'merge', runId],
     queryFn: () => fetchMerge(runId),
     enabled: !!runId,
+    // 监控面板核心诉求：盯屏期间自动刷新（审计 P1）
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    staleTime: LIVE_POLL_INTERVAL_MS,
   })
 }
 
@@ -344,6 +368,10 @@ export function useGates(runId: string) {
     queryKey: ['picode', 'gates', runId],
     queryFn: () => fetchGates(runId),
     enabled: !!runId,
+    // 监控面板核心诉求：盯屏期间自动刷新（审计 P1）
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    staleTime: LIVE_POLL_INTERVAL_MS,
   })
 }
 

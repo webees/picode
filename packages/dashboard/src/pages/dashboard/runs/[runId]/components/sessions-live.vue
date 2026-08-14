@@ -45,6 +45,7 @@ const liveQueries = useQueries({
     enabled: !!s.pi_session_id,
     refetchInterval: LIVE_POLL_INTERVAL_MS,
     staleTime: LIVE_POLL_INTERVAL_MS,
+    retry: 1,
   }))),
 })
 
@@ -67,7 +68,14 @@ function liveTotal(s: SessionItem): number {
 
 function liveError(s: SessionItem): string | null {
   const r = liveFor(s)
-  return r && !r.ok ? r.error : null
+  if (r && !r.ok) return r.error
+  // fetch 抛错（HTTP 5xx / 网络断）时 query data 为 undefined，isError 才可见
+  const i = awakeSessions.value.findIndex((x) => x.agent_id === s.agent_id)
+  const q = i >= 0 ? liveQueries.value[i] : undefined
+  if (q?.isError) {
+    return q.error instanceof Error ? q.error.message : String(q.error ?? 'serve 轮询失败')
+  }
+  return null
 }
 
 const stateVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -162,7 +170,7 @@ function formatTime(iso: string | null) {
             </TableCell>
             <TableCell>
               <template v-if="s.state === 'awake'">
-                <span v-if="liveError(s)" class="text-xs text-destructive" :title="liveError(s)!">
+                <span v-if="liveError(s)" class="text-xs text-destructive" :title="liveError(s) ?? undefined">
                   serve 失联
                 </span>
                 <span v-else-if="liveTotal(s) > 0" class="font-mono tabular-nums text-xs">
