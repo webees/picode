@@ -84,9 +84,12 @@ export const PHASE_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> 
   handing_over: 'outline',
 }
 
+/** squad 房前缀（work_room = squad-<task_id>）；平台房过滤与动态房识别共用（审计 P2-12）。 */
+export const SQUAD_ROOM_PREFIX = 'squad-task-'
+
 /** squad-task-<taskId> → 「<taskId> 任务小组」；其他动态房回退原 id。 */
 export function roomLabel(room: string): string {
-  if (room.startsWith('squad-task-'))
+  if (room.startsWith(SQUAD_ROOM_PREFIX))
     return `${room.slice('squad-task-'.length)} 任务小组`
   if (room.startsWith('meeting-'))
     return `${room.slice('meeting-'.length)} 会议`

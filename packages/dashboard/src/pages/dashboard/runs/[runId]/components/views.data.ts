@@ -4,7 +4,7 @@
  */
 import type { SessionItem, StatusSnapshot, TaskItem } from '@/services/api/picode.api'
 
-import { PHASE_META, platformRoomMembers, ROLE_META, roomLabel } from './role-meta.data'
+import { PHASE_META, platformRoomMembers, ROLE_META, roomLabel, SQUAD_ROOM_PREFIX } from './role-meta.data'
 
 /* ------------------------------ 类型定义 ------------------------------ */
 
@@ -148,7 +148,7 @@ export function deriveRooms(snapshot: StatusSnapshot, tasks: TaskItem[]): RoomsV
     })),
     // 平台房：从 snapshot.rooms 里排除 squad 房，其余按 ROLE→ROOM 约定派生成员
     ...snapshot.rooms
-      .filter(r => !r.room.startsWith('squad-'))
+      .filter(r => !squadRooms.has(r.room) && !r.room.startsWith(SQUAD_ROOM_PREFIX))
       .map(r => ({
         room: r.room,
         label: roomLabel(r.room),
