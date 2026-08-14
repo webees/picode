@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { BasicPage } from '@/components/global-layout'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
@@ -32,7 +32,18 @@ const tabs = [
   { name: '质量门禁', value: 'gates' },
 ]
 
-const defaultTab = tabs[0].value
+// 审计 P2-17：激活 tab 与 URL ?tab= 同步（刷新/深链不再丢回概览页）
+const router = useRouter()
+const activeTab = computed({
+  get: () => {
+    const q = route.query.tab
+    const t = typeof q === 'string' ? q : ''
+    return tabs.some((x) => x.value === t) ? t : tabs[0].value
+  },
+  set: (v: string) => {
+    void router.replace({ query: { ...route.query, tab: v } })
+  },
+})
 </script>
 
 <template>
@@ -40,7 +51,7 @@ const defaultTab = tabs[0].value
     :title="runId"
     description="运行详情 — 目标、进度、房间、人员、分块、任务、会话、合并与门禁全貌"
   >
-    <Tabs :default-value="defaultTab" class="w-full">
+    <Tabs v-model="activeTab" class="w-full">
       <ScrollArea class="w-full">
         <TabsList class="w-max min-w-full">
           <TabsTrigger
