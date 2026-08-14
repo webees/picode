@@ -1,5 +1,7 @@
 # 决策日志（现行有效）
 
+> 决策编号由机器状态 `docs/decisions/watermark.yaml` 全局分配（`node docs/decisions/reserve.mjs`），**勿手改**该文件；新决策须先 `--reserve --run <run-id> --count N` 领取编号段，落地后 `--land` 标记占用。
+
 只记录**当前成立**的产品/架构意图。实现细节以 `spec/**`、`PROCESSES.md`、`17`/`18` 为准。
 
 |ID|现行意图|
