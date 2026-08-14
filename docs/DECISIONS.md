@@ -81,9 +81,11 @@
 |D076|**语义续跑（N7 升级）**：续跑 prompt 注入上一回合要点摘要——`feedContinuation` 改用 `composeContinuationPrompt`（固定指令 + `TranscriptStore.historySummary()` 确定性启发式要点，无 LLM）；摘要为 null（空/损坏转录）回退固定 `CONTINUATION_PROMPT`；数据源仅复用既有 `transcripts/<agent>.jsonl`（**零新增数据源**）；预算/幂等/纯函数语义不回归|
 |D077|**摘要窗口可配置 + stripNoise 去噪**（摘要质量）：`historySummary` 增 `opts.stripNoise[]`（outgoing 要点生成前删除命中子串，删空条目整条跳过；条数统计仍基于原始转录）；`maxEntries<=0` 视为摘要窗口关闭返回 null；`feedContinuation` 用配置 `self_evolve.continuation.summary_entries`（默认 8）替代硬编码 8，并传 `stripNoise:[READY_MESSAGE_TEXT, CONTINUATION_PROMPT]` 剔除机械模板噪音；提取 `CONTINUATION_SUMMARY_HEADER` 常量供 compose/re-spawn 复用。wakeWithOpencode 的 stripNoise 越界改动因 write_paths 门禁回退（D079 缓项）|
 |D078|**续跑预算按角色分流**（预算差异化）：新增 `self_evolve.continuation.max_per_session_platform`（默认 **2**，平台席独立更紧预算；非负整数校验，0=不限保留）；`deriveContinuationTargets` 预算门按 `taskId` 分流——task 绑定会话用 `max_per_session`、平台席（taskId 空）用 `max_per_session_platform`，判定顺序保持预算门在前、platform_seats=skip 门在后；遥测顶层增 `max_per_session_platform` 字段、session 级 `max_per_session` 反映该会话适用上限（三面口径一致）。**现 allow 配置（继承 5）升级后平台席收紧到 2，属有意保守行为变更**|
-|D079|**缓项：re-spawn 摘要去噪一致化**：`wakeWithOpencode`（opencode-adapter.ts）传 `stripNoise:[READY_MESSAGE_TEXT]` 的改动越出本任务 write_paths（P07 门禁 MUST）被回退；feed 路径不受影响。后续单独任务接入（非 C1 验收必需）|
+|D079|**已由 D083 落地**：re-spawn 摘要去噪一致化——`wakeWithOpencode`（opencode-adapter.ts）传 `stripNoise:[READY_MESSAGE_TEXT]`，本轮显式纳入 write_paths 落地（见 D083）|
 |D080|**缓项：上一回合摘要语义化/关键动作提取**：stripNoise 仅精确剔模板句，摘要仍含续跑 feed 的 outgoing 记录（确定性、可复现）；后续可对 summary 做模板句剔除/关键动作提取（仍启发式，不引 LLM）|
-|D081|**缓项：checkpoint 快照 / maxTokens 真计量**（E7 缓项延续）：会话 checkpoint 快照先定「快照只读、文件为准」边界；maxTokens 待 serve token 契约（D058）就绪|
+|D081|**checkpoint 部分已由 D082 落地**：会话 checkpoint 快照（快照只读、文件为准、MVP 显式捕获）见 D082；maxTokens 真计量仍待 serve token 契约（D058）就绪（缓）|
+|D082|**会话 checkpoint 边界 + 最小可行落地**：checkpoint = 捕获时刻对文件真相的**只读投影**，写入后不可变（timestamped 单文件、append-only 目录）；**任何代码路径不得读 checkpoint 驱动状态决策**——恢复/续跑/调度/合并仍只读 session.yaml / task.yaml / transcripts / git。落地 `checkpoint-store.ts`（纯函数 `deriveTaskCheckpoint`/`captureTaskCheckpoint`，不可变落盘 `runs/<id>/checkpoints/<taskId>/checkpoint-<ts>.yaml` schema v1 + 自指纹 sha256）+ 只读 CLI `picode checkpoint capture/status`；**MVP 仅显式捕获**（`boundary: manual` 预留，guardian/merge/serve 恢复路径零改动）|
+|D083|**re-spawn 摘要去噪一致化**（D079 落地）：`wakeWithOpencode` 重 spawn 的 `historySummary` 传 `stripNoise: [READY_MESSAGE_TEXT]`，剔除重投喂 ready 模板句，与 feed 路径（D077）口径一致；`maxEntries` 保持默认 20（全量恢复语义）。`opencode-adapter.ts` 本轮显式纳入 write_paths（D079 越界教训）|
 
 ## 开放
 
@@ -249,8 +251,31 @@
 - 处置：后续对 summary 做模板句剔除/关键动作提取（仍启发式，不引 LLM；不改变编排器无 LLM 不变量 D003）
 - 纪律：未立项不实现；决策目录 §12.3 摘要语义仍标注「启发式」
 
-## D081 — 缓项：checkpoint 快照 / maxTokens 真计量（E7 缓项延续）
+## D081 — checkpoint 已由 D082 落地；maxTokens 真计量仍缓（缓项更新）
 - 2026-08-14 · 来源：run-2026-08-13T21-32-57-118Z goal acceptance + E7 缓项延续
-- 事实：会话 checkpoint 快照（N5）与 maxTokens 真计量（N6，待 serve token 契约 D058）仍未实施；本轮预算差异化（D078）只解决预算总量，不解决「会话中途崩溃恢复」
-- 处置：checkpoint 先定「快照只读、文件为准」边界（D002）；maxTokens 待 opencode serve 暴露 token 计量契约后再评估
+- 事实：会话 checkpoint 快照（N5）与 maxTokens 真计量（N6，待 serve token 契约 D058）原均未实施；本轮预算差异化（D078）只解决预算总量，不解决「会话中途崩溃恢复」
+- 处置：checkpoint 部分本轮落地（D082：快照只读、文件为准、MVP 显式捕获）；maxTokens 仍待 opencode serve 暴露 token 计量契约后再评估（缓）
 - 纪律：缓项只记录不实现，避免范围蔓延；实施须重新立项
+
+## D082 — 会话 checkpoint 边界 + 最小可行落地（C1 task-checkpoint-store）
+- 2026-08-14 · 来源：run-lead 规划 run-2026-08-13T23-48-54-042Z-plan（E10 后续候选 #3 / D081 缓项落地）
+- 问题：会话中途崩溃/观测需捕获时刻快照，但若快照参与恢复/续跑/调度，会与「文件才是真相」产生**第二事实源**（sys-arch 评估点名双源分歧风险）
+- 决定：
+  - **快照只读**：checkpoint 是捕获时刻对文件真相的**只读投影**，写入后不可变（timestamped 单文件、append-only 目录）；**任何代码路径不得读 checkpoint 驱动状态决策**——恢复/续跑/调度/合并仍只读 session.yaml / task.yaml / transcripts / git（文件真相不变量 D002 延续）
+  - **纯函数派生**：`deriveTaskCheckpoint(dir, taskId, {now?, boundary?})` 同输入同输出（now 注入保证确定性）；task 不存在 → null；checkpoint 丢失/损坏**不影响**任何恢复路径（best-effort 观测物）
+  - **MVP 仅显式捕获**：CLI `picode checkpoint capture --task <id>`（+ `status` 只读列出）；guardian/merge/serve 恢复路径**零改动**；捕获边界字段预留（`boundary: manual`，future 可扩展 pre_merge 等）
+  - **捕获内容**（schema v1）：task.yaml `status` + 三角各会话（session.yaml state/budget）+ 各会话 `historySummary`（复用 `stripNoise:[READY_MESSAGE_TEXT, CONTINUATION_PROMPT]`）+ git worktree 指纹（复用 `captureGitWorktreeSnapshot`+`snapshotFingerprint`，非 git 仓 → null 容错）+ `captured_at` + 自指纹 sha256
+  - **落盘**：`runs/<id>/checkpoints/<taskId>/checkpoint-<ts>.yaml`（ts 由 now 派生，字典序=时间序；重复捕获产生新文件，不覆盖=不可变）
+  - **消费面最小化**：只读 CLI 两个子命令；不扩 statusSnapshot 顶层（status 契约不动，三面一致性留后续候选）
+- 实现：`packages/orchestrator/src/checkpoint-store.ts`、`commands/checkpoint.ts`、`commands/index.ts`（注册 + DOMAIN_ORDER）、`checkpoint-store.test.ts` + `cli.test.ts`（命令表断言，D074 模式）
+- 边界：checkpoint 是**观测/审计产物**，不反向驱动任何状态决策；恢复路径零改动（P1 serve 恢复 + 转录重投喂仍以文件真相为准）
+- 缓/拒留档：checkpoint 自动捕获接线（guardian/merge 前）缓——需先验证手工捕获价值；从 checkpoint 恢复/回滚拒（违背快照只读边界，远期若做恢复目标仍为文件真相）；maxTokens 真计量缓（待 D058）
+- commit: 84c52bb/93a2bc7（C1 task-checkpoint-store 合并）
+
+## D083 — re-spawn 摘要去噪一致化（C2 task-respawn-stripnoise）
+- 2026-08-14 · 来源：run-lead 规划 run-2026-08-13T23-48-54-042Z-plan（E10 后续候选 #1 / D079 缓项落地）
+- 问题：`wakeWithOpencode` 重 spawn 的 `historySummary` 未传 stripNoise，转录里每次重投喂的 `READY_MESSAGE_TEXT` 固定模板句被计入摘要，摘要被机械噪音淹没（与 feed 路径 D077 行为不一致）；D079 记录上轮该改动因越出 write_paths 被 P07 回退
+- 决定：`wakeWithOpencode` 调 `historySummary(agentId, { stripNoise: [READY_MESSAGE_TEXT] })`，剔除重投喂 ready 模板句；`maxEntries` 保持默认 20 不动（全量恢复语义，不强行与 feed 的 8 统一）；本轮 `opencode-adapter.ts` 显式纳入 write_paths（D079 越界教训）
+- 实现：`packages/orchestrator/src/opencode-adapter.ts` + `opencode-adapter.test.ts`（2 用例：重 spawn 摘要不含 ready 模板句；转录仅模板句时整条跳过）
+- 边界：stripNoise 缺省 = 现行为（零回归）；仅剔 `READY_MESSAGE_TEXT`，不剔 `CONTINUATION_PROMPT`（re-spawn 不经 feed 路径，口径与 D077 feed 一致）
+- commit: 3eb8434（C2 task-respawn-stripnoise 合并）

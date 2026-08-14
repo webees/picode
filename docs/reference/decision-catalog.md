@@ -512,14 +512,36 @@ re-spawn（wakeWithOpencode）同款消费已复用。预算/幂等/纯函数语
 |------|------|
 |**`summary_entries` 可配（默认 8）+ `stripNoise` 去噪** ★|`historySummary` 取最近 N 条作要点；生成 outgoing 要点前删除命中子串（feed 传 `[READY_MESSAGE_TEXT, CONTINUATION_PROMPT]`），删空条目整条跳过；条数统计仍基于原始转录；`maxEntries<=0` = 摘要窗口关闭返回 null（回退固定模板）|
 |固定硬编码 8（D076）|摘要被每次投喂的机械模板噪音淹没、窗口无法调优（D077 前的问题）|
-|re-spawn 去噪（wakeWithOpencode stripNoise）|**缓项（D079）**：改动越出 C1 write_paths 被 P07 门禁回退；feed 路径不受影响|
+|re-spawn 去噪（wakeWithOpencode stripNoise）|**已定（D083）**：重 spawn 摘要剔除 `READY_MESSAGE_TEXT` 模板句，与 feed 路径口径一致（D079 落地；`maxEntries` 仍默认 20）|
 
-**已定（D077）：`summary_entries` 默认 8（非负整数，0 = 窗口关闭）**；`feedContinuation`
-传 `stripNoise: [READY_MESSAGE_TEXT, CONTINUATION_PROMPT]` 剔除固定投喂模板文本，
-避免摘要被重复噪音淹没。提取 `CONTINUATION_SUMMARY_HEADER` 常量供
-`composeContinuationPrompt`/re-spawn 复用。摘要仍为确定性启发式（D076 不变，
-非 LLM 精炼）；wakeWithOpencode 重 spawn 保持默认 `maxEntries=20`、不加 stripNoise
-（越界改动回退，D079 缓项）。
+**已定（D077 + D083）：`summary_entries` 默认 8（非负整数，0 = 窗口关闭）**；
+`feedContinuation` 传 `stripNoise: [READY_MESSAGE_TEXT, CONTINUATION_PROMPT]`
+剔除固定投喂模板文本，避免摘要被重复噪音淹没。提取 `CONTINUATION_SUMMARY_HEADER`
+常量供 `composeContinuationPrompt`/re-spawn 复用。摘要仍为确定性启发式（D076 不变，
+非 LLM 精炼）。**re-spawn 去噪已一致化（D083）**：`wakeWithOpencode` 重 spawn 摘要同样
+剔除 `READY_MESSAGE_TEXT` 模板句，与 feed 路径口径一致；`maxEntries` 保持默认 20
+（全量恢复语义）。
+
+### 12.9 会话 checkpoint（D082）
+
+权威正文：`packages/orchestrator/src/checkpoint-store.ts` + `commands/checkpoint.ts`；
+CLI：`picode checkpoint capture` / `picode checkpoint status`。
+
+**边界：快照只读、文件为准。** checkpoint 是捕获时刻对文件真相的**只读投影**，写入后
+不可变（timestamped 单文件、append-only 目录）。**任何代码路径不得读 checkpoint 来驱动
+状态决策**——恢复/续跑/调度/合并仍只读 session.yaml / task.yaml / transcripts / git
+（D002 文件真相不变量）。checkpoint 只是观测/审计产物（best-effort），丢失或损坏不影响
+任何恢复路径。
+
+|项|说明|
+|------|------|
+|**MVP 仅显式捕获** ★|`picode checkpoint capture --task <id>` 显式触发；guardian/merge/serve 恢复路径**零改动**；`boundary: manual` 预留（future 可扩展 pre_merge 等）|
+|**只读查询** ★|`picode checkpoint status [--task <id>]`：列某 task 全部（最新在前）或缺省列全部有 checkpoint 的 task 概览（count + 最新）|
+|**捕获内容（schema v1）**|task.yaml `status` + 三角各会话 state/budget + 各会话 `historySummary`（stripNoise 剔模板）+ git worktree 指纹（非 git 仓 → null）+ `captured_at` + 自指纹 sha256|
+|**纯函数 + 不可变落盘**|`captureTaskCheckpoint(dir, taskId, {now?, boundary?})` 同输入同输出（now 注入确定性）；落盘 `runs/<id>/checkpoints/<taskId>/checkpoint-<ts>.yaml`；重复捕获产生新 ts 文件不覆盖；task 不存在 → null|
+|checkpoint 自动捕获（guardian/merge 前）|**缓**：先验证手工捕获价值与写入代价，再评估接线|
+|checkpoint 进 statusSnapshot 三面|**缓**：MVP 仅 CLI 消费面；三面同源需动 status 契约 + mcp-server|
+|从 checkpoint 恢复/回滚|**拒（本轮）/缓（远期）**：违背「快照只读、文件为准」边界；若未来做，恢复目标仍为文件真相（git/文件备份），checkpoint 仅作回滚前对照基线|
 
 ---
 
