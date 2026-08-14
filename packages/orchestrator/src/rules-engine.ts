@@ -11,6 +11,7 @@ import {
 import { SessionStore } from "./session-store.js";
 import { sleepAgent, terminateAgent, wakeAgent } from "./pi-adapter.js";
 import { hasEvolveLayer, isEvolveRun } from "./evolve-run.js";
+import { readJsonl } from "./jsonl.js";
 
 /**
  * Deterministic rules engine (18 phase B / 17 §5.3).
@@ -236,12 +237,8 @@ export async function drainSessionCommands(
 ): Promise<DrainResult> {
   const file = path.join(dir, "session_commands.jsonl");
   if (!fs.existsSync(file)) return { processed: 0, results: [] };
-  const lines = fs
-    .readFileSync(file, "utf8")
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((l) => JSON.parse(l) as SessionCommand);
+  // 逐行容错（P1）：一行损坏不再炸掉整个 drain / guardian tick
+  const lines = readJsonl<SessionCommand>(file);
 
   const drain = await withFileLock(path.join(dir, ".session_commands.lock"), async () => {
     const store = new SessionStore(dir);

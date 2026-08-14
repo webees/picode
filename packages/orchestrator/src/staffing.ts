@@ -10,6 +10,7 @@ import {
   missingPersonaDimensions,
   readYamlFile,
   simpleGlobMatch,
+  splitEvolveGlobs,
   writeAtomic,
   type Persona,
   type PicodeConfig,
@@ -273,7 +274,7 @@ export function checkPersonas(dir: string, config: PicodeConfig, taskId: string)
     );
     if (outOfWrite.length) problems.push(`write_paths outside task: ${outOfWrite.join(", ")}`);
     // E7 (19 §5): self_evolve personas must declare forbidden paths and stay
-    // inside the allowed-layer write paths.
+    // inside the allowed-layer write paths (排除 glob 同样生效，P1 语义统一）。
     if (evolve && evolveAllowed) {
       const forbidden = Array.isArray(frontmatter.forbidden)
         ? (frontmatter.forbidden as string[])
@@ -284,8 +285,13 @@ export function checkPersonas(dir: string, config: PicodeConfig, taskId: string)
       const wp = Array.isArray(frontmatter.write_paths)
         ? (frontmatter.write_paths as string[])
         : [];
+      const { includes, excludes } = splitEvolveGlobs(evolveAllowed);
       const outsideLayer = wp.filter(
-        (w) => !evolveAllowed.some((glob) => simpleGlobMatch(glob, w.replace(/\\/g, "/"))),
+        (w) => {
+          const n = w.replace(/\\/g, "/");
+          const excluded = excludes.some((ex) => simpleGlobMatch(ex.replace(/\/$/, ""), n));
+          return excluded || !includes.some((glob) => simpleGlobMatch(glob, n));
+        },
       );
       if (outsideLayer.length) {
         problems.push(`E7: write_paths outside evolve layers: ${outsideLayer.join(", ")}`);

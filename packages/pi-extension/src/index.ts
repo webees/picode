@@ -191,11 +191,14 @@ export default function picodeExtension(pi: PiApi): void {
       const a = auth();
       if (a) return err(ErrorCode.TOKEN_INVALID, a);
       const rel = String(params.path).replace(/^\/+/, "");
-      if (writePaths.length && !matchGlob(rel, writePaths)) {
+      // fail-closed: empty write set means NO writes are granted (default deny)
+      if (writePaths.length === 0 || !matchGlob(rel, writePaths)) {
         return err(ErrorCode.WRITE_PATH_DENIED, `path not in write_paths: ${rel}`);
       }
-      const abs = path.resolve(cwd, rel);
-      if (!abs.startsWith(path.resolve(cwd))) {
+      let abs: string;
+      try {
+        abs = resolveInCwd(rel);
+      } catch {
         return err(ErrorCode.WRITE_PATH_DENIED, "path escapes cwd");
       }
       fs.mkdirSync(path.dirname(abs), { recursive: true });
@@ -218,12 +221,18 @@ export default function picodeExtension(pi: PiApi): void {
       const a = auth();
       if (a) return err(ErrorCode.TOKEN_INVALID, a);
       const rel = String(params.path).replace(/^\/+/, "");
+      // fail-closed: empty read/write sets fall back to the doc/task extras only
       const allowed =
         writePaths.length === 0 && readPaths.length === 0
-          ? true
+          ? matchGlob(rel, ["tasks/**", "**/*.md"])
           : matchGlob(rel, [...writePaths, ...readPaths, "tasks/**", "**/*.md"]);
       if (!allowed) return err(ErrorCode.READ_PATH_DENIED, rel);
-      const abs = path.resolve(cwd, rel);
+      let abs: string;
+      try {
+        abs = resolveInCwd(rel);
+      } catch {
+        return err(ErrorCode.READ_PATH_DENIED, "path escapes cwd");
+      }
       if (!fs.existsSync(abs)) return err(ErrorCode.NOT_FOUND, rel);
       return jsonResult({ ok: true, path: rel, content: fs.readFileSync(abs, "utf8") });
     },
@@ -262,7 +271,8 @@ export default function picodeExtension(pi: PiApi): void {
         });
         // phase F: also write the machine-readable progress state for sweeps
         const taskId = env("PICODE_TASK_ID");
-        if (taskId && runDir) {
+        // task id 白名单：与 state_read 一致，防 MCP 客户端经 _task_id 路径穿越写
+        if (taskId && runDir && /^[A-Za-z0-9_-]+$/.test(taskId)) {
           const prog = {
             task_id: taskId,
             phase: params.phase ?? "running",

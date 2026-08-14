@@ -3,7 +3,7 @@ import { gitInit } from "../test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { createRun, resolveRunDir } from "../run-store.js";
+import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "../run-store.js";
 import { SessionStore } from "../session-store.js";
 import { goalCommands } from "./goal.js";
 import type { CommandContext } from "./types.js";
@@ -53,6 +53,9 @@ test("goal set-status completed: 终态分支调 closeRun（平台席休眠 + TA
   store.register("sdet", { agentId: `sdet@${taskId}`, initialState: "sleeping" });
   await store.wake(`squad-lead@${taskId}`, "test");
 
+  // 合法路径：先激活再终态（状态机校验 intake→completed 不合法）
+  setProductAcceptance(dir, ["compiles"]);
+  setGoalStatus(dir, "active");
   const { logs } = await captureLog(() => setStatusCmd().run(ctxFor(dir, config, "completed")));
   assert.equal(logs.length, 1, "仅输出一次 JSON");
   const out = JSON.parse(logs[0]) as {

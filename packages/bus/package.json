@@ -15,7 +15,8 @@
     "test": "node --test dist/*.test.js"
   },
   "dependencies": {
-    "@picode/core": "0.1.0"
+    "@picode/core": "0.1.0",
+    "yaml": "^2.7.0"
   },
   "devDependencies": {
     "typescript": "^5.8.2",

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { loadConfig, runsRoot } from "@picode/core";
-import { createRun, resolveRunDir, setGoalStatus } from "./run-store.js";
+import { createRun, resolveRunDir } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
 import {
   cleanResidual,
@@ -29,6 +29,13 @@ function setupRuns() {
 }
 
 /** 激活 goal（直接改文件，绕开 product_acceptance 门禁——与 self-drive.test 同法）。 */
+
+/** 构造终态 goal（直写文件，绕开迁移校验——本文件测审计/清理，不测迁移）。 */
+function terminateGoal(dir: string): void {
+  const gp = path.join(dir, "goal.yaml");
+  fs.writeFileSync(gp, fs.readFileSync(gp, "utf8").replace("status: intake", "status: completed"));
+}
+
 function activateGoal(dir: string): void {
   const p = path.join(dir, "goal.yaml");
   fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace("status: intake", "status: active"));
@@ -69,7 +76,7 @@ test("deriveAuditReport: lists run ids only for dirs with goal.yaml", () => {
 test("deriveAuditReport: terminal run with awake sessions is residual", async () => {
   const { config, root, makeRun } = setupRuns();
   const { dir } = makeRun("t1");
-  setGoalStatus(dir, "completed");
+  terminateGoal(dir);
   const store = new SessionStore(dir);
   await wakePlatformSeats(store, ["run-lead", "pm"]);
 
@@ -93,7 +100,7 @@ test("deriveAuditReport: active run with awake sessions is NOT residual; cross-r
   await wakePlatformSeats(new SessionStore(active), ["run-lead"]);
 
   const { dir: done } = makeRun("done-run");
-  setGoalStatus(done, "completed");
+  terminateGoal(done);
   await wakePlatformSeats(new SessionStore(done), ["pm", "sess-mgr", "scout"]);
 
   const report = deriveAuditReport(root, config);
@@ -123,7 +130,7 @@ test("cleanResidual: only residual (terminal+awake) runs get closeRun", async ()
   await wakePlatformSeats(new SessionStore(active), ["run-lead"]);
 
   const { dir: done } = makeRun("done-run");
-  setGoalStatus(done, "completed");
+  terminateGoal(done);
   await wakePlatformSeats(new SessionStore(done), ["pm"]);
 
   const closeRunCalls: string[] = [];
@@ -147,7 +154,7 @@ test("cleanResidual: only residual (terminal+awake) runs get closeRun", async ()
 test("cleanResidual: no residual runs → empty result without calling closeRun", async () => {
   const { config, root, makeRun } = setupRuns();
   const { dir } = makeRun("t");
-  setGoalStatus(dir, "completed");
+  terminateGoal(dir);
 
   let called = false;
   const res = await cleanResidual(root, config, {
@@ -165,11 +172,11 @@ test("cleanResidual: no residual runs → empty result without calling closeRun"
 test("cleanResidual: closeRun failure is best-effort — recorded as skipped, others still cleaned", async () => {
   const { config, root, makeRun } = setupRuns();
   const { dir: fail } = makeRun("fail-run");
-  setGoalStatus(fail, "completed");
+  terminateGoal(fail);
   await wakePlatformSeats(new SessionStore(fail), ["run-lead"]);
 
   const { dir: ok } = makeRun("ok-run");
-  setGoalStatus(ok, "completed");
+  terminateGoal(ok);
   await wakePlatformSeats(new SessionStore(ok), ["pm"]);
 
   const fakeCloseRun = async (dir: string) => {
@@ -188,7 +195,7 @@ test("cleanResidual: closeRun failure is best-effort — recorded as skipped, ot
 test("deriveAuditReport: --run <id> filter narrows to a single run", async () => {
   const { config, root, makeRun } = setupRuns();
   const { dir: a } = makeRun("run-a");
-  setGoalStatus(a, "completed");
+  terminateGoal(a);
   await wakePlatformSeats(new SessionStore(a), ["run-lead"]);
   const { dir: b } = makeRun("run-b");
   activateGoal(b);

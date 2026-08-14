@@ -222,12 +222,34 @@ export function writeGoal(dir: string, goal: GoalState): void {
   writeYamlFile(path.join(dir, "goal.yaml"), goal);
 }
 
+/**
+ * Goal state machine (01 §2.1): `intake → draft → active ⇄ blocked →
+ * completed | cancelled`; terminal states have no outgoing transitions.
+ * （P12 的 goal change_review 未落实现，变更走 change_orders/<id>.yaml。）
+ */
+const GOAL_TRANSITIONS: Record<GoalState["status"], readonly GoalState["status"][]> = {
+  intake: ["draft", "active", "cancelled"],
+  draft: ["active", "blocked", "cancelled"],
+  active: ["blocked", "completed", "cancelled"],
+  blocked: ["active", "cancelled"],
+  completed: [],
+  cancelled: [],
+};
+
 export function setGoalStatus(
   dir: string,
   status: GoalState["status"],
   opts?: { clearOpenQuestions?: boolean; skipProductAcceptanceCheck?: boolean },
 ): GoalState {
   const goal = readGoal(dir);
+  // 幂等：重复设置同一状态（CLI 重放）直接返回，不报错
+  if (goal.status === status) return goal;
+  // 状态机迁移校验（P1）：禁任意跳转/回退（completed→active、intake→completed）
+  if (!GOAL_TRANSITIONS[goal.status].includes(status)) {
+    throw new Error(
+      `goal status transition not allowed: ${goal.status} → ${status} (allowed: ${GOAL_TRANSITIONS[goal.status].join(" | ") || "terminal"})`,
+    );
+  }
   if (status === "active") {
     if (goal.open_questions.length > 0 && !opts?.clearOpenQuestions) {
       throw new Error("open_questions non-empty; cannot activate");

@@ -16,6 +16,9 @@ import { RoomStore, issueToken } from "@picode/bus";
 import { readGoal } from "./run-store.js";
 import { assertStaffingApproved } from "./staffing.js";
 
+/** chunk id safe-name pattern: becomes the `tasks/task-<chunkId>` directory name. */
+export const SAFE_CHUNK_ID_RE = /^[A-Za-z0-9_-]+$/;
+
 export interface TaskState {
   id: string;
   chunk_id: string;
@@ -40,6 +43,11 @@ export function addChunkAndTask(
   config: PicodeConfig,
   opts: { chunkId: string; writePaths: string[]; readPaths?: string[] },
 ): { taskId: string } {
+  // 路径安全：chunkId 直接拼成 tasks/task-<id> 目录名，非法值（含 `/`、`..`）拒绝，
+  // 防逃逸 run 布局错写其它状态文件（P0）。
+  if (!SAFE_CHUNK_ID_RE.test(opts.chunkId)) {
+    throw new Error(`chunk id "${opts.chunkId}" is not safe (letters/digits/_/- only)`);
+  }
   const goal = readGoal(dir);
   if (goal.status !== "active" && !config.features.allow_implement_before_active) {
     throw new Error("goal not active; cannot add implement task");

@@ -135,8 +135,11 @@ export function isAllowedAcceptor(dir: string, taskId: string, by: string): bool
   const task = readTask(dir, taskId);
   const deps = chunkDependsOn(dir, task.chunk_id);
   if (deps.length === 0) return false;
+  // `squad-lead@task-chunk-b` → m[1] = "chunk-b"（task- 前缀之后）。
+  // depends_on 规范存 chunk id；兼容个别 task-id 形态（merge.ts 同款防御映射），双形态归一。
   const m = /^squad-lead@task-(.+)$/.exec(by);
-  return Boolean(m && deps.includes(m[1]));
+  if (!m) return false;
+  return deps.some((d) => d === m[1] || d === `task-${m[1]}`);
 }
 
 export interface PackageResult {

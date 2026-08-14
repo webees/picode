@@ -65,7 +65,15 @@ test("effectiveLayers intersects goal layers with config allowed layers", () => 
 
 test("assertEvolveWritePathAllowed rejects out-of-layer writes (E2)", () => {
   const config = getDefaultConfig();
-  assertEvolveWritePathAllowed(config, evolveSpec, "docs/knowledge/evolve/run.md");
+  assertEvolveWritePathAllowed(config, evolveSpec, "docs/guide.md");
+  assert.throws(
+    () => assertEvolveWritePathAllowed(config, evolveSpec, "docs/knowledge/evolve/run.md"),
+    /excluded/,
+  );
+  assert.throws(
+    () => assertEvolveWritePathAllowed(config, evolveSpec, "docs/secrets/leak.md"),
+    /excluded/,
+  );
   assert.throws(
     () => assertEvolveWritePathAllowed(config, evolveSpec, "src/business/main.ts"),
     /E2/,

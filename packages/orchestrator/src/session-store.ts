@@ -17,8 +17,7 @@ import {
  * Platform sessions registered per run (17 §3.2 + §3.3).
  * `sponsor` is human-only and never registered (17 §3.1).
  */
-export const PLATFORM_ROLES: readonly string[] = [
-  "sess-mgr",
+export const PLATFORM_ROLES: readonly string[] = [  "sess-mgr",
   "run-lead",
   "tpm",
   "proc-audit",
@@ -37,6 +36,13 @@ export const PLATFORM_ROLES: readonly string[] = [
   "sec-eng",
 ] as const;
 
+/**
+ * Agent id safe-name pattern: platform seats (`run-lead`) and task instances
+ * (`engineer@task-a`, 16 §4). Rejects `/`, `..`, spaces and any other
+ * path-unsafe character — an agent id becomes a file name under sessions/.
+ */
+export const SAFE_AGENT_ID_RE = /^[A-Za-z0-9_-]+(@[A-Za-z0-9_-]+)?$/;
+
 export class SessionStore {
   constructor(private runDir: string) {}
 
@@ -45,6 +51,14 @@ export class SessionStore {
   }
 
   private sessionPath(agentId: string): string {
+    // 路径安全汇聚点：所有读/写/迁移都经过这里，非法 agent id（含 `../`）一律拒绝，
+    // 防逃逸 sessions/ 目录读写任意文件（P0: agentId 直传 CLI --agent）。
+    if (!SAFE_AGENT_ID_RE.test(agentId)) {
+      throw new PicodeError(
+        ErrorCode.BAD_ARGS,
+        `agent id "${agentId}" is not safe (letters/digits/_/-/[A-Za-z0-9_-]+@… only)`,
+      );
+    }
     return path.join(this.sessionsDir(), `${agentId}.yaml`);
   }
 

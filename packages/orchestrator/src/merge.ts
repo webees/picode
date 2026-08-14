@@ -12,6 +12,7 @@ import {
 } from "@picode/core";
 import { isEvolveRun, runVerifyCommands } from "./evolve-run.js";
 import { SessionStore } from "./session-store.js";
+import { readJsonl } from "./jsonl.js";
 import {
   captureTaskCheckpoint,
   PRE_MERGE_CHECKPOINT_BOUNDARY,
@@ -95,12 +96,8 @@ function hasDependencyCycle(dir: string, queued: MergeRequest[]): boolean {
 export function readMergeQueue(dir: string): MergeRequest[] {
   const p = queuePath(dir);
   if (!fs.existsSync(p)) return [];
-  return fs
-    .readFileSync(p, "utf8")
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((l) => JSON.parse(l) as MergeRequest);
+  // 逐行容错（P1）：一行损坏不再炸掉锁内的 merge 流程
+  return readJsonl<MergeRequest>(p);
 }
 
 export async function enqueueMerge(

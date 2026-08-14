@@ -44,17 +44,36 @@ export function effectiveLayers(
   return evolve.layers.filter((l) => allowed.has(l));
 }
 
-/** Write paths generated from goal.evolve.layers (P13 / 19 §4). */
+/** Split `!`-prefixed exclusion globs from the include globs (P1: 排除语义). */
+export function splitEvolveGlobs(globs: string[]): { includes: string[]; excludes: string[] } {
+  const includes: string[] = [];
+  const excludes: string[] = [];
+  for (const g of globs) {
+    if (g.startsWith("!")) excludes.push(g.slice(1));
+    else includes.push(g);
+  }
+  return { includes, excludes };
+}
+
+/**
+ * Write paths generated from goal.evolve.layers (P13 / 19 §4).
+ * `!`-prefixed entries and forbidden_paths are EXCLUSIONS: a write path
+ * matching any exclusion is refused even when an include glob matches.
+ */
 export function evolveWritePaths(config: PicodeConfig, evolve: EvolveGoalSpec): string[] {
   const out = new Set<string>();
   for (const layer of effectiveLayers(config, evolve)) {
     for (const glob of evolveLayerGlobs(layer)) out.add(glob);
   }
-  for (const f of evolve.forbidden_paths) out.delete(f);
+  // forbidden_paths are exclusion globs — normalize to `!`-prefixed form so
+  // every consumer applies the same exclusion semantics (was: literal delete).
+  for (const f of evolve.forbidden_paths) {
+    out.add(f.startsWith("!") ? f : `!${f}`);
+  }
   return [...out];
 }
 
-/** E2: every write path must be inside at least one allowed-layer glob. */
+/** E2: every write path must be inside at least one allowed-layer glob and outside every exclusion. */
 export function assertEvolveWritePathAllowed(
   config: PicodeConfig,
   evolve: EvolveGoalSpec,
@@ -62,9 +81,15 @@ export function assertEvolveWritePathAllowed(
 ): void {
   const allowed = evolveWritePaths(config, evolve);
   const normalized = writePath.replace(/\\/g, "/");
-  for (const glob of allowed) {
-    const pattern = glob.replace(/^!\//, "").replace(/\/$/, "");
-    if (simpleGlobMatch(pattern, normalized)) return;
+  const { includes, excludes } = splitEvolveGlobs(allowed);
+  // 排除优先：命中任一排除 glob（!docs/knowledge/**、forbidden_paths）即拒绝
+  for (const ex of excludes) {
+    if (simpleGlobMatch(ex.replace(/\/$/, ""), normalized)) {
+      throw new Error(`E2: write path "${writePath}" excluded by evolve layer (!${ex})`);
+    }
+  }
+  for (const inc of includes) {
+    if (simpleGlobMatch(inc.replace(/\/$/, ""), normalized)) return;
   }
   throw new Error(
     `E2: write path "${writePath}" not inside any evolve layer (${allowed.join(", ") || "none"})`,

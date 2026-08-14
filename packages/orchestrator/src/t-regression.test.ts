@@ -90,7 +90,8 @@ test("T13: room display_name override does not change the bus room id", () => {
   // bus room id stays the logical id, display is presentation-only
   const members = store.loadMembers("leadership");
   assert.ok(members.length > 0);
-  assert.ok(store.loadMembers("领导舱").length === 0);
+  // display_name 不是合法 room id：RoomStore 路径安全校验直接拒绝（防逃逸）
+  assert.throws(() => store.loadMembers("领导舱"), /not safe/);
 });
 
 test("T14: disabling a required room without a replacement fails validation", () => {

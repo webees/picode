@@ -26,6 +26,13 @@ function tmpGitRepo(): string {
   return dir;
 }
 
+
+/** 构造 draft 状态（直写文件，绕开迁移校验——本文件测 park，不测迁移）。 */
+function forceDraft(dir: string): void {
+  const gp = path.join(dir, "goal.yaml");
+  fs.writeFileSync(gp, fs.readFileSync(gp, "utf8").replace("status: active", "status: draft"));
+}
+
 async function setup() {
   const repo = tmpGitRepo();
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
@@ -78,7 +85,7 @@ test("goal draft park: only draft can park; unpark restores (07§7)", async () =
   const { dir } = await setup();
   // active goal cannot be parked
   assert.throws(() => parkGoal(dir), /only draft/);
-  setGoalStatus(dir, "draft");
+  forceDraft(dir);
   const parked = parkGoal(dir, "draft-idle-sweep");
   assert.ok(parked.parked_at);
   assert.equal(parked.park_reason, "draft-idle-sweep");
@@ -88,7 +95,7 @@ test("goal draft park: only draft can park; unpark restores (07§7)", async () =
 
 test("goal draft sweep parks idle drafts when policy is park", async () => {
   const { dir, config } = await setup();
-  setGoalStatus(dir, "draft");
+  forceDraft(dir);
   // backdate created_at to make the draft idle beyond draft_idle_sec=0
   const p = path.join(dir, "goal.yaml");
   const goal = YAML.parse(fs.readFileSync(p, "utf8"));

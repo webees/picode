@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import YAML from "yaml";
 import { ErrorCode, PicodeError, ensureDir, withFileLock, writeAtomic } from "@picode/core";
 import { groupByWindow, windowIdOf } from "./window.js";
 
@@ -63,18 +64,35 @@ export interface BusMessage {
   meta?: Record<string, unknown>;
 }
 
+/** room id safe-name pattern: becomes path segments under rooms/ and bus/. */
+const SAFE_ROOM_RE = /^[A-Za-z0-9_-]+$/;
+
 export class RoomStore {
   constructor(private runDir: string) {}
 
+  private assertSafeRoom(room: string): void {
+    // 路径安全汇聚点：room 直接拼入 rooms/<room>/ 与 bus/<room>.jsonl，
+    // 非法值（含 `../`）拒绝，防逃逸 runDir 读写任意路径（P1）。
+    if (!SAFE_ROOM_RE.test(room)) {
+      throw new PicodeError(
+        ErrorCode.BAD_ARGS,
+        `room "${room}" is not safe (letters/digits/_/- only)`,
+      );
+    }
+  }
+
   private membersPath(room: string): string {
+    this.assertSafeRoom(room);
     return path.join(this.runDir, "rooms", room, "members.yaml");
   }
 
   private busPath(room: string): string {
+    this.assertSafeRoom(room);
     return path.join(this.runDir, "bus", `${room}.jsonl`);
   }
 
   private lockPath(room: string): string {
+    this.assertSafeRoom(room);
     return path.join(this.runDir, "bus", `.${room}.lock`);
   }
 
@@ -85,10 +103,15 @@ export class RoomStore {
     if (!fs.existsSync(p)) return [];
     const raw = fs.readFileSync(p, "utf8");
     try {
-      const data = JSON.parse(raw);
-      return (data.members ?? data) as Member[];
+      // 按扩展名分流：members.json → JSON；members.yaml → YAML（旧实现用
+      // JSON.parse 解析 YAML 必然失败并静默返回 []，损坏态被当成"空成员表"）。
+      const data = p.endsWith(".yaml") ? YAML.parse(raw) : JSON.parse(raw);
+      return (data?.members ?? data) as Member[];
     } catch {
-      return [];
+      throw new PicodeError(
+        ErrorCode.CONFIG_INVALID,
+        `members file corrupt (${p}) — ACL fail-closed, fix the file`,
+      );
     }
   }
 
@@ -152,19 +175,20 @@ export class RoomStore {
   }
 
   /** Read every message in the room (system operation, no ACL). */
-  private readAll(room: string): BusMessage[] {
-    return this.readBus(room);
-  }
-
   private readBus(room: string): BusMessage[] {
     const file = this.busPath(room);
     if (!fs.existsSync(file)) return [];
-    return fs
-      .readFileSync(file, "utf8")
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .map((l) => JSON.parse(l) as BusMessage);
+    const out: BusMessage[] = [];
+    for (const line of fs.readFileSync(file, "utf8").trim().split("\n")) {
+      if (!line) continue;
+      try {
+        out.push(JSON.parse(line) as BusMessage);
+      } catch {
+        // 逐行容错：崩溃残留的半行不炸掉整个房间历史（P1-6）
+        continue;
+      }
+    }
+    return out;
   }
 
   private archivePath(room: string, windowId: string): string {
@@ -191,7 +215,7 @@ export class RoomStore {
     const now = opts.now ?? new Date();
     const current = windowIdOf(now, opts.splitHour).id;
     return withFileLock(this.lockPath(room), () => {
-      const all = this.readAll(room);
+      const all = this.readBus(room);
       if (all.length === 0) {
         return { room, current_window: current, folded_windows: [], folded: 0, kept: 0, archived: [] };
       }
