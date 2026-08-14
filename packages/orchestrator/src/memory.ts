@@ -68,11 +68,23 @@ export async function createChangeOrder(
   return co;
 }
 
+/** change_order 状态机：proposed → applied → closed（禁止跳级/回退）。 */
+const CHANGE_ORDER_TRANSITIONS: Record<ChangeOrder["status"], readonly ChangeOrder["status"][]> = {
+  proposed: ["applied"],  // 必须先 applied 再 closed（禁直跳）
+  applied: ["closed"],
+  closed: [],
+};
+
 export function transitionChangeOrder(dir: string, id: string, to: "applied" | "closed"): ChangeOrder {
   const p = coPath(dir, id);
   if (!fs.existsSync(p)) throw new Error(`change order not found: ${id}`);
   const co = readYamlFile<ChangeOrder>(p)!;
-  if (co.status === "closed") throw new Error(`change order already closed: ${id}`);
+  // 幂等：重复设置同一状态（CLI 重放）直接返回，不重复追加 task 记录
+  if (co.status === to) return co;
+  // 迁移校验（P1）：proposed→closed 直跳、closed 再动均拒绝
+  if (!CHANGE_ORDER_TRANSITIONS[co.status].includes(to)) {
+    throw new Error(`change order transition not allowed: ${co.status} → ${to}`);
+  }
   co.status = to;
   if (to === "applied") {
     co.applied_at = new Date().toISOString();
@@ -82,9 +94,12 @@ export function transitionChangeOrder(dir: string, id: string, to: "applied" | "
     if (fs.existsSync(tp)) {
       const task = readYamlFile<{ change_orders?: Array<{ co_id: string; summary: string; applied_at: string }> }>(tp)!;
       const list = task.change_orders ?? [];
-      list.push({ co_id: co.id, summary: co.summary, applied_at: co.applied_at });
-      task.change_orders = list;
-      writeYamlFile(tp, task);
+      // 幂等（P1）：同一 co 重复 apply 不重复追加
+      if (!list.some((c) => c.co_id === co.id)) {
+        list.push({ co_id: co.id, summary: co.summary, applied_at: co.applied_at });
+        task.change_orders = list;
+        writeYamlFile(tp, task);
+      }
     }
   } else {
     co.closed_at = new Date().toISOString();

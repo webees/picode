@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import YAML from "yaml";
 import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
 import { addChunkAndTask, draftBrief, approveBrief } from "./task.js";
 import {
@@ -50,7 +51,22 @@ test("change order lifecycle: proposed → applied → closed + leadership notic
   assert.ok(applied.applied_at);
   const closed = transitionChangeOrder(dir, co.id, "closed");
   assert.equal(closed.status, "closed");
-  assert.throws(() => transitionChangeOrder(dir, co.id, "applied"), /already closed/);
+  assert.throws(() => transitionChangeOrder(dir, co.id, "applied"), /transition not allowed/);
+});
+
+test("change order state machine: proposed→closed 直跳被拒、重复 apply 幂等（P1）", async () => {
+  const { dir, taskId } = setup();
+  const co = await createChangeOrder(dir, taskId, "flag x", "run-lead");
+  // proposed → closed 直跳被拒
+  assert.throws(() => transitionChangeOrder(dir, co.id, "closed"), /transition not allowed/);
+  // applied 幂等：重复 apply 不重复追加 change_orders
+  transitionChangeOrder(dir, co.id, "applied");
+  transitionChangeOrder(dir, co.id, "applied");
+  const task = YAML.parse(
+    fs.readFileSync(path.join(dir, "tasks", taskId, "task.yaml"), "utf8"),
+  ) as { change_orders?: Array<{ co_id: string }> };
+  const count = task.change_orders?.filter((x) => x.co_id === co.id).length ?? 0;
+  assert.equal(count, 1, "重复 apply 只记录一次");
 });
 
 test("draft park: draft brief → parked; approved brief cannot be parked", () => {

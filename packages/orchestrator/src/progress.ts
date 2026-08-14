@@ -26,8 +26,10 @@ export function readProgress(dir: string, taskId: string): ProgressState | null 
   if (!fs.existsSync(p)) return null;
   try {
     return JSON.parse(fs.readFileSync(p, "utf8")) as ProgressState;
-  } catch {
-    return null;
+  } catch (e) {
+    // core 约定：损坏状态文件绝不静默当缺失 — 否则 sweep 会把损坏误判为
+    // 超时并错误唤醒 squad-lead（P1）
+    throw new Error(`progress file corrupt (${p}): ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 

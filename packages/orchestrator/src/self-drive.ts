@@ -542,7 +542,24 @@ export async function guardianTick(
 
   const events: ApplyResult[] = [];
   for (const ev of deriveEvents(dir, config)) {
-    events.push(await applyEvent(dir, config, ev.event, ev.taskId ? { taskId: ev.taskId } : {}));
+    // 单事件容错（P1）：一个 applyEvent 抛错（如 sleepAgent 后端失败）不再
+    // 毁掉整轮 tick — 记录错误事件，其余事件照常处理
+    try {
+      events.push(await applyEvent(dir, config, ev.event, ev.taskId ? { taskId: ev.taskId } : {}));
+    } catch (e) {
+      events.push({
+        event: ev.event,
+        rejected: true,
+        actions: [
+          {
+            agent_id: ev.taskId ? `task:${ev.taskId}` : "*",
+            action: "skip",
+            outcome: "rejected",
+            reason: e instanceof Error ? e.message : String(e),
+          },
+        ],
+      });
+    }
   }
 
   const progress = await sweepProgress(dir, config);

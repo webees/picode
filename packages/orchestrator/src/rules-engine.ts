@@ -156,8 +156,15 @@ export async function applyEvent(
         a.reason = `not awake (${cur.state})`;
         continue;
       }
-      await sleepAgent(dir, config, a.agent_id, `event:${event}`);
-      a.outcome = "ok";
+      try {
+        await sleepAgent(dir, config, a.agent_id, `event:${event}`);
+        a.outcome = "ok";
+      } catch (e) {
+        // 与 wake 分支一致：单席失败不中止整轮（P1）
+        a.outcome = "rejected";
+        a.reason = e instanceof Error ? e.message : String(e);
+        result.rejected = true;
+      }
     } else if (a.action === "terminate") {
       if (cur.state === "terminated") {
         a.outcome = "skipped";
@@ -169,8 +176,15 @@ export async function applyEvent(
         a.reason = "cannot terminate from registered";
         continue;
       }
-      await terminateAgent(dir, config, a.agent_id, `event:${event}`);
-      a.outcome = "ok";
+      try {
+        await terminateAgent(dir, config, a.agent_id, `event:${event}`);
+        a.outcome = "ok";
+      } catch (e) {
+        // 与 wake 分支一致：单席失败不中止整轮（P1）
+        a.outcome = "rejected";
+        a.reason = e instanceof Error ? e.message : String(e);
+        result.rejected = true;
+      }
     }
   }
 
