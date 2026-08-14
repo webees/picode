@@ -251,6 +251,9 @@ export class OpencodeSpawner {
  *
  * P4: 重 spawn 时读取 runs/<id>/transcripts/<agent>.jsonl，把历史要点摘要
  * 追加进 ready 消息（断点续跑）；每次成功投喂/响应都写回转录归档。
+ *
+ * D083: 摘要生成传 stripNoise:[READY_MESSAGE_TEXT]，剔除重 spawn 时转录里
+ * 反复出现的 ready 模板句，避免摘要被机械噪音淹没；maxEntries 保持默认 20。
  */
 export async function wakeWithOpencode(
   dir: string,
@@ -273,7 +276,7 @@ export async function wakeWithOpencode(
   });
   try {
     await store.wake(agentId, reason, opts);
-    const summary = transcript.historySummary(agentId);
+    const summary = transcript.historySummary(agentId, { stripNoise: [READY_MESSAGE_TEXT] });
     const extraText = summary ? `\n\n## 历史要点摘要（转录恢复）\n${summary}` : undefined;
     const handle = await spawner.spawn(agentId, env, extraText);
     const updated = await store.attachPiSession(agentId, handle.pi_session_id);

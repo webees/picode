@@ -4,7 +4,12 @@ import { getDefaultConfig, type PicodeConfig } from "@picode/core";
 import { gitInit } from "./test-utils.js";
 import { createRun, resolveRunDir } from "./run-store.js";
 import { TranscriptStore } from "./transcript-store.js";
-import { OpencodeSpawner, opencodeSessionIdOf, wakeWithOpencode } from "./opencode-adapter.js";
+import {
+  OpencodeSpawner,
+  READY_MESSAGE_TEXT,
+  opencodeSessionIdOf,
+  wakeWithOpencode,
+} from "./opencode-adapter.js";
 
 /** Capture every fetch() call for assertion. */
 function mockFetch(
@@ -214,6 +219,62 @@ test("P4: wakeWithOpencode 空转录不追加摘要（首次 spawn）", async ()
     };
     assert.equal(msg.parts.length, 1, "无历史转录时只投喂基础 ready 消息");
     assert.ok(!JSON.stringify(msg.parts).includes("历史要点摘要"));
+  } finally {
+    restore();
+  }
+});
+
+test("D083: wakeWithOpencode 重 spawn 摘要剔除 ready 模板句（stripNoise）", async () => {
+  const repo = gitInit({ prefix: "picode-wake-oc-" });
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir } = resolveRunDir(repo, runId);
+  const transcript = new TranscriptStore(dir);
+  await transcript.recordOutgoing("pm", `${READY_MESSAGE_TEXT}\n\n实现模块 A`);
+  await transcript.recordOutgoing("pm", `${READY_MESSAGE_TEXT}\n\n实现模块 B`);
+
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const restore = mockFetch(calls);
+  try {
+    const r = await wakeWithOpencode(dir, cfg(), "pm", "re-wake", {});
+    assert.ok(r.pi_session_id?.startsWith("oc-"));
+    const msg = calls.find((c) => c.url.includes("/message"))?.body as {
+      parts: Array<{ type: string; text: string }>;
+    };
+    const texts = msg.parts.map((p) => p.text).join("\n");
+    assert.match(texts, /历史要点摘要/);
+    assert.match(texts, /实现模块 A/);
+    assert.match(texts, /实现模块 B/);
+    const summarySection = texts.split("## 历史要点摘要（转录恢复）")[1] ?? "";
+    assert.ok(
+      !summarySection.includes(READY_MESSAGE_TEXT),
+      "重 spawn 注入的摘要不得包含 ready 模板句（stripNoise 生效）",
+    );
+    assert.ok(!summarySection.includes("你已就绪"), "ready 模板句不应残留在摘要任何位置");
+  } finally {
+    restore();
+  }
+});
+
+test("D083: wakeWithOpencode 转录仅 ready 模板句时摘要删除该条（不留噪音）", async () => {
+  const repo = gitInit({ prefix: "picode-wake-oc-" });
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir } = resolveRunDir(repo, runId);
+  const transcript = new TranscriptStore(dir);
+  await transcript.recordOutgoing("pm", READY_MESSAGE_TEXT);
+
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const restore = mockFetch(calls);
+  try {
+    const r = await wakeWithOpencode(dir, cfg(), "pm", "re-wake", {});
+    assert.ok(r.pi_session_id?.startsWith("oc-"));
+    const msg = calls.find((c) => c.url.includes("/message"))?.body as {
+      parts: Array<{ type: string; text: string }>;
+    };
+    const texts = msg.parts.map((p) => p.text).join("\n");
+    const summarySection = texts.split("## 历史要点摘要（转录恢复）")[1] ?? "";
+    assert.ok(!summarySection.includes("投喂:"), "全为模板句的 outgoing 条目应整条跳过，不生成要点行");
+    assert.ok(!summarySection.includes(READY_MESSAGE_TEXT), "ready 模板句不得注入摘要");
+    assert.ok(!summarySection.includes("你已就绪"), "ready 模板句不应残留在摘要任何位置");
   } finally {
     restore();
   }
