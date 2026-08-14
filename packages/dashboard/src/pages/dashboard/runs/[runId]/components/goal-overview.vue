@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import { useRun, useSessions, useTasks } from '@/services/api/picode.api'
 import { label, RUN_KIND, RUN_SCALE, RUN_STATUS } from '@/utils/labels'
 import { ErrorState } from '@/components/dashboard'
+import type { BadgeVariant } from '@/lib/utils'
 
 import { derivePersonnel, deriveProgress, deriveRooms } from './views.data'
 
@@ -59,7 +60,7 @@ const alerts = computed(() => {
   return list
 })
 
-const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+const statusVariant: Record<string, BadgeVariant> = {
   active: 'default',
   completed: 'secondary',
   cancelled: 'destructive',

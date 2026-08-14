@@ -24,6 +24,7 @@ import {
 } from '@/services/api/picode.api'
 import { label, SESSION_STATE } from '@/utils/labels'
 import { ErrorState } from '@/components/dashboard'
+import type { BadgeVariant } from '@/lib/utils'
 
 const props = defineProps<{ runId: string }>()
 
@@ -74,7 +75,7 @@ function liveError(s: SessionItem): string | null {
   return null
 }
 
-const stateVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+const stateVariant: Record<string, BadgeVariant> = {
   awake: 'default',
   sleeping: 'secondary',
   registered: 'outline',

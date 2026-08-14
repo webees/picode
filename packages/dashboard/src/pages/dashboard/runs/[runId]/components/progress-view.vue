@@ -18,6 +18,7 @@ import {
 import { useTasks } from '@/services/api/picode.api'
 import { label, TASK_STATUS } from '@/utils/labels'
 import { ErrorState } from '@/components/dashboard'
+import type { BadgeVariant } from '@/lib/utils'
 
 import { deriveProgress } from './views.data'
 import { PHASE_PROGRESS } from './role-meta.data'
@@ -35,7 +36,7 @@ const { data, isLoading, isError, error } = useTasks(props.runId)
 
 const view = computed(() => deriveProgress(data.value?.tasks ?? []))
 
-const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+const statusVariant: Record<string, BadgeVariant> = {
   in_progress: 'default',
   ready: 'secondary',
   merged: 'secondary',

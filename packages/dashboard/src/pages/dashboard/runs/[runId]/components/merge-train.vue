@@ -17,6 +17,7 @@ import {
 import { useMerge } from '@/services/api/picode.api'
 import { label, MERGE_STATUS } from '@/utils/labels'
 import { ErrorState } from '@/components/dashboard'
+import type { BadgeVariant } from '@/lib/utils'
 
 const props = defineProps<{ runId: string }>()
 
@@ -25,7 +26,7 @@ const { data, isLoading, isError, error } = useMerge(props.runId)
 const queue = computed(() => data.value?.queue ?? [])
 const counts = computed(() => data.value?.counts ?? { queued: 0, merged: 0, failed: 0 })
 
-const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+const statusVariant: Record<string, BadgeVariant> = {
   merged: 'default',
   queued: 'outline',
   failed: 'destructive',
