@@ -3,10 +3,10 @@ import type { Command, CommandContext } from "./types.js";
 import { need } from "./util.js";
 import {
   captureTaskCheckpoint,
-  listCheckpointTasks,
   listTaskCheckpoints,
   latestTaskCheckpoint,
 } from "../checkpoint-store.js";
+import { checkpointOverview } from "../status.js";
 
 /**
  * `picode checkpoint` 两个子命令（D082-6 MVP 消费面）：
@@ -42,7 +42,8 @@ export const checkpointCommands: Command[] = [
         const latest = latestTaskCheckpoint(ctx.dir!, taskId);
         console.log(JSON.stringify({ task_id: taskId, count: all.length, latest }, null, 2));
       } else {
-        console.log(JSON.stringify({ tasks: listCheckpointTasks(ctx.dir!) }, null, 2));
+        // C1：与 statusSnapshot.checkpoint / MCP checkpoint_status 同源（同一派生）。
+        console.log(JSON.stringify({ tasks: checkpointOverview(ctx.dir!) }, null, 2));
       }
     },
   },

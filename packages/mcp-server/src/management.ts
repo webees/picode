@@ -51,6 +51,7 @@ import {
   addFeed,
   triageFeed,
   closeFeed,
+  checkpointOverview,
 } from "@picode/orchestrator";
 import { evolveWritePaths, type EvolveLayer, type GoalKind } from "@picode/core";
 import type { ToolDef } from "./registry.js";
@@ -649,6 +650,16 @@ export function managementTools(): ToolDef[] {
           };
         }
         return { ok: true, fed: true, ...res };
+      },
+    ),
+    withRun(
+      "checkpoint_status",
+      "checkpoint 观测段（C1 + D082）：每 task 最新 checkpoint 概要（task_id/latest_at/boundary/sha256）。与 statusSnapshot.checkpoint / `checkpoint status` 同源（同一派生）。纯读零写。",
+      {},
+      [],
+      (p, env) => {
+        const { dir } = requireRun(env, str(p, "run_id"));
+        return { ok: true, tasks: checkpointOverview(dir) };
       },
     ),
   ];

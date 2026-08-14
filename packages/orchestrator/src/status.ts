@@ -7,6 +7,7 @@ import { TranscriptStore } from "./transcript-store.js";
 import { taskIdOfAgent } from "./continuation.js";
 import { readMergeQueue } from "./merge.js";
 import { readProgress } from "./progress.js";
+import { listCheckpointTasks } from "./checkpoint-store.js";
 
 /**
  * Run status snapshot (18 phase H / U12): `picode status --run <id>`.
@@ -41,6 +42,12 @@ export interface StatusSnapshot {
    * 续跑计数 / 上次投喂时间 / in-flight（投喂后未响应）/ 平台席标记。
    */
   continuation: ContinuationTelemetry;
+  /**
+   * C1 (D082 观测面三面同源): 每任务最新 checkpoint 概要段。statusSnapshot /
+   * `checkpoint status` / MCP `checkpoint_status` 共用同一派生
+   * （checkpointOverview），口径一致；纯读零写。无 checkpoint → []。
+   */
+  checkpoint: CheckpointTaskOverview[];
 }
 
 /**
@@ -76,6 +83,22 @@ export interface ContinuationTelemetry {
   /** 空闲触发间隔（秒，配置值）。 */
   idle_sec: number;
   sessions: ContinuationSessionTelemetry[];
+}
+
+/**
+ * C1 (D082 三面同源): 每任务最新 checkpoint 概要。字段全部取自最新 checkpoint
+ * 文件（listCheckpointTasks → latest），latest_at = captured_at、boundary、sha256。
+ */
+export interface CheckpointTaskOverview {
+  task_id: string;
+  /** 该 task 已捕获 checkpoint 数量（listCheckpointTasks count）。 */
+  count: number;
+  /** 最新 checkpoint 捕获时间（ISO）；无 → null。 */
+  latest_at: string | null;
+  /** 最新 checkpoint 捕获边界（manual/guardian/pre_merge）；无 → null。 */
+  boundary: string | null;
+  /** 最新 checkpoint 自指纹 sha256；无 → null。 */
+  sha256: string | null;
 }
 
 function briefStatus(dir: string, taskId: string): string {
@@ -152,6 +175,21 @@ export function continuationTelemetry(dir: string, config: PicodeConfig): Contin
   };
 }
 
+/**
+ * C1 (D082 三面同源): 每任务最新 checkpoint 概要段。statusSnapshot /
+ * `checkpoint status` / MCP `checkpoint_status` 三面共用同一派生，保证口径一致。
+ * 纯读零写（listCheckpointTasks 只读，不读 checkpoint 驱动任何状态决策）。
+ */
+export function checkpointOverview(dir: string): CheckpointTaskOverview[] {
+  return listCheckpointTasks(dir).map((t) => ({
+    task_id: t.task_id,
+    count: t.count,
+    latest_at: t.latest?.captured_at ?? null,
+    boundary: t.latest?.boundary ?? null,
+    sha256: t.latest?.sha256 ?? null,
+  }));
+}
+
 export function statusSnapshot(dir: string, config: PicodeConfig): StatusSnapshot {
   void config;
   const goal = readGoal(dir);
@@ -214,5 +252,6 @@ export function statusSnapshot(dir: string, config: PicodeConfig): StatusSnapsho
       failed: queue.filter((q) => q.status === "failed").length,
     },
     continuation: continuationTelemetry(dir, config),
+    checkpoint: checkpointOverview(dir),
   };
 }

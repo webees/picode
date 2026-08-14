@@ -202,3 +202,57 @@ test("R3-C3: continuation_status 返回全会话续跑遥测列（预算/上次�
   // 纯读：continuation_status 不得写任何状态
   assert.equal(store.get(agentId)!.budget?.continuations, 1);
 });
+
+test("C1: checkpoint_status 返回每 task 最新 checkpoint 概要段（同 statusSnapshot.checkpoint）", async () => {
+  const repo = tmpGitRepo();
+  const env: ServerEnv = { repo };
+  const init = await call("init_run", { title: "cp-triad", scale: "S" }, env);
+  const runId = String(init.runId);
+  const { dir } = resolveRunDir(repo, runId);
+
+  // 未捕获 → 空段
+  const s0 = await call("checkpoint_status", { run_id: runId }, env);
+  assert.equal(s0.ok, true);
+  assert.deepEqual(s0.tasks, [], "no checkpoints → empty tasks");
+
+  // 直接落一个最新 checkpoint 文件（listCheckpointTasks 只读同一目录）
+  const now = "2026-08-14T00:00:00.000Z";
+  const ts = now.replace(/[:.]/g, "-");
+  const cpDir = path.join(dir, "checkpoints", "task-cp");
+  fs.mkdirSync(cpDir, { recursive: true });
+  const sha = "0".repeat(64);
+  const cp = {
+    schema_version: "1",
+    task_id: "task-cp",
+    captured_at: now,
+    boundary: "manual",
+    task_status: "assigned",
+    sessions: [],
+    transcript_summaries: [],
+    git: { fingerprint: null },
+    sha256: sha,
+  };
+  fs.writeFileSync(path.join(cpDir, `checkpoint-${ts}.yaml`), JSON.stringify(cp), "utf8");
+
+  const res = await call("checkpoint_status", { run_id: runId }, env);
+  assert.equal(res.ok, true);
+  const rows = res.tasks as Array<{
+    task_id: string;
+    count: number;
+    latest_at: string | null;
+    boundary: string | null;
+    sha256: string | null;
+  }>;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].task_id, "task-cp");
+  assert.equal(rows[0].count, 1);
+  assert.equal(rows[0].latest_at, now);
+  assert.equal(rows[0].boundary, "manual");
+  assert.equal(rows[0].sha256, sha);
+
+  // 与 run_status 内嵌的 statusSnapshot.checkpoint 段同源一致
+  const status = await call("run_status", { run_id: runId }, env);
+  assert.equal(status.ok, true);
+  const snapshot = status.status as { checkpoint: unknown[] };
+  assert.deepEqual(snapshot.checkpoint, rows, "run_status.checkpoint 与 checkpoint_status.tasks 同源");
+});

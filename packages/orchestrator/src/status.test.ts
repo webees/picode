@@ -6,9 +6,10 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
 import { addChunkAndTask } from "./task.js";
-import { statusSnapshot } from "./status.js";
+import { statusSnapshot, checkpointOverview } from "./status.js";
 import { SessionStore } from "./session-store.js";
 import { TranscriptStore } from "./transcript-store.js";
+import { captureTaskCheckpoint, DEFAULT_CHECKPOINT_BOUNDARY } from "./checkpoint-store.js";
 
 function tmpGitRepo(): string {
   const dir = gitInit({ prefix: "picode-test-", email: "test@picode", name: "picode-test" });
@@ -116,4 +117,47 @@ test("C2: 平台席 row 反映 max_per_session_platform，task 席反映 max_per
   const task = s.continuation.sessions.find((x) => x.agent_id === "engineer@task-cap")!;
   assert.equal(task.platform_seat, false);
   assert.equal(task.max_per_session, 5, "task 绑定 row 反映 max_per_session");
+});
+
+test("C1: status snapshot exposes per-task latest checkpoint overview segment", () => {
+  const repo = tmpGitRepo();
+  const { runId } = createRun(repo, { title: "goal-cp", scale: "S" });
+  const { dir, config } = resolveRunDir(repo, runId);
+  setProductAcceptance(dir, ["a"]);
+  setGoalStatus(dir, "active");
+  addChunkAndTask(repo, dir, config, { chunkId: "chunk-cp", writePaths: ["src/a/**"] });
+
+  // 未捕获 → 空段
+  const s0 = statusSnapshot(dir, config);
+  assert.deepEqual(s0.checkpoint, [], "no checkpoints → empty segment");
+
+  // 捕获一次 → 段反映 latest 概要（task_id/latest_at/boundary/sha256）
+  const now = new Date("2026-08-14T00:00:00.000Z");
+  const r = captureTaskCheckpoint(dir, "task-chunk-cp", { now });
+  assert.ok(r, "capture must succeed");
+  const s = statusSnapshot(dir, config);
+  assert.equal(s.checkpoint.length, 1);
+  const row = s.checkpoint[0];
+  assert.equal(row.task_id, "task-chunk-cp");
+  assert.equal(row.count, 1);
+  assert.equal(row.latest_at, now.toISOString());
+  assert.equal(row.boundary, DEFAULT_CHECKPOINT_BOUNDARY);
+  assert.equal(row.sha256, r!.checkpoint.sha256);
+});
+
+test("C1: checkpointOverview derivation is the single source used by status segment", () => {
+  const repo = tmpGitRepo();
+  const { runId } = createRun(repo, { title: "goal-cp2", scale: "S" });
+  const { dir, config } = resolveRunDir(repo, runId);
+  setProductAcceptance(dir, ["a"]);
+  setGoalStatus(dir, "active");
+  addChunkAndTask(repo, dir, config, { chunkId: "chunk-cp2", writePaths: ["src/a/**"] });
+  const now = new Date("2026-08-14T01:00:00.000Z");
+  captureTaskCheckpoint(dir, "task-chunk-cp2", { now });
+
+  assert.deepEqual(
+    statusSnapshot(dir, config).checkpoint,
+    checkpointOverview(dir),
+    "statusSnapshot.checkpoint 与 checkpointOverview 同源（同一派生）",
+  );
 });
