@@ -134,7 +134,8 @@ test("NO_RUN: unknown run_id surfaces as structured error, not crash", async () 
   const body = JSON.parse((res.content as Array<{ text: string }>)[0].text) as {
     code: string;
   };
-  assert.equal(body.code, "INTERNAL");
+  // 上游已改抛 PicodeError(NOT_FOUND)：客户端现在能区分「run 不存在」与门闩失败
+  assert.equal(body.code, "NOT_FOUND");
 });
 
 test("session_wake_direct/sleep_direct with pure state machine (no backend)", async () => {
