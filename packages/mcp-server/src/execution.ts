@@ -23,39 +23,9 @@
 import path from "node:path";
 import { PicodeError, ErrorCode, readRunSecret } from "@picode/core";
 import { issueToken } from "@picode/bus";
-import picodeExtension from "@picode/pi-extension";
+import { captureTools, type CapturedTool } from "@picode/pi-extension/dist/capture.js";
 import type { ToolDef } from "./registry.js";
 import { runsRootOf, type ServerEnv } from "./context.js";
-
-interface CapturedTool {
-  name: string;
-  label: string;
-  description: string;
-  parameters: Record<string, unknown>;
-  execute: (
-    id: string,
-    params: Record<string, unknown>,
-  ) => Promise<{ content: Array<{ type: string; text: string }> }>;
-}
-
-/** Capture the extension's tool table against a fake Pi API (env snapshot). */
-function captureTools(env: Record<string, string>): Map<string, CapturedTool> {
-  const tools = new Map<string, CapturedTool>();
-  const saved: Record<string, string | undefined> = { ...process.env };
-  for (const [k, v] of Object.entries(env)) process.env[k] = v;
-  try {
-    picodeExtension({
-      registerTool: (t: CapturedTool) => tools.set(t.name, t),
-    } as never);
-  } finally {
-    // restore exactly: drop keys the snapshot did not have, restore the rest
-    for (const k of Object.keys(process.env)) {
-      if (!(k in saved)) delete process.env[k];
-    }
-    Object.assign(process.env, saved);
-  }
-  return tools;
-}
 
 function envOf(p: Record<string, unknown>, k: string, fallback = ""): string {
   const v = p[k];
@@ -111,11 +81,12 @@ const TRANSPORT_REQUIRED = ["_agent_id"];
 
 /** Wrap one captured pi-extension tool as an MCP tool. */
 function executionToolDef(tool: CapturedTool): ToolDef {
-  const props = tool.parameters.properties as Record<string, unknown> | undefined;
-  const required = (tool.parameters.required as string[] | undefined) ?? [];
+  const params = tool.parameters ?? {};
+  const props = params.properties as Record<string, unknown> | undefined;
+  const required = (params.required as string[] | undefined) ?? [];
   return {
     name: tool.name,
-    description: `${tool.description}（执行面 · ACL 全保留：profile+token+房间+路径）`,
+    description: `${tool.description ?? tool.name}（执行面 · ACL 全保留：profile+token+房间+路径）`,
     inputSchema: {
       type: "object",
       properties: { ...TRANSPORT_PROPS, ...(props ?? {}) },

@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { issueToken } from "@picode/bus";
-import picodeExtension from "./index.js";
+import { captureTools } from "./capture.js";
 
 export interface Tool {
   name: string;
@@ -29,17 +29,8 @@ export function makeRun(agentId: string): { runsRoot: string; runId: string; tok
 
 /** Load the extension against a fake Pi API, capturing registered tools. */
 export function loadExtension(env: Record<string, string>): Map<string, Tool> {
-  const tools = new Map<string, Tool>();
-  const saved = { ...process.env };
-  Object.assign(process.env, env);
-  try {
-    picodeExtension({
-      registerTool: (t: { name: string }) => tools.set(t.name, t as unknown as Tool),
-    } as never);
-  } finally {
-    process.env = saved;
-  }
-  return tools;
+  const tools = captureTools(env);
+  return new Map([...tools].map(([k, t]) => [k, t as unknown as Tool]));
 }
 
 export async function call(
