@@ -7,8 +7,8 @@ import {
   repoRootOf,
   snapshotFingerprint,
 } from "./continuation-gate.js";
-import { CONTINUATION_PROMPT, TERMINAL_TASK_STATUSES } from "./continuation.js";
-import { READY_MESSAGE_TEXT } from "./opencode-adapter.js";
+import { TERMINAL_TASK_STATUSES } from "./continuation.js";
+import { SUMMARY_STRIP_NOISE } from "./summary-noise.js";
 import { SessionStore } from "./session-store.js";
 import { TranscriptStore } from "./transcript-store.js";
 
@@ -40,11 +40,9 @@ export const GUARDIAN_CHECKPOINT_BOUNDARY = "guardian";
 /** 捕获边界：merge 前捕获。 */
 export const PRE_MERGE_CHECKPOINT_BOUNDARY = "pre_merge";
 
-/** historySummary 剔除的机械投喂模板噪音（口径同 D077 feed 路径）。 */
-export const CHECKPOINT_NOISE: readonly string[] = [
-  READY_MESSAGE_TEXT,
-  CONTINUATION_PROMPT,
-];
+/** historySummary 剔除的机械投喂模板噪音（D092：统一消费 SUMMARY_STRIP_NOISE，
+ * 口径与 feed/re-spawn 路径一致）。 */
+export const CHECKPOINT_NOISE: readonly string[] = [...SUMMARY_STRIP_NOISE];
 
 /** 单个三角会话的快照段（state + budget，均为文件真相的只读投影）。 */
 export interface TaskCheckpointSession {

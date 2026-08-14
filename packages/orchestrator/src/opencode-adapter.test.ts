@@ -11,6 +11,7 @@ import {
   renderSkillsSection,
   wakeWithOpencode,
 } from "./opencode-adapter.js";
+import { CONTINUATION_PROMPT } from "./summary-noise.js";
 
 /** Capture every fetch() call for assertion. */
 function mockFetch(
@@ -261,13 +262,13 @@ test("C2: buildReadyMessage system prompt 追加 skills 段（有 env 时）；�
   assert.ok(withSkills.system.startsWith(bare.system), "追加在 persona 段之后");
 });
 
-test("D083: wakeWithOpencode 重 spawn 摘要剔除 ready 模板句（stripNoise）", async () => {
+test("D092: wakeWithOpencode 重 spawn 摘要剔除 ready + 续跑模板句（SUMMARY_STRIP_NOISE 统一口径）", async () => {
   const repo = gitInit({ prefix: "picode-wake-oc-" });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir } = resolveRunDir(repo, runId);
   const transcript = new TranscriptStore(dir);
   await transcript.recordOutgoing("pm", `${READY_MESSAGE_TEXT}\n\n实现模块 A`);
-  await transcript.recordOutgoing("pm", `${READY_MESSAGE_TEXT}\n\n实现模块 B`);
+  await transcript.recordOutgoing("pm", `${CONTINUATION_PROMPT}\n\n实现模块 B`);
 
   const calls: Array<{ url: string; body: unknown }> = [];
   const restore = mockFetch(calls);
@@ -287,6 +288,11 @@ test("D083: wakeWithOpencode 重 spawn 摘要剔除 ready 模板句（stripNoise
       "重 spawn 注入的摘要不得包含 ready 模板句（stripNoise 生效）",
     );
     assert.ok(!summarySection.includes("你已就绪"), "ready 模板句不应残留在摘要任何位置");
+    assert.ok(
+      !summarySection.includes(CONTINUATION_PROMPT),
+      "重 spawn 注入的摘要不得包含续跑模板句（D092：同剔 CONTINUATION_PROMPT）",
+    );
+    assert.ok(!summarySection.includes("检测到本会话已空闲"), "续跑模板句不应残留在摘要任何位置");
   } finally {
     restore();
   }

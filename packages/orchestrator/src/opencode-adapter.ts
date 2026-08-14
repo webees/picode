@@ -1,6 +1,8 @@
 import { ErrorCode, PicodeError, type PicodeConfig } from "@picode/core";
 import { SessionStore } from "./session-store.js";
 import { TranscriptStore } from "./transcript-store.js";
+import { READY_MESSAGE_TEXT, SUMMARY_STRIP_NOISE } from "./summary-noise.js";
+export { READY_MESSAGE_TEXT };
 
 /**
  * Opencode spawn adapter (D044). Uses an `opencode serve` server's HTTP API:
@@ -11,10 +13,6 @@ import { TranscriptStore } from "./transcript-store.js";
  * *session handle* (the opencode session id) instead of a child pid. `stop`
  * deletes the session; `isAlive` probes the server.
  */
-
-/** Ready-message 文本（P4：投喂给 agent 的就绪提示，同步落转录归档）。 */
-export const READY_MESSAGE_TEXT =
-  "你已就绪。按角色 prompt 工作;如需联网/查询按 picode 信息控制流程申请,不要私自 web。文件写入必须在你的 task worktree（.picode/worktrees/<run>/<task>）内，禁止修改仓库根目录文件。提交信息遵循 docs/standards/commit.md：type(scope): 中文摘要 + body 根因 + Reviewed-by footer。";
 export interface OpencodeHandle {
   pid: number;
   pi_session_id: string; // "oc-<opencode-session-id>"
@@ -294,8 +292,10 @@ export class OpencodeSpawner {
  * P4: 重 spawn 时读取 runs/<id>/transcripts/<agent>.jsonl，把历史要点摘要
  * 追加进 ready 消息（断点续跑）；每次成功投喂/响应都写回转录归档。
  *
- * D083: 摘要生成传 stripNoise:[READY_MESSAGE_TEXT]，剔除重 spawn 时转录里
- * 反复出现的 ready 模板句，避免摘要被机械噪音淹没；maxEntries 保持默认 20。
+ * D092: 摘要生成统一消费 SUMMARY_STRIP_NOISE（ready + 续跑模板一并剔除，
+ * 与 feed/checkpoint 同口径），避免重 spawn 时转录里反复出现的机械模板噪音
+ * 淹没摘要；maxEntries 保持默认 20。D083 曾只剔 READY_MESSAGE_TEXT，本轮
+ * 行为变更：CONTINUATION_PROMPT 也被剔（re-spawn 语义对齐 feed）。
  */
 export async function wakeWithOpencode(
   dir: string,
@@ -318,7 +318,7 @@ export async function wakeWithOpencode(
   });
   try {
     await store.wake(agentId, reason, opts);
-    const summary = transcript.historySummary(agentId, { stripNoise: [READY_MESSAGE_TEXT] });
+    const summary = transcript.historySummary(agentId, { stripNoise: [...SUMMARY_STRIP_NOISE] });
     const extraText = summary ? `\n\n## 历史要点摘要（转录恢复）\n${summary}` : undefined;
     const handle = await spawner.spawn(agentId, env, extraText);
     const updated = await store.attachPiSession(agentId, handle.pi_session_id);

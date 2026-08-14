@@ -11,6 +11,7 @@ import { createRun, resolveRunDir } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
 import { READY_MESSAGE_TEXT } from "./opencode-adapter.js";
 import { CONTINUATION_PROMPT } from "./continuation.js";
+import { SUMMARY_STRIP_NOISE } from "./summary-noise.js";
 import {
   CHECKPOINT_NOISE,
   CHECKPOINT_SCHEMA_VERSION,
@@ -133,6 +134,7 @@ test("C1-b: captureTaskCheckpoint 捕获内容正确（task_status + 三角会�
   assert.ok(r, "task 存在必须捕获成功");
   const cp = r.checkpoint;
   assert.deepEqual(CHECKPOINT_NOISE, [READY_MESSAGE_TEXT, CONTINUATION_PROMPT], "剔噪口径必须与 feed 路径一致");
+  assert.deepEqual(CHECKPOINT_NOISE, [...SUMMARY_STRIP_NOISE], "D092：checkpoint 剔噪必须统一消费 SUMMARY_STRIP_NOISE");
   assert.equal(cp.schema_version, CHECKPOINT_SCHEMA_VERSION);
   assert.equal(cp.task_id, "task-x");
   assert.equal(cp.captured_at, now.toISOString());
