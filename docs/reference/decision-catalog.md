@@ -645,3 +645,57 @@ terminology §3），面板不引入新端点、不改 API 契约。
 
 **已定（D073）：汇总含 `max_awake_exhausted` 布尔。** 清理前后各跑一次
 `session audit` 对比，验证残留清空且非终态 run 不受影响。
+
+---
+
+## 15. Skill harness（技能承载体系，D082）
+
+权威正文：[standards/skill-spec.md](../standards/skill-spec.md)（SKILL.md 规范唯一正文）；
+配置键 `paths.skills_root`（[13-configuration §3](../spec/13-configuration.md)，默认 `skills`）；
+机制实现 `packages/core/src/skills.ts` + `packages/core/src/validate/skill-lint.ts` +
+`packages/orchestrator/src/{pi-adapter,opencode-adapter}.ts`。
+
+### 15.1 SKILL.md 校验（skill-lint）
+
+|选项|说明|
+|------|------|
+|**自研 `skill-lint` 镜像 persona-lint（数据优先不抛错）** ★|`npm run check` 内含；校验 `skills_root` 下全部 `**/SKILL.md` frontmatter——`name` 必填匹配 `SAFE_ID_RE` 且等于目录名、`description` 必填（>1024 仅 warning，兼容存量 ponytail）、`license`/`allowed-tools`/`compatibility`/`argument-hint`/`metadata` 白名单、未知键 warning|
+|官方 `skills-ref` 工具接入|**缓项（D083）**：npm 包需联网安装/运行，picode 无裸网（D010）；自研已覆盖等价语义，后续可对齐|
+
+**已定（D082-1）：自研 skill-lint。** 结构化返回 `{ok, problems, files}` + CLI；
+错误码全集 `packages/core/src/validate/skill-lint.ts` `SkillLintCode`。
+
+### 15.2 skills_root 激活与发现
+
+|选项|说明|
+|------|------|
+|**激活 `paths.skills_root`（默认 `skills`）+ 纯模块 `skills.ts`** ★|D055 死键局部解除；`resolveSkillsRoot`/`discoverSkills`（递归 `**/SKILL.md`，跳过 node_modules/点目录）/`buildSkillIndex`（metadata 一行一项，有界截断）/`personaDeclaredSkills`（frontmatter `skills[]` 对账 catalog）；`validateConfig` 禁绝对/`..` 逃逸；未配置时空转零行为变更|
+|维持死键（D055）|harness 无处落地，SKILL.md 无法被发现的技能毫无意义|
+
+**已定（D082-2）：激活。** `@picode/core` 导出 skills 模块；仅激活此键，D055 其余死键不动。
+
+### 15.3 persona skills[] 接线
+
+|选项|说明|
+|------|------|
+|**`buildPiEnv` 注入 `PICODE_SKILLS_INDEX` + `PICODE_PERSONA_SKILLS`** ★|读人设 frontmatter `skills[]`（实例人设 `staffing/personas/<seat>.md`，平台席回退 `.picode/agents/<role>.md`）→ 对账 skill 目录 → env 注入；`buildReadyMessage` 系统 prompt 追加 skills 段|
+|skills[] 仅声明不接线|必填维度零消费，声明与能力脱节|
+
+**已定（D082-3）：接线。** 未知 skill 名 → index 标记 unavailable 不阻断 spawn；
+两个种子角色模板（engineer/run-lead）声明 `skills: [ponytail]` dogfood 验证。
+
+### 15.4 渐进披露三层
+
+|选项|说明|
+|------|------|
+|**metadata → instructions → resources 三层** ★|① metadata 启动注入（`buildSkillIndex` 有界截断 ≈100 tokens：name + 一行 desc + 相对路径）；② instructions 激活时 `repo_read` SKILL.md 正文（≤1024 字 desc 由 lint 守）；③ resources 按需读 `scripts/`/`references/`/`assets/`；**SKILL.md 正文绝不进系统 prompt**|
+|一次性灌入 skill 正文|爆 context、正文进转录污染续跑摘要（D076 stripNoise 新负担）|
+
+**已定（D082-4）：三层分离，只注入 metadata。** agent 激活为模型自主（D003 编排器无 LLM）。
+
+### 15.5 allowed-tools 工具白名单
+
+|选项|说明|
+|------|------|
+|**仅解析不强制** ★|`skill-lint` 校验形状（非空 string[]），但不限制 agent 工具面——ACL 仍由 tool_profile 六层决定（09 tool-profiles）|
+|机械强制 skill 级工具白名单|**拒（D086）**：与现有 ACL 关系未定，强制可能破坏权限模型，留档待设计|

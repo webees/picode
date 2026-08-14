@@ -58,7 +58,7 @@
 |D052|**SessionStore.register 无锁审计结论**（I10/A4）：`register` 为 check-then-write 无 flock；因同 agentId 记录内容确定性 + writeAtomic 原子替换，并发重复注册为良性 last-wins，无撕裂状态；跨进程重复注册由调用方（init/CLI）保证单次。transition/attachPiSession/setError 均持锁串行，已加并发测试|
 |D053|**文档↔实现偏差记录**（不改 spec 正文）：(1) 18 阶段 A 内联会话样例无 `error` 字段，实现与 `reference/schemas/session.yaml` 均含——以 schema 样例为准；(2) 13 §5 `hr.default_mode` vs 实现键 `staffing.mode=real_recruit`；(3) 13 §7 `prompts.root` vs 实现键 `paths.prompts_root`；(4) 13 未列 `product.require_acceptance_before_active`（见 D034）。实现键全部以 `PicodeConfig` 类型为准|
 |D054|**命名律复核结论**（glossary §0）：R1（role∩room=∅）与 id 字符集（`^[a-z][a-z0-9-]*$`，因 id 用作文件名）机械强制；R2–R7 为新增 ID 的约定（前缀/后缀/四字），机械全量强制会产生误报，不加入校验器|
-|D055|**死配置键标记**（质量重构）：以下键按 13/17/19 声明于 `PicodeConfig` 与默认值，但实现零读取——保留以维持配置面兼容并在类型注释中标 `Reserved (D055)`：`sess_mgr.enabled/idle_sleep_sec/allow_orch_force_wake`、`paths.skills_root/prompts_root`、`git.rebase_on_merge/merge_serial/force_dissolve_autocommit`、`scheduler.max_parallel_triads`、`timeouts.progress_interval_sec/cross_room_ttl_sec`、`models.*`、`info_pipeline.*`、`cross_room.*`、`work_brief.seat_slicing/require_docs_assemble/allow_research_attach`、`features` 四键（除 `allow_implement_before_active`）、`bus.adapter`、`i18n.locale`、`self_evolve.enabled/require_sponsor_merge/knowledge_log_glob`；override 后统一 validateConfig 已防降级（D3 测试）|
+|D055|**死配置键标记**（质量重构）：以下键按 13/17/19 声明于 `PicodeConfig` 与默认值，但实现零读取——保留以维持配置面兼容并在类型注释中标 `Reserved (D055)`：`sess_mgr.enabled/idle_sleep_sec/allow_orch_force_wake`、`paths.prompts_root`、`git.rebase_on_merge/merge_serial/force_dissolve_autocommit`、`scheduler.max_parallel_triads`、`timeouts.progress_interval_sec/cross_room_ttl_sec`、`models.*`、`info_pipeline.*`、`cross_room.*`、`work_brief.seat_slicing/require_docs_assemble/allow_research_attach`、`features` 四键（除 `allow_implement_before_active`）、`bus.adapter`、`i18n.locale`、`self_evolve.enabled/require_sponsor_merge/knowledge_log_glob`；override 后统一 validateConfig 已防降级（D3 测试）——`paths.skills_root` 已于 D082 激活移除本标记，其余死键不动|
 |D056|**CLI 流程清晰化**（方向 E）：命令注册表驱动 `picode --help` 按域分组（run/goal/session/staffing/task/merge/memory/evolve/window/status）；每命令 `--help` 显示 usage；缺失参数/未知命令抛 `USAGE` 码并附「下一步」提示；全部错误统一 `[picode] ERROR: <CODE>: <msg>`；文档地图与 GETTING_STARTED 补全新命令域（E4）|
 |D057|**真 LLM 闭环验证修复**（验收测试发现）：(1) `loader.ts` 补 13 §2 第 2 层「用户全局 ~/.picode/config.yaml」（原实现缺失），业务仓免配 LLM 后端；(2) 新增统一会话入口 `wakeAgent/sleepAgent/terminateAgent`，CLI 与规则引擎（applyEvent/drain/staffing/closure）共用——opencode/pi 配置下规则引擎 wake 真实建会话（原为纯状态机，导致「已 awake 无法补 spawn」死角），默认配置行为不变；(3) `npm test` 隔离 HOME（mktemp），单元测试不再受用户全局配置污染；(4) 新增 `npm run test:e2e`（scripts/e2e/smoke.sh + docs/guides/e2e-smoke.md）：临时仓完整交付闭环 + 真实 LLM 会话 + 串行 merge 合入 main|
 |D058|**opencode serve v1.18 API 契约实测**（E2E 专用测试 key 验证）：(1) `POST /session` 仅接受 `{parentID?, title?}`——provider/model/system/tools 均不在会话级，多余字段被忽略；(2) 模型在**消息级**指定：`POST /session/{id}/message` body `{model: {providerID, modelID}, parts: [{type:"text",text}]}`，`model` 必须是对象（纯字符串或 `p/id` 格式均 400），不带则回退 serve 默认模型（本机 `gpt-5.6-luna` → 区域 403）；(3) 响应为单条 JSON `{info, parts}` 而非 SSE；(4) picode 适配器（D044）契约正确无需改，`smoke.sh` 第 7 步已补 model 对象并强化断言（上游错误/空响应即失败）；(5) E2E 偶发唤醒失败（三角 2/3）：applyEvent 的 wake 失败仅置 `result.rejected` 不抛、approve 不感知——smoke.sh 断言三角会话 `error` 字段兜底，产品行为暂不改（留观察）|
@@ -84,6 +84,11 @@
 |D079|**缓项：re-spawn 摘要去噪一致化**：`wakeWithOpencode`（opencode-adapter.ts）传 `stripNoise:[READY_MESSAGE_TEXT]` 的改动越出本任务 write_paths（P07 门禁 MUST）被回退；feed 路径不受影响。后续单独任务接入（非 C1 验收必需）|
 |D080|**缓项：上一回合摘要语义化/关键动作提取**：stripNoise 仅精确剔模板句，摘要仍含续跑 feed 的 outgoing 记录（确定性、可复现）；后续可对 summary 做模板句剔除/关键动作提取（仍启发式，不引 LLM）|
 |D081|**缓项：checkpoint 快照 / maxTokens 真计量**（E7 缓项延续）：会话 checkpoint 快照先定「快照只读、文件为准」边界；maxTokens 待 serve token 契约（D058）就绪|
+|D082|**Skill harness 落地（技能承载体系）**：锚定 agentskills spec——① 新增 `skill-lint`（镜像 persona-lint 数据优先设计）校验 `skills_root` 下全部 `**/SKILL.md` frontmatter：`name` 必填匹配 `SAFE_ID_RE` 且等于目录名、`description` 必填（>1024 仅 warning）、`license`/`allowed-tools`/`compatibility`/`argument-hint`/`metadata` 白名单、未知键 warning；② **激活** `paths.skills_root`（D055 死键局部解除，默认 `skills` 不变，`validateConfig` 补相对路径校验禁绝对/`..` 逃逸），新增纯模块 `skills.ts`（`resolveSkillsRoot`/`discoverSkills`/`buildSkillIndex`/`personaDeclaredSkills`），未配置时 harness 空转零行为变更；③ **persona skills[] 接线**：`buildPiEnv` 注入 `PICODE_SKILLS_INDEX` + `PICODE_PERSONA_SKILLS`（读人设 frontmatter `skills[]`，实例人设/平台席模板），`buildReadyMessage` 系统 prompt 追加 skills 段；④ **渐进披露三层**：metadata（启动注入，有界截断）→ instructions（激活时 `repo_read` SKILL.md 正文）→ resources（按需），SKILL.md 正文绝不进系统 prompt；⑤ `npm run check` 追加 skill-lint；两个种子角色模板（engineer/run-lead）声明 `skills: [ponytail]` dogfood 接线。缓项：D083 skills-ref 官方工具接入、D084 打包/导入双轨机械实现、D085 skill-creator 评价循环（拒）、D086 allowed-tools 机械强制（拒）|
+|D083|**缓项：skills-ref 官方校验工具接入**（agentskills spec 工具链）：官方工具为 npm 包需联网安装/运行，picode 无裸网（D010 信息控制）；自研 skill-lint 覆盖等价语义（name/desc/命名），后续可对齐。留档|
+|D084|**缓项：skill 打包/导入双轨**（mattpocock M6：托管只读 vs 可编辑副本）：已以文档约定存在（skills/README M6 双轨）；机械实现依赖 CLI 下载器（需网），本轮不做。留档|
+|D085|**拒：skill-creator / 评价循环**（anthropics 全套 evals/benchmark/variance）：依赖 LLM 评价循环，超出「承载体系」边界；后续独立 run 立项|
+|D086|**拒：allowed-tools 字段机械强制**（skill 级工具白名单 vs picode tool_profile）：与 09 tool-profiles ACL 关系未定，强制可能破坏现有权限模型；本轮仅解析不强制。留档待设计|
 
 ## 开放
 
@@ -254,3 +259,36 @@
 - 事实：会话 checkpoint 快照（N5）与 maxTokens 真计量（N6，待 serve token 契约 D058）仍未实施；本轮预算差异化（D078）只解决预算总量，不解决「会话中途崩溃恢复」
 - 处置：checkpoint 先定「快照只读、文件为准」边界（D002）；maxTokens 待 opencode serve 暴露 token 计量契约后再评估
 - 纪律：缓项只记录不实现，避免范围蔓延；实施须重新立项
+
+## D082 — Skill harness 落地（技能承载体系）
+- 2026-08-14 · 来源：run-lead 自治规划 run-2026-08-13T23-50-59-484Z（从 anthropics/skills + agentskills spec 学习，改 picode 自身技能承载体系）
+- 问题：`paths.skills_root` 是 D055 死键（声明零读取），两个种子 SKILL.md 无任何校验守卫，新 skill 可任意书写；`Persona.skills[]` 是必填维度但零消费；ready 消息若硬注入 skill 正文会爆 context
+- 决定（C1 spec + C2 wiring 落地）：
+  - **① skill-lint**（`packages/core/src/validate/skill-lint.ts`，镜像 persona-lint 数据优先设计，不抛错返回结构化 `{ok, problems, files}` + CLI）：校验 `skills_root` 下全部 `**/SKILL.md` frontmatter——`name` 必填匹配 `SAFE_ID_RE`（`^[a-z][a-z0-9-]*$`）且等于目录名、`description` 必填（>1024 仅 warning，agentskills 建议上限，兼容存量 ponytail）、白名单键 `license`/`allowed-tools`/`compatibility`/`argument-hint`/`metadata`、未知键 warning（防误杀存量 argument-hint）
+  - **② skills_root 激活**：`packages/core/src/skills.ts` 新增纯模块 `resolveSkillsRoot`/`discoverSkills`/`buildSkillIndex`/`personaDeclaredSkills`；`config.ts` 移除该键 D055 reserved 注释，`validateConfig` 补相对路径校验（非空/非绝对/无 `..` 逃逸）；**仅激活此键**，D055 其余死键（prompts_root 等）不动；未配置时 harness 空转零行为变更
+  - **③ persona skills[] 接线**：`buildPiEnv` 读会话 persona frontmatter `skills[]`（实例人设 `staffing/personas/<seat>.md`，平台席回退 `.picode/agents/<role>.md`）→ 对账 skill 目录 → 注入 `PICODE_SKILLS_INDEX`（全量目录）+ `PICODE_PERSONA_SKILLS`（本会话声明路径）；`buildReadyMessage` 系统 prompt 追加「可用技能（metadata）」+「本会话声明技能」两段
+  - **④ 渐进披露三层**：metadata（启动注入，`buildSkillIndex` 有界截断 ≈100 tokens）→ instructions（激活时 agent `repo_read` SKILL.md 正文，≤1024 字 desc 由 lint 守）→ resources（`scripts/`/`references/`/`assets/` 按需读取）；**SKILL.md 正文绝不进系统 prompt**（不爆 context、正文不进转录 → D076 stripNoise 无新负担）
+  - **⑤ 校验/等价检查**：`npm run check` 追加 skill-lint（persona-lint + skill-lint 双通过）；单测覆盖 discover/buildSkillIndex/personaDeclaredSkills 与 skill-lint 全错误码及 validateConfig 路径逃逸拒绝
+  - **⑥ 种子声明**：`.picode/agents/engineer.md` 与 `run-lead.md` frontmatter 增可选 `skills: [ponytail]`（dogfood 接线；persona-lint TEMPLATE_REQUIRED 不含 skills，加字段不破坏）
+- 实现：C1 `packages/core`（skills.ts + skill-lint + config 激活 + index 导出 + package.json check 接线，884af8d）；C2 `packages/orchestrator`（pi-adapter buildPiEnv + opencode-adapter renderSkillsSection + 2 角色模板，d5d3aeb，含冲突修复 3ddabcc）；C3 本文档 + skill-spec.md + skill-harness.md + catalog §15 + E11 纪要
+- 边界：未知 skill 名 → index 标记 unavailable 不阻断 spawn；allowed-tools 仅解析不强制（D086 拒）；agent 激活为模型自主（D003 编排器无 LLM）
+- 缓项：D083 skills-ref 官方工具接入（需网）、D084 打包/导入双轨机械实现（需网下载器）；拒项：D085 skill-creator 评价循环、D086 allowed-tools 机械强制
+
+## D083 — 缓项：skills-ref 官方校验工具接入
+- 2026-08-14 · 来源：run-2026-08-13T23-50-59-484Z 决策清单 (d) 1
+- 事实：agentskills spec 官方校验工具为 npm 包，需联网安装/运行，picode 无裸网（D010 信息控制）
+- 处置：自研 skill-lint 已覆盖等价语义（name/desc/命名）；后续 picode 信息控制允许后接官方工具或对齐其语义。留档
+
+## D084 — 缓项：skill 打包/导入双轨机械实现
+- 2026-08-14 · 来源：run-2026-08-13T23-50-59-484Z 决策清单 (d) 2
+- 事实：mattpocock M6 双轨（托管只读 vs 可编辑副本）已以文档约定存在（skills/README M6），机械实现依赖 CLI 下载器（需网）
+- 处置：本轮不做；后续独立任务实现托管/可编辑安装器。留档
+
+## D085 — 拒：skill-creator / 评价循环
+- 2026-08-14 · 来源：run-2026-08-13T23-50-59-484Z 决策清单
+- 决定：anthropics skill-creator 全套（evals/benchmark/variance）依赖 LLM 评价循环，超出本轮「承载体系」边界——本轮只做规格+校验+注入；后续独立 run 立项
+
+## D086 — 拒：allowed-tools 字段机械强制
+- 2026-08-14 · 来源：run-2026-08-13T23-50-59-484Z 决策清单
+- 决定：skill 级工具白名单与 picode ACL（09 tool-profiles 六层）关系未定，强制可能破坏现有权限模型；本轮仅解析不强制，留档待设计
+- 纪律：未立项不实现
