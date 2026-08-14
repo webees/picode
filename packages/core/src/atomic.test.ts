@@ -62,6 +62,52 @@ test("withFileLock throws LOCK_TIMEOUT after retries when the lock stays held", 
   );
 });
 
+test("P1 stale-lock recovery: dead-holder lock is stolen, fn runs", async () => {
+  const dir = tmpDir();
+  const lock = path.join(dir, "x.lock");
+  // 模拟崩溃残留：锁文件记录的 pid 不存在（死进程）+ 超龄
+  fs.writeFileSync(lock, JSON.stringify({ pid: 99999999, at: Date.now() - 60000 }));
+  const out = await withFileLock(lock, () => "stolen");
+  assert.equal(out, "stolen");
+  assert.ok(!fs.existsSync(lock), "lock released after steal");
+});
+
+test("P1 stale-lock recovery: fresh live-holder lock is NOT stolen", async () => {
+  const dir = tmpDir();
+  const lock = path.join(dir, "x.lock");
+  fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, at: Date.now() }));
+  await assert.rejects(
+    withFileLock(lock, () => Promise.resolve("never runs"), { retries: 3, delayMs: 5 }),
+    (e: unknown) => e instanceof PicodeError && e.code === ErrorCode.LOCK_TIMEOUT,
+  );
+});
+
+test("P1 stale-lock recovery: legacy empty lockfile older than staleMs is stolen", async () => {
+  const dir = tmpDir();
+  const lock = path.join(dir, "x.lock");
+  fs.writeFileSync(lock, ""); // 旧版本格式（空文件）
+  const old = new Date(Date.now() - 120000);
+  fs.utimesSync(lock, old, old);
+  const out = await withFileLock(lock, () => "legacy-stolen", { staleMs: 30000 });
+  assert.equal(out, "legacy-stolen");
+});
+
+test("P1 stale-lock recovery: non-EEXIST open errors propagate", async () => {
+  const dir = tmpDir();
+  // 父目录是一个普通文件 → mkdirSync/openSync 必然失败（EEXIST/ENOTDIR），
+  // 且不是"他人持锁"：必须传播真实错误而非伪装成 LOCK_TIMEOUT
+  const blocker = path.join(dir, "blocker");
+  fs.writeFileSync(blocker, "x");
+  const lock = path.join(blocker, "x.lock");
+  await assert.rejects(
+    withFileLock(lock, () => 1, { retries: 3, delayMs: 5 }),
+    (e: unknown) => {
+      const code = (e as NodeJS.ErrnoException).code;
+      return code === "EEXIST" || code === "ENOTDIR" || code === "ENOENT";
+    },
+  );
+});
+
 test("withFileLock returns async fn results and propagates async rejections", async () => {
   const dir = tmpDir();
   const lock = path.join(dir, "x.lock");
