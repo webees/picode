@@ -9,7 +9,7 @@ import YAML from "yaml";
 
 const PICODE = "/Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js";
 const REPO = "/tmp/picode-dogfood";
-const RUN = "run-2026-08-13T21-32-57-118Z";
+const RUN = "run-2026-08-13T23-50-59-484Z";
 const RUN_DIR = `${REPO}/.picode/runs/${RUN}`;
 
 const CHUNKS = {
@@ -226,6 +226,36 @@ const CHUNKS = {
   "deep-docs": {
     first: "docs/DECISIONS.md",
     write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-13T21-32-57-118Z.md"],
+    skills: "docs,spec",
+  },
+  "checkpoint-store": {
+    first: "packages/orchestrator/src/checkpoint-store.ts",
+    write: ["packages/orchestrator/src/checkpoint-store.ts", "packages/orchestrator/src/checkpoint-store.test.ts", "packages/orchestrator/src/commands/checkpoint.ts", "packages/orchestrator/src/commands/index.ts"],
+    skills: "typescript,state-machine",
+  },
+  "respawn-stripnoise": {
+    first: "packages/orchestrator/src/opencode-adapter.ts",
+    write: ["packages/orchestrator/src/opencode-adapter.ts", "packages/orchestrator/src/opencode-adapter.test.ts", "packages/orchestrator/src/transcript-store.test.ts"],
+    skills: "typescript,opencode",
+  },
+  "checkpoint-docs": {
+    first: "docs/DECISIONS.md",
+    write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-13T23-48-54-042Z.md"],
+    skills: "docs,spec",
+  },
+  "skill-spec": {
+    first: "packages/core/src/skills.ts",
+    write: ["packages/core/src/skills.ts", "packages/core/src/skills.test.ts", "packages/core/src/validate/skill-lint.ts", "packages/core/src/validate/skill-lint.test.ts", "packages/core/src/config.ts", "packages/core/src/index.ts", "package.json"],
+    skills: "typescript,skill",
+  },
+  "skill-wiring": {
+    first: "packages/orchestrator/src/pi-adapter.ts",
+    write: ["packages/orchestrator/src/pi-adapter.ts", "packages/orchestrator/src/pi-adapter.test.ts", "packages/orchestrator/src/opencode-adapter.ts", "packages/orchestrator/src/opencode-adapter.test.ts", ".picode/agents/engineer.md", ".picode/agents/run-lead.md"],
+    skills: "typescript,opencode,persona",
+  },
+  "skill-docs": {
+    first: "docs/standards/skill-spec.md",
+    write: ["docs/standards/skill-spec.md", "docs/guides/skills/skill-harness.md", "skills/README.md", "docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/knowledge/evolve/run-2026-08-13T23-50-59-484Z.md"],
     skills: "docs,spec",
   },
 };
