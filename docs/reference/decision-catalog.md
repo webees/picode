@@ -535,11 +535,11 @@ CLI：`picode checkpoint capture` / `picode checkpoint status`。
 
 |项|说明|
 |------|------|
-|**MVP 仅显式捕获** ★|`picode checkpoint capture --task <id>` 显式触发；guardian/merge/serve 恢复路径**零改动**；`boundary: manual` 预留（future 可扩展 pre_merge 等）|
+|**显式捕获** ★|`picode checkpoint capture --task <id>` 显式触发；`boundary: manual` 默认|
 |**只读查询** ★|`picode checkpoint status [--task <id>]`：列某 task 全部（最新在前）或缺省列全部有 checkpoint 的 task 概览（count + 最新）|
 |**捕获内容（schema v1）**|task.yaml `status` + 三角各会话 state/budget + 各会话 `historySummary`（stripNoise 剔模板）+ git worktree 指纹（非 git 仓 → null）+ `captured_at` + 自指纹 sha256|
 |**纯函数 + 不可变落盘**|`captureTaskCheckpoint(dir, taskId, {now?, boundary?})` 同输入同输出（now 注入确定性）；落盘 `runs/<id>/checkpoints/<taskId>/checkpoint-<ts>.yaml`；重复捕获产生新 ts 文件不覆盖；task 不存在 → null|
-|checkpoint 自动捕获（guardian/merge 前）|**缓**：先验证手工捕获价值与写入代价，再评估接线|
+|**自动捕获（D091）** ★|`self_evolve.checkpoints`：`enabled`（默认 **false**，开启后自动捕获生效，D082 显式捕获行为不变）+ `guardian_interval_sec`（默认 600s 节流，0 = 每次 tick）+ `pre_merge`（默认 true，受 `enabled` 总开关约束）。guardian 周期捕获（`boundary: guardian`，guardianTick 在 checkBudgets 后接线，仅写观测文件、跳过终态/缺失 task）；merge 前捕获（`boundary: pre_merge`，mergeNext 实际合并前 best-effort，try/catch 绝不阻断 merge）。两者均只写不读，**快照只读边界（D082）不变**|
 |checkpoint 进 statusSnapshot 三面|**缓**：MVP 仅 CLI 消费面；三面同源需动 status 契约 + mcp-server|
 |从 checkpoint 恢复/回滚|**拒（本轮）/缓（远期）**：违背「快照只读、文件为准」边界；若未来做，恢复目标仍为文件真相（git/文件备份），checkpoint 仅作回滚前对照基线|
 

@@ -290,6 +290,7 @@
 |D088|**拒：allowed-tools 字段机械强制**（skill 级工具白名单 vs picode tool_profile）：与 09 tool-profiles ACL 关系未定，强制可能破坏现有权限模型；本轮仅解析不强制。留档待设计|
 |D089|**决策编号全局分配器（watermark ledger + reserve 脚本）**：`docs/decisions/watermark.yaml`（schema v1：`next_number` + `reservations[]`）+ `docs/decisions/reserve.mjs`（`--reserve --run <id> --count N` 领取连续编号段 / `--land` 标记占用 / `--status` 只读快照；复用 `@picode/core` `withFileLock`+`writeAtomic`，flock 临界区原子 read-modify-write，同 run 重复 reserve 幂等返回既有预留）；DECISIONS 顶部加水位说明。**勿手改 watermark（机器状态）**——新决策先 `--reserve` 领号、落地后 `--land` 标记占用|
 |D090|**decision-lint 决策编号完整性校验**：镜像 persona-lint 数据优先设计（`checkDecisions` 返回 `{ok, problems, files}` + CLI），校验 ①表行编号唯一（DUP_TABLE）②详条编号唯一（DUP_SECTION）③详条↔表行对应（TABLE_SECTION_MISMATCH）④watermark 水位一致（WATERMARK_DRIFT）⑤docs/** D0xx 引用可解析（REF_UNRESOLVED warning）⑥reservations 幂等/无冲突（RESERVATION_COLLISION）；`--plan <file>` 规划期预检；`npm run check` 接线三 lint（persona-lint + skill-lint + decision-lint）|
+|D091|**checkpoint 自动捕获接线（guardian 周期捕获 + merge 前捕获，boundary 扩展，快照只读边界不变）**：新增 `self_evolve.checkpoints` 配置（`enabled` 默认 false = D082 显式捕获行为不变；`guardian_interval_sec` 默认 600s 节流；`pre_merge` 默认 true 但受 `enabled` 总开关约束）；checkpoint-store 新增 `GUARDIAN`/`PRE_MERGE` 边界常量 + `guardianCaptureDue` 纯函数 + `captureDueGuardianCheckpoints`（仅写观测文件，跳过终态/缺失 task，节流复用）；self-drive `guardianTick` 在 `checkBudgets` 之后接线周期捕获（`GuardianTickResult.checkpoints` 仅作观测回报，**不驱动任何状态决策**）；merge `mergeNext` 实际合并前 best-effort 捕获（`enabled && pre_merge`，try/catch 绝不阻断 merge，`MergeOutcome.checkpoint` 纯观测）；**快照只读/文件为准边界（D082）不变**。同 run 一并落地 reserve.mjs 预留字段对齐（`from`→`start`）+ `--plan` 预检（E12 剩余风险 #1 闭环）|
 ## D084 — Skill harness 落地（技能承载体系）
 - 2026-08-14 · 来源：run-lead 自治规划 run-2026-08-13T23-50-59-484Z（从 anthropics/skills + agentskills spec 学习，改 picode 自身技能承载体系）
 - 问题：`paths.skills_root` 是 D055 死键（声明零读取），两个种子 SKILL.md 无任何校验守卫，新 skill 可任意书写；`Persona.skills[]` 是必填维度但零消费；ready 消息若硬注入 skill 正文会爆 context
@@ -349,3 +350,17 @@
 - 实现：`decision-lint.ts` + `decision-lint.test.ts`（全错误码覆盖 + 合法 fixture 零报错 + `--plan` 预检 + 修复前损坏样本报 DUP 防回归）+ `index.ts` 导出 + `npm run check` 接线（persona-lint + skill-lint + decision-lint 三 lint）
 - 验证：npm run build + npm test 全绿；decision-lint 对修复前损坏 DECISIONS 报 6 error（C3 修复后清零）
 - commit: a20dbd8 / 8460427（C2 task-decision-lint 合并）
+
+## D091 — checkpoint 自动捕获接线（guardian 周期捕获 + merge 前捕获，boundary 扩展，快照只读边界不变）（C1 task-checkpoint-auto + C2 reserve-schema）
+- 2026-08-14 · 来源：run-lead 规划 run-2026-08-14T08-55-08-366Z（C1 checkpoint-auto）+ E12 剩余风险 #1 落地（C2 reserve-schema）
+- 问题：D082 MVP 仅显式捕获（`boundary: manual`），guardian/merge 前自动捕获为缓项（E10 后续候选）；同时 C1/C2 预留 schema 不一致——reserve.mjs 写 `from`/`count`、decision-lint 只解析 `start`/`count`，领号 → lint 全链路无法闭环
+- 决定：
+  - **自动捕获接线（boundary 扩展）**：新增 `self_evolve.checkpoints` 配置——`enabled`（默认 **false** = D082 显式捕获行为不变）、`guardian_interval_sec`（默认 **600s** 节流，0 = 每次 tick 都捕获）、`pre_merge`（默认 **true** 但受 `enabled` 总开关约束）
+  - checkpoint-store 新增 `GUARDIAN`/`PRE_MERGE` 边界常量 + `guardianCaptureDue` 纯函数（距上次 guardian 捕获超间隔 → due；从未捕获 → due）+ `captureDueGuardianCheckpoints`（仅写观测文件，跳过终态/缺失 task，节流复用）
+  - self-drive：`guardianTick` 在 `checkBudgets` 之后接线周期捕获，`GuardianTickResult.checkpoints` 仅作观测回报，**不驱动任何状态决策**
+  - merge：`mergeNext` 实际合并前 best-effort 捕获（`enabled && pre_merge`，boundary=pre_merge），try/catch 绝不阻断 merge；`MergeOutcome.checkpoint` 纯观测
+  - **快照只读/文件为准边界（D082）不变**：自动捕获仍只写观测文件，不读 checkpoint 驱动任何恢复/续跑/调度/合并状态决策
+  - **reserve 字段对齐（C2）**：`reserve.mjs` 预留条目字段统一为 `{run, start, count, status}`（`from`→`start`），与 decision-lint 校验契约（D090）一致；新增 `--plan <file>` 预检（复用 checkDecisions，REF_UNRESOLVED/PLAN_MISSING 输出与 decision-lint 逐字对齐）
+- 实现：`packages/core/src/config.ts`（CheckpointCaptureConfig + 校验 + DEFAULTS）、`packages/orchestrator/src/checkpoint-store.ts`（GUARDIAN/PRE_MERGE 常量 + guardianCaptureDue + captureDueGuardianCheckpoints）、`self-drive.ts`（guardianTick 接线）、`merge.ts`（mergeNext 前捕获）+ 对应测试；`docs/decisions/reserve.mjs` + `reserve.test.mjs`
+- 验证：npm run build + npm test 445 断言全绿（core 111 / orchestrator 282），tsc -b 干净；D082 边界由 sdet 独立审计 PASS（checkpoint 仅写不读）；reserve.test.mjs 12/12（领号→lint 闭环 + 未预留 REF_UNRESOLVED + plan 缺失 PLAN_MISSING）
+- commit: 7860df0（C1 task-checkpoint-auto 合并）/ 3b99888（C2 task-decision-reserve-schema 合并）

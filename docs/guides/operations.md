@@ -1,6 +1,6 @@
 # 运维规程（serve/会话/续跑/guardian 重启/会话生命周期/真相关于文件）
 
-> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）+ D072/D073（run 收尾自动休眠 + session audit 跨 run 残留审计）+ D077/D078（摘要窗口去噪 / 平台席预算分流）+ D082（会话 checkpoint）+ D083（re-spawn 摘要去噪）+ D089/D090（决策编号全局分配器 + decision-lint）。
+> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）+ D072/D073（run 收尾自动休眠 + session audit 跨 run 残留审计）+ D077/D078（摘要窗口去噪 / 平台席预算分流）+ D082/D091（会话 checkpoint 显式 + 自动捕获）+ D083（re-spawn 摘要去噪）+ D089/D090（决策编号全局分配器 + decision-lint）。
 > 遵循本规程可避免已知的 serve 类故障人工踩坑，并正确观察/调整续跑、重启守护热载、管理 run 收尾与跨 run 会话残留。
 
 ## 决策编号规程（D089 / D090）
@@ -48,11 +48,11 @@
 - curl/HTTP 超时 ≠ 消息失败；以 run 状态文件与 worktree git 状态为准
 - serve 日志 /tmp/opencode-serve.log 是故障定位第一现场（stream 挂起/权限 ask/key 缺失均在此可见）
 
-## 会话 checkpoint（D082）
+## 会话 checkpoint（D082 / D091）
 
 checkpoint = 捕获时刻对文件真相的**只读投影**，写入后不可变。**它是观测/审计产物，不参与任何
 状态决策**——恢复/续跑/调度/合并仍只读 session.yaml / task.yaml / transcripts / git（文件为准，
-D082 边界）。MVP 仅显式捕获，guardian/merge/serve 恢复路径零改动。
+D082 边界）。默认仅显式捕获；开启自动捕获（D091）后 guardian 周期捕获 + merge 前捕获也只写不读。
 
 ### 捕获
 
@@ -64,6 +64,25 @@ picode checkpoint capture --repo <path> --run <id> --task <task_id> [--boundary 
   state/budget + 各会话转录摘要（已剔模板噪音）+ git worktree 指纹 + 自指纹 sha256）
 - 重复捕获产生新 ts 文件，**不覆盖**既有（不可变）；task 不存在 → 报 `NOT_FOUND`
 - 语义：同输入同输出（纯函数）；捕获内容可由文件真相重演，不产生第二事实源
+
+### 自动捕获（D091，默认关闭）
+
+`self_evolve.checkpoints` 配置总开关 `enabled` 默认 **false**（= D082 仅显式捕获，行为不变）；
+开启后两条自动捕获路径，**均只写观测文件、快照只读边界不变**：
+
+|配置|默认|语义|
+|----|------|----|
+|`self_evolve.checkpoints.enabled`|false|自动捕获总开关；false 时 guardian/merge 路径零改动|
+|`self_evolve.checkpoints.guardian_interval_sec`|600|guardian 周期捕获节流（秒）；0 = 每次 tick 都捕获；>0 = 距上次 guardian 捕获不足则跳过（从未捕获 → 捕获）|
+|`self_evolve.checkpoints.pre_merge`|true|merge 前捕获；仅 `enabled` 时才生效；true = `mergeNext` 实际合并前对入队任务捕获一次（boundary=pre_merge）|
+
+- **guardian 周期捕获**（boundary=guardian）：`guardianTick` 在 checkBudgets 之后对每个已登记 task
+  捕获（task.yaml 存在 ∧ status 非终态 ∧ 距上次 guardian 捕获超间隔）；`GuardianTickResult.checkpoints`
+  仅作观测回报，**不驱动任何状态决策**
+- **merge 前捕获**（boundary=pre_merge）：`mergeNext` 实际合并前 best-effort 捕获一次；捕获失败
+  try/catch 吞掉**绝不阻断 merge**；`MergeOutcome.checkpoint` 纯观测
+- **边界审计**：D082 快照只读边界由 sdet 独立审计 PASS——自动捕获仅写不读，checkpoint 丢失/损坏
+  不影响任何恢复/续跑/调度/合并路径
 
 ### 只读查询
 
@@ -78,8 +97,9 @@ picode checkpoint status --repo <path> --run <id>                    # 全部有
   留痕，**不作为当前状态判定依据**（以文件真相为准）
 - checkpoint 目录缺失/文件损坏 → 不影响任何恢复/续跑路径（best-effort 观测物），无需修复；
   怀疑状态漂移时重 capture 一次即可
-- 需要自动化定时捕获 → 属后续候选（本轮 MVP 仅手动）；需要三面（status/CLI/MCP）同源展示 →
-  亦为后续候选
+- 自动捕获未生效 → 先查 `self_evolve.checkpoints.enabled` 是否为 true（默认关闭属正常）；guardian
+  周期捕获未按预期频率 → 检查 `guardian_interval_sec` 节流与任务终态/缺失
+- 需要三面（status/CLI/MCP）同源展示 checkpoint → 属后续候选
 
 ## watchdog（ERR-01）
 
