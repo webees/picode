@@ -68,6 +68,7 @@
 |D060|**11 playbook 勾选滞后核实**（不改 spec 正文）：29 项未勾选中 27 项已实现且有测试守护（逐项 grep 验证：loader 5 层 / atomic+flock / ACL / token / 消息 type / 双门闩 / merge 拓扑与 abort / 文档三人小组 / Memory Brief / change_order / draft park）；2 项未实现——cell check_signoff 文件格式与 violations/proc-audit 红灯，属 O006 开放项（spec 10 仅定义消息 type，`check_signoff` type 已注册于 bus；文件/流程格式留待 spec 细化，实现按保守默认未做）。11 playbook 勾选属实现追踪而非规范正文，补勾建议由 spec 维护方统一处理|
 |D061|**opencode spawn 改为 noReply 异步**（dogfood E2E 发现）：build agent 收到「就绪」消息后自主行动（探索仓库/跑工具），spawn 同步等待模型回复导致 120s 超时、approve 卡死（实测 180s+ 超时 2/3 唤醒失败）；`spawn()` 的 ready message 加 `noReply: true`（serve 原生参数，消息异步入队、agent 自行处理），spawn 秒回（实测 approve 0.152s、wokeErrors 空）。新增 3 单测（mock fetch 断言 noReply/model 对象/spawn 快速返回）|
 |D062|**dogfood 实测发现**（克隆仓 /tmp/picode-dogfood，deepseek-v4-flash 真实闭环）：(1) 模型产出 2 处低风险重构——`globToRegExp` 转义提取 `escapeRegExp`（233f431）+ `GLOB_ESCAPE_RE` 常量与 `pickFromPool`（5ad44c7），行为不变、195 测试全绿、已合并入克隆仓 main；(2) **E4 merge gate 缺陷**：`verify_commands`（npm test）在 merge 时执行但未先 build——TS 项目可能测旧 dist，本次以 merge 后手动 build+test 兜底，建议 gate 改为 `npm run build && npm test`（未改行为）；(3) **agent cwd 偏差**：opencode 会话 cwd = 会话目录（克隆仓根）而非 worktree，模型把第二处改动写进了克隆仓根 working tree 导致 merge 冲突——建议任务 prompt 明确 cd worktree，或 spawn 时把会话 directory 指向 worktree（改进建议，未改行为）|
+|D063|**error.report / error.digest 消息类型（T2 越权改 spec 处置）**：回退模型越权 spec 改动；登记 bus 消息类型 error.report/error.digest；错误收集机制（docs/errors/ + bus）自 D063 生效|
 |D064|**picode 提供 MCP 服务器（stdio · 全量工具面）**：新增 `@picode/mcp-server`——编排面（~36 工具，直接包装 orchestrator store 函数，门闩/锁/不变量全保留）+ 执行面（pi-extension 20 工具 1:1，ACL 六层全保留：profile+token+房间+路径+state 白名单+allowlist 边界）。传输 stdio（`PICODE_REPO` 指定仓库）；执行面逐调用注入 env + 重捕获工具表（与 harness/opencode 插件同款模式），token 由服务器代签（`issueToken` + run secret.txt/dev-secret 兜底），transport 参数 `_` 前缀与工具参数分离。副作用工具（session_wake/sleep/terminate、task_prepare、merge_process、task_dissolve）在描述中显式标注。HTTP/SSE 传输与 resources 留待后续|
 |D065|**sponsor 信息投喂入口（intake）**：sponsor 任意时刻投喂（一条信息/想法/链接/文档），状态机 `add → triage → close`；落盘 `runs/<id>/intake/feed-*.yaml`（from=sponsor/ts/type/body）；分诊由 run-lead 会话决策或规则按 type 转对应角色（需求→product/run-lead；研究→ind-res；文档→docs cell；问题→run-lead 拆卡）；分发走 bus 通知 + 唤醒；处理结果回执 sponsor|
 |D066|**会话续跑机制（continuation）**：对「已 awake ∧ 无 error ∧ 任务未终态 ∧ 预算未耗尽 ∧ 空闲超 `idle_sec`」的 opencode 会话，guardian 机械层按 D061 noReply 语义投喂**固定续跑 prompt**（复用 ready 消息角色/任务上下文 + 固定「继续推进或报告完成」模板）；预算 `self_evolve.continuation.max_per_session`（0=不限，保守默认）+ 每会话 `budget.continuations` 计数持久化（文件真相，D002），耗尽即停，靠既有 idle-sleep/budgets 停靠；断连经 P1 恢复重投喂 ready 后从持久化计数续发（不重算不超发）。**边界：不引入 daemon（N4 缓）、不 LLM 生成续跑指令（N7 缓）**；语义续跑（transcript 摘要注入）列第二轮|
@@ -282,13 +283,13 @@
 - 边界：stripNoise 缺省 = 现行为（零回归）；仅剔 `READY_MESSAGE_TEXT`，不剔 `CONTINUATION_PROMPT`（re-spawn 不经 feed 路径，口径与 D077 feed 一致）
 - commit: 3eb8434（C2 task-respawn-stripnoise 合并）
 
-|D087|**缓项：checkpoint 快照 / maxTokens 真计量**（E7 缓项延续）：会话 checkpoint 快照先定「快照只读、文件为准」边界；maxTokens 待 serve token 契约（D058）就绪|
-|D088|**Skill harness 落地（技能承载体系）**：锚定 agentskills spec——① 新增 `skill-lint`（镜像 persona-lint 数据优先设计）校验 `skills_root` 下全部 `**/SKILL.md` frontmatter：`name` 必填匹配 `SAFE_ID_RE` 且等于目录名、`description` 必填（>1024 仅 warning）、`license`/`allowed-tools`/`compatibility`/`argument-hint`/`metadata` 白名单、未知键 warning；② **激活** `paths.skills_root`（D055 死键局部解除，默认 `skills` 不变，`validateConfig` 补相对路径校验禁绝对/`..` 逃逸），新增纯模块 `skills.ts`（`resolveSkillsRoot`/`discoverSkills`/`buildSkillIndex`/`personaDeclaredSkills`），未配置时 harness 空转零行为变更；③ **persona skills[] 接线**：`buildPiEnv` 注入 `PICODE_SKILLS_INDEX` + `PICODE_PERSONA_SKILLS`（读人设 frontmatter `skills[]`，实例人设/平台席模板），`buildReadyMessage` 系统 prompt 追加 skills 段；④ **渐进披露三层**：metadata（启动注入，有界截断）→ instructions（激活时 `repo_read` SKILL.md 正文）→ resources（按需），SKILL.md 正文绝不进系统 prompt；⑤ `npm run check` 追加 skill-lint；两个种子角色模板（engineer/run-lead）声明 `skills: [ponytail]` dogfood 接线。缓项：D089 skills-ref 官方工具接入、D087 打包/导入双轨机械实现、D088 skill-creator 评价循环（拒）、D089 allowed-tools 机械强制（拒）|
-|D089|**缓项：skills-ref 官方校验工具接入**（agentskills spec 工具链）：官方工具为 npm 包需联网安装/运行，picode 无裸网（D010 信息控制）；自研 skill-lint 覆盖等价语义（name/desc/命名），后续可对齐。留档|
+|D084|**缓项：checkpoint 快照 / maxTokens 真计量**（E7 缓项延续）：会话 checkpoint 快照先定「快照只读、文件为准」边界；maxTokens 待 serve token 契约（D058）就绪|
+|D085|**Skill harness 落地（技能承载体系）**：锚定 agentskills spec——① 新增 `skill-lint`（镜像 persona-lint 数据优先设计）校验 `skills_root` 下全部 `**/SKILL.md` frontmatter：`name` 必填匹配 `SAFE_ID_RE` 且等于目录名、`description` 必填（>1024 仅 warning）、`license`/`allowed-tools`/`compatibility`/`argument-hint`/`metadata` 白名单、未知键 warning；② **激活** `paths.skills_root`（D055 死键局部解除，默认 `skills` 不变，`validateConfig` 补相对路径校验禁绝对/`..` 逃逸），新增纯模块 `skills.ts`（`resolveSkillsRoot`/`discoverSkills`/`buildSkillIndex`/`personaDeclaredSkills`），未配置时 harness 空转零行为变更；③ **persona skills[] 接线**：`buildPiEnv` 注入 `PICODE_SKILLS_INDEX` + `PICODE_PERSONA_SKILLS`（读人设 frontmatter `skills[]`，实例人设/平台席模板），`buildReadyMessage` 系统 prompt 追加 skills 段；④ **渐进披露三层**：metadata（启动注入，有界截断）→ instructions（激活时 `repo_read` SKILL.md 正文）→ resources（按需），SKILL.md 正文绝不进系统 prompt；⑤ `npm run check` 追加 skill-lint；两个种子角色模板（engineer/run-lead）声明 `skills: [ponytail]` dogfood 接线。缓项：D086 skills-ref 官方工具接入、D087 打包/导入双轨机械实现、D088 skill-creator 评价循环（拒）、D089 allowed-tools 机械强制（拒）|
+|D086|**缓项：skills-ref 官方校验工具接入**（agentskills spec 工具链）：官方工具为 npm 包需联网安装/运行，picode 无裸网（D010 信息控制）；自研 skill-lint 覆盖等价语义（name/desc/命名），后续可对齐。留档|
 |D087|**缓项：skill 打包/导入双轨**（mattpocock M6：托管只读 vs 可编辑副本）：已以文档约定存在（skills/README M6 双轨）；机械实现依赖 CLI 下载器（需网），本轮不做。留档|
 |D088|**拒：skill-creator / 评价循环**（anthropics 全套 evals/benchmark/variance）：依赖 LLM 评价循环，超出「承载体系」边界；后续独立 run 立项|
 |D089|**拒：allowed-tools 字段机械强制**（skill 级工具白名单 vs picode tool_profile）：与 09 tool-profiles ACL 关系未定，强制可能破坏现有权限模型；本轮仅解析不强制。留档待设计|
-## D088 — Skill harness 落地（技能承载体系）
+## D085 — Skill harness 落地（技能承载体系）
 - 2026-08-14 · 来源：run-lead 自治规划 run-2026-08-13T23-50-59-484Z（从 anthropics/skills + agentskills spec 学习，改 picode 自身技能承载体系）
 - 问题：`paths.skills_root` 是 D055 死键（声明零读取），两个种子 SKILL.md 无任何校验守卫，新 skill 可任意书写；`Persona.skills[]` 是必填维度但零消费；ready 消息若硬注入 skill 正文会爆 context
 - 决定（C1 spec + C2 wiring 落地）：
@@ -302,7 +303,7 @@
 - 边界：未知 skill 名 → index 标记 unavailable 不阻断 spawn；allowed-tools 仅解析不强制（D089 拒）；agent 激活为模型自主（D003 编排器无 LLM）
 - 缓项：D089 skills-ref 官方工具接入（需网）、D087 打包/导入双轨机械实现（需网下载器）；拒项：D088 skill-creator 评价循环、D089 allowed-tools 机械强制
 
-## D089 — 缓项：skills-ref 官方校验工具接入
+## D086 — 缓项：skills-ref 官方校验工具接入
 - 2026-08-14 · 来源：run-2026-08-13T23-50-59-484Z 决策清单 (d) 1
 - 事实：agentskills spec 官方校验工具为 npm 包，需联网安装/运行，picode 无裸网（D010 信息控制）
 - 处置：自研 skill-lint 已覆盖等价语义（name/desc/命名）；后续 picode 信息控制允许后接官方工具或对齐其语义。留档
