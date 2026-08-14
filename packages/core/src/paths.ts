@@ -24,28 +24,39 @@ export function branchName(config: PicodeConfig, runId: string, taskId: string):
     .replaceAll("{task_id}", taskId);
 }
 
-export function matchGlob(filePath: string, patterns: string[]): boolean {
-  const normalized = filePath.replace(/\\/g, "/");
-  return patterns.some((p) => globToRegExp(p).test(normalized));
+/**
+ * Single glob engine for the whole codebase (P1: 原 matchGlob/simpleGlobMatch
+ * 两套实现语义分歧 — 双星号前缀须匹配根级文件，标准 glob 语义）。
+ *
+ * `**` = any depth (0..n segments), `*` = within one segment.
+ */
+export function simpleGlobMatch(pattern: string, value: string): boolean {
+  const p = pattern.replace(/\/\*\*/g, "/__ALL__").replace(/\*\*\//g, "__ALL__/");
+  const segments = p.split("/");
+  const parts: RegExp[] = segments.map((seg) => {
+    if (seg === "__ALL__") return /(?:.*)?/;
+    return new RegExp(
+      "^" + seg.split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$",
+    );
+  });
+  const valueSegs = value.split("/");
+  // try to match greedily from the start; `**` can span many segments
+  const matches = (vi: number, pi: number): boolean => {
+    if (pi === parts.length) return vi === valueSegs.length;
+    if (parts[pi].source === "(?:.*)?") {
+      for (let k = vi; k <= valueSegs.length; k++) {
+        if (matches(k, pi + 1)) return true;
+      }
+      return false;
+    }
+    if (vi >= valueSegs.length) return false;
+    if (!parts[pi].test(valueSegs[vi])) return false;
+    return matches(vi + 1, pi + 1);
+  };
+  return matches(0, 0);
 }
 
-/** Regex metacharacters that must be escaped to match a glob segment literally. */
-const GLOB_ESCAPE_RE = /[.+^${}()|[\]\\]/g;
-/** Trailing double-glob suffix (`/...` can span any depth). */
-const DOUBLE_GLOB_SUFFIX = "/**";
-/** Stand-in for `**` so single `*` is expanded first (double-glob must survive it). */
-const DOUBLE_GLOB_PLACEHOLDER = "§§";
-
-function globToRegExp(glob: string): RegExp {
-  const g = glob.replace(/\\/g, "/");
-  if (g.endsWith(DOUBLE_GLOB_SUFFIX)) {
-    const base = g.slice(0, -DOUBLE_GLOB_SUFFIX.length).replace(GLOB_ESCAPE_RE, "\\$&");
-    return new RegExp(`^${base}(/.*)?$`);
-  }
-  const escaped = g
-    .replace(GLOB_ESCAPE_RE, "\\$&")
-    .replace(/\*\*/g, DOUBLE_GLOB_PLACEHOLDER)
-    .replace(/\*/g, "[^/]*")
-    .replaceAll(DOUBLE_GLOB_PLACEHOLDER, ".*");
-  return new RegExp(`^${escaped}$`);
+export function matchGlob(filePath: string, patterns: string[]): boolean {
+  const normalized = filePath.replace(/\\/g, "/");
+  return patterns.some((p) => simpleGlobMatch(p, normalized));
 }

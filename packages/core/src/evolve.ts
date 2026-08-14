@@ -3,6 +3,7 @@ import path from "node:path";
 import type { EvolveLayer, EvolveGoalSpec, PicodeConfig } from "./config.js";
 import { writeAtomic } from "./atomic.js";
 import { PicodeError, type ErrorCode } from "./errors.js";
+import { simpleGlobMatch } from "./paths.js";
 
 /**
  * C2 write-guard conflict code. Deliberately a module-local constant instead of
@@ -94,33 +95,6 @@ export function assertEvolveWritePathAllowed(
   throw new Error(
     `E2: write path "${writePath}" not inside any evolve layer (${allowed.join(", ") || "none"})`,
   );
-}
-
-/** Minimal glob match: `**` (any depth) and `*` (within a segment). */
-export function simpleGlobMatch(pattern: string, value: string): boolean {
-  const p = pattern.replace(/\/\*\*/g, "/__ALL__").replace(/\*\*\//g, "__ALL__/");
-  const segments = p.split("/");
-  const parts: RegExp[] = segments.map((seg) => {
-    if (seg === "__ALL__") return /(?:.*)?/;
-    return new RegExp(
-      "^" + seg.split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$",
-    );
-  });
-  const valueSegs = value.split("/");
-  // try to match greedily from the start; `**` can span many segments
-  const matches = (vi: number, pi: number): boolean => {
-    if (pi === parts.length) return vi === valueSegs.length;
-    if (parts[pi].source === "(?:.*)?") {
-      for (let k = vi; k <= valueSegs.length; k++) {
-        if (matches(k, pi + 1)) return true;
-      }
-      return false;
-    }
-    if (vi >= valueSegs.length) return false;
-    if (!parts[pi].test(valueSegs[vi])) return false;
-    return matches(vi + 1, pi + 1);
-  };
-  return matches(0, 0);
 }
 
 /** 19 §4 MUST: a self_evolve target must be the picode (or declared platform) repo. */

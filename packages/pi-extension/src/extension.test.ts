@@ -85,6 +85,7 @@ test("repo_glob only lists files inside write/read paths", async () => {
   const matches = (r as unknown as { matches: string[] }).matches;
   assert.ok(matches.includes("src/a.ts"), "src/a.ts matched");
   assert.ok(!matches.includes("out.txt"), "out.txt outside write_paths excluded");
-  // `**/*.md` does not match top-level files in the current glob semantics
-  assert.ok(!matches.includes("README.md"), "README.md outside write/read paths excluded");
+  // `**/*.md` matches root-level files under standard glob semantics (P1 统一) —
+  // 文档必读，README.md 属于允许读集
+  assert.ok(matches.includes("README.md"), "README.md matches **/*.md (unified glob semantics)");
 });
