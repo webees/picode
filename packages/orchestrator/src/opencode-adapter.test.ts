@@ -225,4 +225,69 @@ test("P4: wakeWithOpencode 空转录不追加摘要（首次 spawn）", async ()
   }
 });
 
+test("C2: renderSkillsSection renders metadata only from env; empty env → empty string", () => {
+  assert.equal(renderSkillsSection({}), "");
+  assert.equal(renderSkillsSection({ PICODE_SKILLS_INDEX: "[]", PICODE_PERSONA_SKILLS: "[]" }), "");
+  const section = renderSkillsSection({
+    PICODE_SKILLS_INDEX: JSON.stringify([
+      { name: "ponytail", description: "lazy", path: "skills/engineering/ponytail/SKILL.md" },
+    ]),
+    PICODE_PERSONA_SKILLS: JSON.stringify(["skills/engineering/ponytail/SKILL.md"]),
+  });
+  assert.match(section, /ponytail/);
+  assert.match(section, /lazy/);
+  assert.match(section, /skills\/engineering\/ponytail\/SKILL\.md/);
+  assert.ok(!section.includes("SKILL.md body"), "skills 段只渲染 metadata 不渲染正文");
+});
+
+test("C2: buildReadyMessage system prompt 追加 skills 段（有 env 时）；无 env 时逐字节不变", () => {
+  const spawner = new OpencodeSpawner(cfg());
+  const bare = spawner.buildReadyMessage({ PICODE_PERSONA: "role: engineer" });
+  assert.equal(
+    bare.system,
+    "You are a picode agent.\n\nRole prompt:\nrole: engineer",
+    "无 skills env 时 system prompt 逐字节不变",
+  );
+  const withSkills = spawner.buildReadyMessage({
+    PICODE_PERSONA: "role: engineer",
+    PICODE_SKILLS_INDEX: JSON.stringify([
+      { name: "ponytail", description: "lazy", path: "skills/engineering/ponytail/SKILL.md" },
+    ]),
+  });
+  assert.ok(withSkills.system.includes("可用技能"));
+  assert.ok(withSkills.system.includes("ponytail"));
+  assert.ok(withSkills.system.includes("You are a picode agent."));
+  assert.ok(withSkills.system.includes("role: engineer"));
+  assert.ok(withSkills.system.startsWith(bare.system), "追加在 persona 段之后");
+});
+
+test("D083: wakeWithOpencode 重 spawn 摘要剔除 ready 模板句（stripNoise）", async () => {
+  const repo = gitInit({ prefix: "picode-wake-oc-" });
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir } = resolveRunDir(repo, runId);
+  const transcript = new TranscriptStore(dir);
+  await transcript.recordOutgoing("pm", `${READY_MESSAGE_TEXT}\n\n实现模块 A`);
+  await transcript.recordOutgoing("pm", `${READY_MESSAGE_TEXT}\n\n实现模块 B`);
+
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const restore = mockFetch(calls);
+  try {
+    const r = await wakeWithOpencode(dir, cfg(), "pm", "re-wake", {});
+    assert.ok(r.pi_session_id?.startsWith("oc-"));
+    const msg = calls.find((c) => c.url.includes("/message"))?.body as {
+      parts: Array<{ type: string; text: string }>;
+    };
+    const texts = msg.parts.map((p) => p.text).join("\n");
+    assert.match(texts, /历史要点摘要/);
+    assert.match(texts, /实现模块 A/);
+    assert.match(texts, /实现模块 B/);
+    const summarySection = texts.split("## 历史要点摘要（转录恢复）")[1] ?? "";
+    assert.ok(
+      !summarySection.includes(READY_MESSAGE_TEXT),
+      "重 spawn 注入的摘要不得包含 ready 模板句（stripNoise 生效）",
+    );
+    assert.ok(!summarySection.includes("你已就绪"), "ready 模板句不应残留在摘要任何位置");
+  } finally {
+    restore();
+  }
 });
