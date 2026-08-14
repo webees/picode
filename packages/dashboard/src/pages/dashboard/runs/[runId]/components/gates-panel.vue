@@ -1,21 +1,15 @@
 <script setup lang="ts">
-import {
-  AlertTriangleIcon,
-  CheckCircle2Icon,
-  FileTextIcon,
-  ShieldCheckIcon,
-  XCircleIcon,
-} from '@lucide/vue'
+import { CheckCircle2Icon, FileTextIcon, ShieldCheckIcon, XCircleIcon } from '@lucide/vue'
 
 import type { GateEvidence } from '@/services/api/picode.api'
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useGates } from '@/services/api/picode.api'
+import { ErrorState } from '@/components/dashboard'
 
 const props = defineProps<{ runId: string }>()
 
@@ -58,13 +52,8 @@ function resultLabel(result: string): string {
 </script>
 
 <template>
-  <Alert v-if="isError" variant="destructive">
-    <AlertTriangleIcon />
-    <AlertTitle>无法加载门禁</AlertTitle>
-    <AlertDescription>
-      {{ error instanceof Error ? error.message : String(error) }}
-    </AlertDescription>
-  </Alert>
+  <ErrorState v-if="isError" title="无法加载门禁"
+    :description="error instanceof Error ? error.message : String(error)" />
 
   <div v-else-if="isLoading" class="space-y-4">
     <Skeleton class="h-8 w-48" />

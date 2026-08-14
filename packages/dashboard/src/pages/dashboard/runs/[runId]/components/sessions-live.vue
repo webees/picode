@@ -1,14 +1,9 @@
 <script setup lang="ts">
-import {
-  ActivityIcon,
-  AlertTriangleIcon,
-  RefreshCwIcon,
-} from '@lucide/vue'
+import { ActivityIcon, RefreshCwIcon } from '@lucide/vue'
 import { useQueries } from '@tanstack/vue-query'
 
 import type { LiveResult, SessionItem } from '@/services/api/picode.api'
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -28,6 +23,7 @@ import {
   useSessions,
 } from '@/services/api/picode.api'
 import { label, SESSION_STATE } from '@/utils/labels'
+import { ErrorState } from '@/components/dashboard'
 
 const props = defineProps<{ runId: string }>()
 
@@ -91,13 +87,8 @@ function formatTime(iso: string | null) {
 </script>
 
 <template>
-  <Alert v-if="isError" variant="destructive">
-    <AlertTriangleIcon />
-    <AlertTitle>无法加载会话</AlertTitle>
-    <AlertDescription>
-      {{ error instanceof Error ? error.message : String(error) }}
-    </AlertDescription>
-  </Alert>
+  <ErrorState v-if="isError" title="无法加载会话"
+    :description="error instanceof Error ? error.message : String(error)" />
 
   <div v-else-if="isLoading" class="space-y-4">
     <div class="grid gap-4 md:grid-cols-3">

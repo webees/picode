@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { AlertTriangleIcon, LoaderCircleIcon } from '@lucide/vue'
+import { LoaderCircleIcon } from '@lucide/vue'
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { useBoard, useTasks } from '@/services/api/picode.api'
 import { BOARD_COLUMN_ZH } from '@/utils/labels'
+import { ErrorState } from '@/components/dashboard'
 
 import { BOARD_COLUMN_META } from './tasks-board.data'
 import { PHASE_PROGRESS } from './role-meta.data'
@@ -59,13 +59,8 @@ function phaseLabel(phase: string | undefined): string {
 </script>
 
 <template>
-  <Alert v-if="isError" variant="destructive">
-    <AlertTriangleIcon />
-    <AlertTitle>无法加载看板</AlertTitle>
-    <AlertDescription>
-      {{ error instanceof Error ? error.message : String(error) }}
-    </AlertDescription>
-  </Alert>
+  <ErrorState v-if="isError" title="无法加载看板"
+    :description="error instanceof Error ? error.message : String(error)" />
 
   <div v-else-if="isLoading" class="flex items-center justify-center py-16 text-muted-foreground">
     <LoaderCircleIcon class="mr-2 size-4 animate-spin" />

@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { AlertTriangleIcon } from '@lucide/vue'
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -17,6 +15,7 @@ import {
 } from '@/components/ui/table'
 import { useChunks } from '@/services/api/picode.api'
 import { CHUNK_STATUS, label } from '@/utils/labels'
+import { ErrorState } from '@/components/dashboard'
 
 const props = defineProps<{ runId: string }>()
 
@@ -33,13 +32,8 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
 </script>
 
 <template>
-  <Alert v-if="isError" variant="destructive">
-    <AlertTriangleIcon />
-    <AlertTitle>无法加载分块计划</AlertTitle>
-    <AlertDescription>
-      {{ error instanceof Error ? error.message : String(error) }}
-    </AlertDescription>
-  </Alert>
+  <ErrorState v-if="isError" title="无法加载分块计划"
+    :description="error instanceof Error ? error.message : String(error)" />
 
   <Card v-else-if="isLoading" class="p-0">
     <div class="space-y-3 p-4">

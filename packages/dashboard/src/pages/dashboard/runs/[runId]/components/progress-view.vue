@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { AlertTriangleIcon, ListChecksIcon } from '@lucide/vue'
+import { ListChecksIcon } from '@lucide/vue'
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -18,6 +17,7 @@ import {
 } from '@/components/ui/table'
 import { useTasks } from '@/services/api/picode.api'
 import { label, TASK_STATUS } from '@/utils/labels'
+import { ErrorState } from '@/components/dashboard'
 
 import { deriveProgress } from './views.data'
 import { PHASE_PROGRESS } from './role-meta.data'
@@ -50,13 +50,8 @@ function formatTime(iso: string | null) {
 </script>
 
 <template>
-  <Alert v-if="isError" variant="destructive">
-    <AlertTriangleIcon />
-    <AlertTitle>无法加载任务进度</AlertTitle>
-    <AlertDescription>
-      {{ error instanceof Error ? error.message : String(error) }}
-    </AlertDescription>
-  </Alert>
+  <ErrorState v-if="isError" title="无法加载任务进度"
+    :description="error instanceof Error ? error.message : String(error)" />
 
   <div v-else-if="isLoading" class="space-y-4">
     <div class="grid gap-4 md:grid-cols-3">

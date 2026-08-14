@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { AlertTriangleIcon, UsersIcon } from '@lucide/vue'
+import { UsersIcon } from '@lucide/vue'
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -17,6 +16,7 @@ import {
 } from '@/components/ui/table'
 import { useSessions, useTasks } from '@/services/api/picode.api'
 import { label, SESSION_STATE } from '@/utils/labels'
+import { ErrorState } from '@/components/dashboard'
 
 import { derivePersonnel } from './views.data'
 
@@ -48,13 +48,8 @@ const SEAT_ZH: Record<string, string> = {
 </script>
 
 <template>
-  <Alert v-if="isError" variant="destructive">
-    <AlertTriangleIcon />
-    <AlertTitle>无法加载人员</AlertTitle>
-    <AlertDescription>
-      {{ error instanceof Error ? error.message : String(error) }}
-    </AlertDescription>
-  </Alert>
+  <ErrorState v-if="isError" title="无法加载人员"
+    :description="error instanceof Error ? error.message : String(error)" />
 
   <div v-else-if="isLoading" class="space-y-4">
     <Skeleton class="h-40 w-full" />

@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { AlertTriangleIcon, MessageSquareIcon } from '@lucide/vue'
+import { MessageSquareIcon } from '@lucide/vue'
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useRun, useTasks } from '@/services/api/picode.api'
+import { ErrorState } from '@/components/dashboard'
 
 import { deriveRooms } from './views.data'
 
@@ -37,13 +37,8 @@ const view = computed(() =>
 </script>
 
 <template>
-  <Alert v-if="isError" variant="destructive">
-    <AlertTriangleIcon />
-    <AlertTitle>无法加载房间</AlertTitle>
-    <AlertDescription>
-      {{ error instanceof Error ? error.message : String(error) }}
-    </AlertDescription>
-  </Alert>
+  <ErrorState v-if="isError" title="无法加载房间"
+    :description="error instanceof Error ? error.message : String(error)" />
 
   <div v-else-if="isLoading" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
     <Skeleton v-for="i in 6" :key="i" class="h-28 w-full" />

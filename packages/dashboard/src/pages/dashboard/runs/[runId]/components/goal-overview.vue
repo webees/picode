@@ -1,17 +1,12 @@
 <script setup lang="ts">
-import {
-  AlertTriangleIcon,
-  LoaderCircleIcon,
-  TargetIcon,
-  UsersIcon,
-} from '@lucide/vue'
+import { LoaderCircleIcon, TargetIcon, UsersIcon } from '@lucide/vue'
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { useRun, useSessions, useTasks } from '@/services/api/picode.api'
 import { label, RUN_KIND, RUN_SCALE, RUN_STATUS } from '@/utils/labels'
+import { ErrorState } from '@/components/dashboard'
 
 import { derivePersonnel, deriveProgress, deriveRooms } from './views.data'
 
@@ -76,13 +71,8 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
 </script>
 
 <template>
-  <Alert v-if="isError" variant="destructive">
-    <AlertTriangleIcon />
-    <AlertTitle>无法加载运行概览</AlertTitle>
-    <AlertDescription>
-      {{ error instanceof Error ? error.message : String(error) }}
-    </AlertDescription>
-  </Alert>
+  <ErrorState v-if="isError" title="无法加载运行概览"
+    :description="error instanceof Error ? error.message : String(error)" />
 
   <div v-else-if="isLoading" class="flex items-center justify-center py-16 text-muted-foreground">
     <LoaderCircleIcon class="mr-2 size-4 animate-spin" />
