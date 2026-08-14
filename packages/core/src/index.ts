@@ -27,3 +27,5 @@ export * from "./persona.js";
 export * from "./naming.js";
 // self-evolution write-path policy (19)
 export * from "./evolve.js";
+// skill harness core (D082): skills_root discovery/index/persona declarations
+export * from "./skills.js";
