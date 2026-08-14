@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ensureDir, readYamlFile, writeAtomic, writeYamlFile, type PicodeConfig } from "@picode/core";
+import { ensureDir, readYamlFile, writeAtomic, writeYamlFile, type PicodeConfig, readYamlDir } from "@picode/core";
 import { RoomStore } from "@picode/bus";
 
 /**
@@ -30,13 +30,7 @@ function coPath(dir: string, id: string): string {
 }
 
 export function readChangeOrders(dir: string): ChangeOrder[] {
-  const d = coDir(dir);
-  if (!fs.existsSync(d)) return [];
-  return fs
-    .readdirSync(d)
-    .filter((f) => f.endsWith(".yaml"))
-    .map((f) => readYamlFile<ChangeOrder>(path.join(d, f))!)
-    .sort((a, b) => a.ts.localeCompare(b.ts));
+  return readYamlDir<ChangeOrder>(coDir(dir), { sortBy: (c) => c.ts });
 }
 
 /** run-lead issues a change order; notifies leadership via bus (type change_order). */

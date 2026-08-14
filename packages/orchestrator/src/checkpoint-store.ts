@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { ensureDir, readYamlFile, writeYamlFile, type PicodeConfig } from "@picode/core";
+import { ensureDir, readYamlFile, writeYamlFile, type PicodeConfig, readYamlDir } from "@picode/core";
 import {
   captureGitWorktreeSnapshot,
   repoRootOf,
@@ -172,14 +172,10 @@ export function captureTaskCheckpoint(
 
 /** 某 task 的全部 checkpoint，按 ts 倒序（最新在前）；只读。 */
 export function listTaskCheckpoints(dir: string, taskId: string): TaskCheckpoint[] {
-  const d = path.join(dir, "checkpoints", taskId);
-  if (!fs.existsSync(d)) return [];
-  return fs
-    .readdirSync(d)
-    .filter((f) => f.endsWith(".yaml"))
-    .sort((a, b) => b.localeCompare(a))
-    .map((f) => readYamlFile<TaskCheckpoint>(path.join(d, f)))
-    .filter((c): c is TaskCheckpoint => c !== null);
+  // 最新在前（captured_at 倒序；与按文件名排序等价且更稳健）
+  return readYamlDir<TaskCheckpoint>(path.join(dir, "checkpoints", taskId)).sort(
+    (a, b) => b.captured_at.localeCompare(a.captured_at),
+  );
 }
 
 /** 某 task 的最新 checkpoint（list 首条）；无则 null。只读。 */

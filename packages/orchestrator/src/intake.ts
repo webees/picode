@@ -9,7 +9,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { ErrorCode, PicodeError, ensureDir, readYamlFile, writeYamlFile } from "@picode/core";
+import { ErrorCode, PicodeError, ensureDir, readYamlFile, writeYamlFile, readYamlDir } from "@picode/core";
 import { RoomStore } from "@picode/bus";
 
 export const INTAKE_TYPES = ["需求", "研究", "文档", "问题"] as const;
@@ -73,13 +73,7 @@ export function addFeed(
 }
 
 export function readFeeds(dir: string): IntakeFeed[] {
-  const d = intakeDir(dir);
-  if (!fs.existsSync(d)) return [];
-  return fs
-    .readdirSync(d)
-    .filter((f) => f.endsWith(".yaml"))
-    .map((f) => readYamlFile<IntakeFeed>(path.join(d, f))!)
-    .sort((a, b) => a.ts.localeCompare(b.ts));
+  return readYamlDir<IntakeFeed>(intakeDir(dir), { sortBy: (f) => f.ts });
 }
 
 function getFeed(dir: string, id: string): IntakeFeed {

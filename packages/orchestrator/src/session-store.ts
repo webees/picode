@@ -1,17 +1,5 @@
-import fs from "node:fs";
 import path from "node:path";
-import {
-  ErrorCode,
-  HUMAN_ONLY_ROLES,
-  PicodeError,
-  assertTransition,
-  ensureDir,
-  readYamlFile,
-  withFileLock,
-  writeYamlFile,
-  type SessionRecord,
-  type SessionState,
-} from "@picode/core";
+import { ErrorCode, HUMAN_ONLY_ROLES, PicodeError, assertTransition, ensureDir, readYamlFile, withFileLock, writeYamlFile, type SessionRecord, type SessionState, readYamlDir } from "@picode/core";
 
 /**
  * Platform sessions registered per run (17 §3.2 + §3.3).
@@ -71,13 +59,9 @@ export class SessionStore {
   }
 
   list(): SessionRecord[] {
-    const dir = this.sessionsDir();
-    if (!fs.existsSync(dir)) return [];
-    return fs
-      .readdirSync(dir)
-      .filter((f) => f.endsWith(".yaml"))
-      .map((f) => readYamlFile<SessionRecord>(path.join(dir, f))!)
-      .sort((a, b) => a.agent_id.localeCompare(b.agent_id));
+    return readYamlDir<SessionRecord>(this.sessionsDir(), {
+      sortBy: (s) => s.agent_id,
+    });
   }
 
   /** Sessions currently awake (T21: sleeping sessions must not appear here). */
