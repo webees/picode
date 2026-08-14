@@ -39,7 +39,7 @@ async function setup() {
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["compiles"]);
   setGoalStatus(dir, "active");
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });

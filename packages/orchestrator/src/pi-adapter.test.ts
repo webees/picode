@@ -65,7 +65,7 @@ function alive(pid: number): boolean {
   }
 }
 
-test("buildPiEnv carries token/profile/room/persona/transcript (18 phase C)", () => {
+test("buildPiEnv carries token/profile/room/persona/transcript (18 phase C)", async () => {
   const { dir, config } = setup({});
   const store = new SessionStore(dir);
   const session = store.get("pm")!;
@@ -79,7 +79,7 @@ test("buildPiEnv carries token/profile/room/persona/transcript (18 phase C)", ()
   assert.equal(env.PICODE_RUN_ALLOWLIST, JSON.stringify(config.run_allowlist), "ERR-05: allowlist 注入");
 });
 
-test("buildPiEnv: task seat cwd falls back to repo root before prepare (ERR-03)", () => {
+test("buildPiEnv: task seat cwd falls back to repo root before prepare (ERR-03)", async () => {
   const { dir, config } = setup({});
   const store = new SessionStore(dir);
   const seat = store.register("engineer", { agentId: "engineer@task-x", initialState: "sleeping" });
@@ -151,14 +151,14 @@ test("pi disabled: wake is state-only, no process", async () => {
   assert.equal(session.pi_session_id, null);
 });
 
-test("spawner stop is idempotent and tolerant of missing pids", () => {
+test("spawner stop is idempotent and tolerant of missing pids", async () => {
   const { config } = setup({});
   const spawner = makeSpawner(config);
   const fake: PiHandle = { pid: 999999, pi_session_id: "pid-999999" };
   assert.doesNotThrow(() => spawner.stop(fake));
 });
 
-test("C2: buildSkillIndex scans skills_root for SKILL.md metadata", () => {
+test("C2: buildSkillIndex scans skills_root for SKILL.md metadata", async () => {
   const repo = tmpGitRepo();
   const skillDir = path.join(repo, "skills", "engineering", "ponytail");
   fs.mkdirSync(skillDir, { recursive: true });
@@ -173,7 +173,7 @@ test("C2: buildSkillIndex scans skills_root for SKILL.md metadata", () => {
   assert.equal(index[0].path, "skills/engineering/ponytail/SKILL.md");
 });
 
-test("C2: buildSkillIndex missing root → empty; SKILL.md without frontmatter skipped", () => {
+test("C2: buildSkillIndex missing root → empty; SKILL.md without frontmatter skipped", async () => {
   const repo = tmpGitRepo();
   assert.deepEqual(buildSkillIndex("skills", repo), []);
   const bare = path.join(repo, "skills", "bare");
@@ -182,7 +182,7 @@ test("C2: buildSkillIndex missing root → empty; SKILL.md without frontmatter s
   assert.deepEqual(buildSkillIndex("skills", repo), []);
 });
 
-test("C2: personaDeclaredSkills resolves declared names to indexed paths", () => {
+test("C2: personaDeclaredSkills resolves declared names to indexed paths", async () => {
   const repo = tmpGitRepo();
   const skillDir = path.join(repo, "skills", "engineering", "ponytail");
   fs.mkdirSync(skillDir, { recursive: true });
@@ -198,7 +198,7 @@ test("C2: personaDeclaredSkills resolves declared names to indexed paths", () =>
   assert.deepEqual(personaDeclaredSkills(path.join(repo, "missing.md"), index), []);
 });
 
-test("C2: buildPiEnv injects skills index + persona-declared skills (role fallback)", () => {
+test("C2: buildPiEnv injects skills index + persona-declared skills (role fallback)", async () => {
   const { dir, config } = setup({});
   const repo = path.resolve(dir, "../../..");
   const skillDir = path.join(repo, "skills", "engineering", "ponytail");

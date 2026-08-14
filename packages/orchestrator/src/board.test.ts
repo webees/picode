@@ -43,7 +43,7 @@ function tmpRun(): string {
   return run;
 }
 
-test("board: intake → Backlog, chunk w/o task → 分块, triad awake → 进行中, merged → 已完成", () => {
+test("board: intake → Backlog, chunk w/o task → 分块, triad awake → 进行中, merged → 已完成", async () => {
   const run = tmpRun();
   const b = buildBoard(run);
   const byId = new Map(b.cards.map((c) => [c.id, c]));
@@ -55,7 +55,7 @@ test("board: intake → Backlog, chunk w/o task → 分块, triad awake → 进�
   assert.equal(byId.get("task-a")?.owner, "squad-lead@task-a, engineer@task-a, sdet@task-a");
 });
 
-test("board: merged task lands in 已完成", () => {
+test("board: merged task lands in 已完成", async () => {
   const run = tmpRun();
   fs.writeFileSync(
     path.join(run, "merge_queue.jsonl"),
@@ -65,7 +65,7 @@ test("board: merged task lands in 已完成", () => {
   assert.equal(b.cards.find((c) => c.id === "task-a")?.column, "已完成");
 });
 
-test("board: blocked progress flags the card", () => {
+test("board: blocked progress flags the card", async () => {
   const run = tmpRun();
   fs.writeFileSync(
     path.join(run, "tasks", "task-a", "progress.json"),
@@ -75,7 +75,7 @@ test("board: blocked progress flags the card", () => {
   assert.equal(b.cards.find((c) => c.id === "task-a")?.blocked, true);
 });
 
-test("board: render includes all columns in order", () => {
+test("board: render includes all columns in order", async () => {
   const run = tmpRun();
   const text = renderBoard(buildBoard(run));
   let last = -1;
@@ -86,7 +86,7 @@ test("board: render includes all columns in order", () => {
   }
 });
 
-test("board: intake/ feed with status=open lands in Backlog; triaged/done excluded", () => {
+test("board: intake/ feed with status=open lands in Backlog; triaged/done excluded", async () => {
   const run = tmpRun();
   const intake = path.join(run, "intake");
   fs.mkdirSync(intake, { recursive: true });
@@ -137,14 +137,14 @@ const WRITE_APIS = [
   "createWriteStream",
 ];
 
-test("board: 源码零写路径（静态断言）", () => {
+test("board: 源码零写路径（静态断言）", async () => {
   const src = fs.readFileSync(path.join(import.meta.dirname, "..", "src", "board.ts"), "utf8");
   for (const api of WRITE_APIS) {
     assert.ok(!src.includes(`fs.${api}`), `board.ts must not use fs.${api}`);
   }
 });
 
-test("board: buildBoard 不修改 run 目录（运行时断言）", () => {
+test("board: buildBoard 不修改 run 目录（运行时断言）", async () => {
   const run = tmpRun();
   const snapshot = (dir: string): string[] => {
     const out: string[] = [];

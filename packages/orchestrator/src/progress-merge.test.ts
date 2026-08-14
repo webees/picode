@@ -35,7 +35,7 @@ async function setupTask(opts: { scale?: "S" | "M" | "L"; timeoutSec?: number } 
     );
   }
   const config = loadConfig(repo, runId);
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });

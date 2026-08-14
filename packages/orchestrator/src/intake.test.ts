@@ -48,7 +48,7 @@ test("intake lifecycle: add(open) → triage(triaged+assigned_to+bus) → close(
   assert.equal(persisted.status, "done");
 });
 
-test("intake: add rejects unknown type (USAGE)", () => {
+test("intake: add rejects unknown type (USAGE)", async () => {
   const dir = tmpRunDir();
   assert.throws(
     () => addFeed(dir, { type: "bogus", body: "x" }),
@@ -91,7 +91,7 @@ test("intake: close rejects unknown feed, double-close, and triage-after-done", 
   );
 });
 
-test("intake: every cataloged type is accepted; feeds sorted by ts", () => {
+test("intake: every cataloged type is accepted; feeds sorted by ts", async () => {
   const dir = tmpRunDir();
   for (const type of INTAKE_TYPES) {
     const feed = addFeed(dir, { type, body: `喂一个${type}` });

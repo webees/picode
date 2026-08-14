@@ -101,7 +101,7 @@ test("R3-C2-b: 配置 gate_commands 后启用", async () => {
 // 工作树有变化 → 重跑 gate
 // ---------------------------------------------------------------------------
 
-test("R3-C2-c: captureGitWorktreeSnapshot 在 git 仓库内返回指纹，工作树变化后不同", () => {
+test("R3-C2-c: captureGitWorktreeSnapshot 在 git 仓库内返回指纹，工作树变化后不同", async () => {
   const repo = gitInit({ prefix: "picode-gate-snap-" });
   fs.writeFileSync(path.join(repo, "a.txt"), "v1");
   execFileSync("git", ["add", "-A"], { cwd: repo });
@@ -124,7 +124,7 @@ test("R3-C2-c: captureGitWorktreeSnapshot 在 git 仓库内返回指纹，工作
   assert.notEqual(withUntracked, untrackedChanged, "untracked 内容变化必须反映到快照");
 });
 
-test("R3-C2-c: captureGitWorktreeSnapshot 非 git 目录 → null", () => {
+test("R3-C2-c: captureGitWorktreeSnapshot 非 git 目录 → null", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-notgit-" + Date.now()));
   try {
     assert.equal(captureGitWorktreeSnapshot(dir), null);
@@ -133,7 +133,7 @@ test("R3-C2-c: captureGitWorktreeSnapshot 非 git 目录 → null", () => {
   }
 });
 
-test("R3-C2-c: shouldRunGate — gate 未启用 / 快照一致 / 变化 三分支", () => {
+test("R3-C2-c: shouldRunGate — gate 未启用 / 快照一致 / 变化 三分支", async () => {
   assert.equal(shouldRunGate([], "fp", "snapshot-any"), false, "未启用 → false");
   const snap = "worktree-v1";
   const fp = snapshotFingerprint(snap);

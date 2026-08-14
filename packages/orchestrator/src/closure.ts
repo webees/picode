@@ -5,6 +5,7 @@ import {
   branchName,
   ensureDir,
   readYamlFile,
+  withFileLock,
   worktreePath,
   writeAtomic,
   type PicodeConfig,
@@ -245,15 +246,18 @@ export function assertHandoffAccepted(dir: string, taskId: string): void {
   }
 }
 
-function setChunkStatus(dir: string, chunkId: string, status: string): string | null {
+async function setChunkStatus(dir: string, chunkId: string, status: string): Promise<string | null> {
   const p = path.join(dir, "chunks.yaml");
   if (!fs.existsSync(p)) return null;
-  const data = readYamlFile<{ chunks: Array<{ id: string; status?: string }> }>(p)!;
-  const chunk = data.chunks.find((c) => c.id === chunkId);
-  if (!chunk) return null;
-  chunk.status = status;
-  writeYamlFile(p, data);
-  return status;
+  // 并发安全（P1）：与 addChunkAndTask 共用 .chunks.lock，读改写不互相覆盖
+  return withFileLock(path.join(dir, ".chunks.lock"), () => {
+    const data = readYamlFile<{ chunks: Array<{ id: string; status?: string }> }>(p)!;
+    const chunk = data.chunks.find((c) => c.id === chunkId);
+    if (!chunk) return null;
+    chunk.status = status;
+    writeYamlFile(p, data);
+    return status;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -405,7 +409,7 @@ export async function dissolveTask(
   writeYamlFile(path.join(dir, "tasks", taskId, "task.yaml"), task);
 
   // Normal dissolve unlocks downstream chunks; force leaves the chunk retryable.
-  const chunkStatus = opts.force ? null : setChunkStatus(dir, task.chunk_id, "done");
+  const chunkStatus = opts.force ? null : await setChunkStatus(dir, task.chunk_id, "done");
 
   return {
     task_id: taskId,

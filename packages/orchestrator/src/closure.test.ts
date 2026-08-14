@@ -36,7 +36,7 @@ async function setupPreparedTask(opts: { writePaths?: string[] } = {}) {
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["feature works"]);
   setGoalStatus(dir, "active");
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: opts.writePaths ?? ["src/module-a/**"],
   });
@@ -192,7 +192,7 @@ test("gc reclaims failed tasks past TTL, keeps fresh ones", async () => {
   assert.equal(r.status, "failed");
 
   // second task, failed and fresh (now)
-  const { taskId: task2 } = addChunkAndTask(ctx.repo, ctx.dir, ctx.config, {
+  const { taskId: task2 } = await addChunkAndTask(ctx.repo, ctx.dir, ctx.config, {
     chunkId: "chunk-b",
     writePaths: ["src/module-b/**"],
   });

@@ -85,7 +85,7 @@ test("D061: spawn fires the ready message with noReply=true (async, never blocks
   }
 });
 
-test("opencodeSessionIdOf parses oc-<id> and rejects others", () => {
+test("opencodeSessionIdOf parses oc-<id> and rejects others", async () => {
   assert.equal(opencodeSessionIdOf("oc-ses_abc"), "ses_abc");
   assert.equal(opencodeSessionIdOf("ses_abc"), null);
   assert.equal(opencodeSessionIdOf(""), null);
@@ -226,7 +226,7 @@ test("P4: wakeWithOpencode 空转录不追加摘要（首次 spawn）", async ()
   }
 });
 
-test("C2: renderSkillsSection renders metadata only from env; empty env → empty string", () => {
+test("C2: renderSkillsSection renders metadata only from env; empty env → empty string", async () => {
   assert.equal(renderSkillsSection({}), "");
   assert.equal(renderSkillsSection({ PICODE_SKILLS_INDEX: "[]", PICODE_PERSONA_SKILLS: "[]" }), "");
   const section = renderSkillsSection({
@@ -241,7 +241,7 @@ test("C2: renderSkillsSection renders metadata only from env; empty env → empt
   assert.ok(!section.includes("SKILL.md body"), "skills 段只渲染 metadata 不渲染正文");
 });
 
-test("C2: buildReadyMessage system prompt 追加 skills 段（有 env 时）；无 env 时逐字节不变", () => {
+test("C2: buildReadyMessage system prompt 追加 skills 段（有 env 时）；无 env 时逐字节不变", async () => {
   const spawner = new OpencodeSpawner(cfg());
   const bare = spawner.buildReadyMessage({ PICODE_PERSONA: "role: engineer" });
   assert.equal(

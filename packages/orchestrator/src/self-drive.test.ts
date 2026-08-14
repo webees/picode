@@ -57,7 +57,7 @@ test("deriveEvents: fresh run with never-woken sessions fires run_created", asyn
 test("deriveEvents: goal active + staffed queued task + approved brief fires task_ready", async () => {
   const { repo, dir, config, store } = setupRun();
   activateGoal(dir);
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });
@@ -74,7 +74,7 @@ test("deriveEvents: goal active + staffed queued task + approved brief fires tas
 test("deriveEvents: skips task_ready until the work brief is approved", async () => {
   const { repo, dir, config, store } = setupRun();
   activateGoal(dir);
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });
@@ -88,7 +88,7 @@ test("deriveEvents: skips task_ready until the work brief is approved", async ()
 test("deriveEvents: no task_ready while a triad seat is already awake (idempotent self-next)", async () => {
   const { repo, dir, config, store } = setupRun();
   activateGoal(dir);
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });
@@ -104,7 +104,7 @@ test("deriveEvents: no task_ready while a triad seat is already awake (idempoten
 test("deriveEvents: completed goal dissolves any task still in flight", async () => {
   const { repo, dir, config, store } = setupRun();
   activateGoal(dir);
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });
@@ -279,7 +279,7 @@ test("probeServeHealth: 风暴限流 —— 每会话最多 1 次自动恢复（
 test("guardianTick: drains the sess-mgr command queue and applies derived events", async () => {
   const { repo, dir, config, store } = setupRun();
   activateGoal(dir);
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });
@@ -334,7 +334,7 @@ test("sleepPlatformSeats: sleeps only awake platform seats (no task binding), id
 test("closeRun: 终态 goal 补发 TASK_DISSOLVED + 休眠平台席（best-effort，幂等）", async () => {
   const { repo, dir, config, store } = setupRun();
   activateGoal(dir);
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });
@@ -815,7 +815,7 @@ test("C1 checkpoint-auto: guardianTick 默认（checkpoints 关闭）→ checkpo
 test("C1 checkpoint-auto: enabled + interval=0 → guardianTick 捕获已登记非终态 task；只写不读、不驱动决策", async () => {
   const { repo, dir, config, store } = setupRun();
   activateGoal(dir);
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });

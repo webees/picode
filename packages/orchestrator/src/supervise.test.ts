@@ -54,7 +54,7 @@ test("D093: deriveSuperviseObservation shape — agents/total/worktrees/tasks/me
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["a"]);
   setGoalStatus(dir, "active");
-  addChunkAndTask(repo, dir, config, { chunkId: "chunk-a", writePaths: ["src/a/**"] });
+  await await addChunkAndTask(repo, dir, config, { chunkId: "chunk-a", writePaths: ["src/a/**"] });
   await awakeEngineer(dir);
   addWorktreeFiles(repo, runId);
 
@@ -103,17 +103,17 @@ test("D093: POLL_FAIL 会话 tokens=null、不计入 total", async () => {
   assert.equal(obs.total, 0, "POLL_FAIL 不计入 total");
 });
 
-test("D093: isIdleStopped — 连续 3 轮零增长 → true", () => {
+test("D093: isIdleStopped — 连续 3 轮零增长 → true", async () => {
   assert.equal(isIdleStopped([{ total: 100 }, { total: 100 }, { total: 100 }, { total: 100 }]), true);
 });
 
-test("D093: isIdleStopped — 样本不足 rounds+1 → false", () => {
+test("D093: isIdleStopped — 样本不足 rounds+1 → false", async () => {
   assert.equal(isIdleStopped([{ total: 100 }, { total: 100 }, { total: 100 }]), false);
   assert.equal(isIdleStopped([{ total: 100 }]), false);
   assert.equal(isIdleStopped([]), false);
 });
 
-test("D093: isIdleStopped — 中间有增长 → false", () => {
+test("D093: isIdleStopped — 中间有增长 → false", async () => {
   assert.equal(
     isIdleStopped([{ total: 100 }, { total: 100 }, { total: 150 }, { total: 150 }]),
     false,
@@ -124,13 +124,13 @@ test("D093: isIdleStopped — 中间有增长 → false", () => {
   );
 });
 
-test("D093: isIdleStopped — POLL_FAIL（total=0）不判 idle", () => {
+test("D093: isIdleStopped — POLL_FAIL（total=0）不判 idle", async () => {
   assert.equal(isIdleStopped([{ total: 0 }, { total: 0 }, { total: 0 }, { total: 0 }]), false);
   const obs = [{ total: 1200 }, { total: 0 }, { total: 0 }, { total: 0 }];
   assert.equal(isIdleStopped(obs), false, "一旦 total 归零（全 POLL_FAIL）不判 STOPPED");
 });
 
-test("D093: isIdleStopped — thresholdRounds 容差内微增仍判 stopped", () => {
+test("D093: isIdleStopped — thresholdRounds 容差内微增仍判 stopped", async () => {
   assert.equal(
     isIdleStopped([{ total: 100 }, { total: 100 }, { total: 105 }, { total: 105 }], { thresholdRounds: 5 }),
     true,
@@ -141,7 +141,7 @@ test("D093: isIdleStopped — thresholdRounds 容差内微增仍判 stopped", ()
   );
 });
 
-test("D093: isIdleStopped — 自定义 rounds 窗口", () => {
+test("D093: isIdleStopped — 自定义 rounds 窗口", async () => {
   assert.equal(isIdleStopped([{ total: 100 }, { total: 100 }, { total: 100 }], { rounds: 2 }), true);
   assert.equal(isIdleStopped([{ total: 100 }, { total: 100 }, { total: 100 }], { rounds: 3 }), false);
 });

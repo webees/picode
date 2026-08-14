@@ -19,13 +19,13 @@ function tmpGitRepo(): string {
   return dir;
 }
 
-test("status snapshot reflects goal, sessions, tasks and merge queue", () => {
+test("status snapshot reflects goal, sessions, tasks and merge queue", async () => {
   const repo = tmpGitRepo();
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["a", "b"]);
   setGoalStatus(dir, "active");
-  addChunkAndTask(repo, dir, config, { chunkId: "chunk-a", writePaths: ["src/a/**"] });
+  await addChunkAndTask(repo, dir, config, { chunkId: "chunk-a", writePaths: ["src/a/**"] });
 
   const s = statusSnapshot(dir, config);
   assert.equal(s.goal.status, "active");
@@ -92,7 +92,7 @@ test("R3-C3: in-flight = 末条转录为 outgoing（投喂后无响应）", asyn
   assert.equal(row!.continuations_used, 0, "recordOutgoing alone does not bump budget");
 });
 
-test("C2: 平台席 row 反映 max_per_session_platform，task 席反映 max_per_session", () => {
+test("C2: 平台席 row 反映 max_per_session_platform，task 席反映 max_per_session", async () => {
   const repo = tmpGitRepo();
   const { runId } = createRun(repo, { title: "goal-cap", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);

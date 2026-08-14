@@ -37,19 +37,19 @@ function buildFixture(repo: string, runId: string): string {
   return run;
 }
 
-test("D093: orchestrator re-exports live primitives (dashboard-server 兼容)", () => {
+test("D093: orchestrator re-exports live primitives (dashboard-server 兼容)", async () => {
   assert.equal(typeof orchestrator.fetchLiveTokens, "function");
   assert.equal(typeof orchestrator.lastTokenSample, "function");
   assert.equal(typeof orchestrator.serveSessionIdOf, "function");
   assert.equal(typeof orchestrator.stripOcPrefix, "function");
 });
 
-test("stripOcPrefix strips oc- prefix (dashboard-server 原语义)", () => {
+test("stripOcPrefix strips oc- prefix (dashboard-server 原语义)", async () => {
   assert.equal(stripOcPrefix("oc-ses_abc"), "ses_abc");
   assert.equal(stripOcPrefix("ses_abc"), "ses_abc");
 });
 
-test("lastTokenSample picks the most recent message with tokens", () => {
+test("lastTokenSample picks the most recent message with tokens", async () => {
   const messages = [
     { info: { role: "user", time: { created: 1 } } },
     { info: { role: "assistant", tokens: { total: 1234 }, time: { created: 2 } } },
@@ -130,7 +130,7 @@ test("live: unknown agent session yields {error}", async () => {
   if (!live.ok) assert.match(live.error, /no serve session/);
 });
 
-test("serveSessionIdOf returns null when no serve session", () => {
+test("serveSessionIdOf returns null when no serve session", async () => {
   const repo = tmpRepo();
   const run = buildFixture(repo, "run-live-1");
   assert.equal(serveSessionIdOf(run, "ghost@nowhere"), null);

@@ -33,7 +33,7 @@ function tmpGitRepo(): string {
   return dir;
 }
 
-test("E2: --help groups commands by domain and lists every registered command", () => {
+test("E2: --help groups commands by domain and lists every registered command", async () => {
   const { status, stdout } = runCli(["--help"]);
   assert.equal(status, 0);
   for (const domain of ["run:", "goal:", "session:", "staffing:", "task:", "merge:", "memory:", "evolve:", "window:", "status:", "intake:", "self-drive:", "supervise:"]) {
@@ -56,33 +56,33 @@ test("E2: --help groups commands by domain and lists every registered command", 
   }
 });
 
-test("E1: per-command --help prints the usage line", () => {
+test("E1: per-command --help prints the usage line", async () => {
   const { status, stdout } = runCli(["session", "wake", "--help"]);
   assert.equal(status, 0);
   assert.ok(stdout.includes("picode session wake --repo <path> --run <id> --agent <agent_id>"));
 });
 
-test("E3: unknown command renders [picode] ERROR: USAGE with exit 1", () => {
+test("E3: unknown command renders [picode] ERROR: USAGE with exit 1", async () => {
   const { status, stderr } = runCli(["frobnicate"]);
   assert.equal(status, 1);
   assert.match(stderr, /^\[picode\] ERROR: USAGE: unknown command "frobnicate"/);
   assert.ok(stderr.includes("picode --help"));
 });
 
-test("E3: missing --run renders a coded error naming the command's usage", () => {
+test("E3: missing --run renders a coded error naming the command's usage", async () => {
   const { status, stderr } = runCli(["status", "--repo", "/tmp"]);
   assert.equal(status, 1);
   assert.match(stderr, /^\[picode\] ERROR: USAGE: missing --run <id>/);
   assert.ok(stderr.includes("picode status --repo"));
 });
 
-test("E3: unknown subcommand names the offending verb", () => {
+test("E3: unknown subcommand names the offending verb", async () => {
   const { status, stderr } = runCli(["session", "frob"]);
   assert.equal(status, 1);
   assert.match(stderr, /unknown session subcommand "frob"/);
 });
 
-test("E3: run-level errors carry the originating code (config validation)", () => {
+test("E3: run-level errors carry the originating code (config validation)", async () => {
   const repo = tmpGitRepo();
   // break the v1-fixed sponsor contract via project config
   fs.mkdirSync(path.join(repo, ".picode"), { recursive: true });
@@ -95,7 +95,7 @@ test("E3: run-level errors carry the originating code (config validation)", () =
   assert.match(stderr, /^\[picode\] ERROR: CONFIG_INVALID: sponsor\.human_only must be true/);
 });
 
-test("intake E2E: add(open, board Backlog) → triage(triaged+bus, leaves board) → close(done)", () => {
+test("intake E2E: add(open, board Backlog) → triage(triaged+bus, leaves board) → close(done)", async () => {
   const repo = tmpGitRepo();
   const init = runCli(["init", "--repo", repo, "--goal-title", "t"]);
   assert.equal(init.status, 0);

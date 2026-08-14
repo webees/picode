@@ -42,17 +42,17 @@ function tmpGitRepo(): string {
   return dir;
 }
 
-test("T01: implement task cannot be created before goal is active", () => {
+test("T01: implement task cannot be created before goal is active", async () => {
   const repo = tmpGitRepo();
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
-  assert.throws(
-    () => addChunkAndTask(repo, dir, config, { chunkId: "c1", writePaths: ["src/**"] }),
+  await assert.rejects(
+    addChunkAndTask(repo, dir, config, { chunkId: "c1", writePaths: ["src/**"] }),
     /goal not active/,
   );
 });
 
-test("T02: goal with open questions cannot be activated", () => {
+test("T02: goal with open questions cannot be activated", async () => {
   const repo = tmpGitRepo();
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir } = resolveRunDir(repo, runId);
@@ -64,12 +64,12 @@ test("T02: goal with open questions cannot be activated", () => {
   assert.throws(() => setGoalStatus(dir, "active"), /open_questions/);
 });
 
-test("T10: init outside a git repository fails", () => {
+test("T10: init outside a git repository fails", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-nogit-"));
   assert.throws(() => createRun(dir, { title: "x" }), /Not a git repository/);
 });
 
-test("T13: room display_name override does not change the bus room id", () => {
+test("T13: room display_name override does not change the bus room id", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-t13-"));
   fs.mkdirSync(path.join(dir, ".picode"), { recursive: true });
   fs.writeFileSync(
@@ -94,7 +94,7 @@ test("T13: room display_name override does not change the bus room id", () => {
   assert.throws(() => store.loadMembers("领导舱"), /not safe/);
 });
 
-test("T14: disabling a required room without a replacement fails validation", () => {
+test("T14: disabling a required room without a replacement fails validation", async () => {
   const base = getDefaultConfig();
   const broken = {
     ...base,
@@ -105,7 +105,7 @@ test("T14: disabling a required room without a replacement fails validation", ()
   assert.throws(() => validateConfig(broken), /required room disabled or missing/);
 });
 
-test("T15: cells.templates pointing at an unknown role fails validation", () => {
+test("T15: cells.templates pointing at an unknown role fails validation", async () => {
   const base = getDefaultConfig();
   const broken = {
     ...base,
@@ -129,7 +129,7 @@ test("T17: engineer spawn env never embeds unapproved research text", async () =
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["works"]);
   setGoalStatus(dir, "active");
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/a/**"],
   });

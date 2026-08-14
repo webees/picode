@@ -42,7 +42,7 @@ const evolveSpec: EvolveGoalSpec = {
   forbidden_paths: ["**/secrets/**"],
 };
 
-test("simpleGlobMatch: ** spans depths, * within segment", () => {
+test("simpleGlobMatch: ** spans depths, * within segment", async () => {
   assert.ok(simpleGlobMatch("packages/**", "packages/core/src/config.ts"));
   assert.ok(simpleGlobMatch("docs/**", "docs/knowledge/evolve/run.md"));
   assert.ok(simpleGlobMatch("packages/**/*.test.ts", "packages/core/src/evolve.test.ts"));
@@ -50,7 +50,7 @@ test("simpleGlobMatch: ** spans depths, * within segment", () => {
   assert.ok(!simpleGlobMatch("packages/core/**", "packages/bus/src/x.ts"));
 });
 
-test("evolveLayerGlobs + evolveWritePaths honor layers and forbidden paths", () => {
+test("evolveLayerGlobs + evolveWritePaths honor layers and forbidden paths", async () => {
   assert.ok(evolveLayerGlobs("code").includes("packages/**"));
   const wp = evolveWritePaths(getDefaultConfig(), evolveSpec);
   assert.ok(wp.includes("docs/**"));
@@ -58,12 +58,12 @@ test("evolveLayerGlobs + evolveWritePaths honor layers and forbidden paths", () 
   assert.ok(!wp.includes("**/secrets/**"), "forbidden paths removed");
 });
 
-test("effectiveLayers intersects goal layers with config allowed layers", () => {
+test("effectiveLayers intersects goal layers with config allowed layers", async () => {
   const config = getDefaultConfig(); // allowed: knowledge,prompts,docs,tests
   assert.deepEqual(effectiveLayers(config, { ...evolveSpec, layers: ["docs", "code"] }), ["docs"]);
 });
 
-test("assertEvolveWritePathAllowed rejects out-of-layer writes (E2)", () => {
+test("assertEvolveWritePathAllowed rejects out-of-layer writes (E2)", async () => {
   const config = getDefaultConfig();
   assertEvolveWritePathAllowed(config, evolveSpec, "docs/guide.md");
   assert.throws(
@@ -80,14 +80,14 @@ test("assertEvolveWritePathAllowed rejects out-of-layer writes (E2)", () => {
   );
 });
 
-test("assertEvolveTargetRoot accepts picode monorepo, rejects others (19 §4 MUST)", () => {
+test("assertEvolveTargetRoot accepts picode monorepo, rejects others (19 §4 MUST)", async () => {
   const ok = tmpGitRepo("picode");
   assertEvolveTargetRoot(ok, getDefaultConfig());
   const bad = tmpGitRepo("not-picode");
   assert.throws(() => assertEvolveTargetRoot(bad, getDefaultConfig()), /self_evolve target_repo/);
 });
 
-test("init --kind self_evolve writes kind/target_repo/evolve; delivery default", () => {
+test("init --kind self_evolve writes kind/target_repo/evolve; delivery default", async () => {
   const repo = tmpGitRepo("picode");
   const { runId } = createRun(repo, {
     title: "upgrade picode",
@@ -110,7 +110,7 @@ test("init --kind self_evolve writes kind/target_repo/evolve; delivery default",
   assert.equal(readGoal(path.join(repo2, ".picode", "runs", r2)).kind, "delivery");
 });
 
-test("init self_evolve on non-picode target is rejected", () => {
+test("init self_evolve on non-picode target is rejected", async () => {
   const repo = tmpGitRepo("not-picode");
   assert.throws(
     () => createRun(repo, { title: "x", kind: "self_evolve", targetRepo: repo }),
@@ -118,7 +118,7 @@ test("init self_evolve on non-picode target is rejected", () => {
   );
 });
 
-test("old goal without kind reads as delivery (backward compat)", () => {
+test("old goal without kind reads as delivery (backward compat)", async () => {
   const repo = tmpGitRepo();
   const { runId } = createRun(repo, { title: "old" });
   const { dir } = resolveRunDir(repo, runId);
@@ -136,7 +136,7 @@ test("old goal without kind reads as delivery (backward compat)", () => {
   assert.equal(g.evolve, null);
 });
 
-test("E6: writeEvolveKnowledgeLog writes knowledge/evolve/<run_id>.md", () => {
+test("E6: writeEvolveKnowledgeLog writes knowledge/evolve/<run_id>.md", async () => {
   const repo = tmpGitRepo("picode");
   const { runId } = createRun(repo, { title: "evolve", kind: "self_evolve", evolveLayers: ["docs"] });
   const { dir, config } = resolveRunDir(repo, runId);
@@ -148,7 +148,7 @@ test("E6: writeEvolveKnowledgeLog writes knowledge/evolve/<run_id>.md", () => {
   assert.match(md, /fixed docs/);
 });
 
-test("C2 write-guard: stale expectedBaseline → EVOLVE_WRITE_CONFLICT, original log intact", () => {
+test("C2 write-guard: stale expectedBaseline → EVOLVE_WRITE_CONFLICT, original log intact", async () => {
   const repo = tmpGitRepo("picode");
   const { runId } = createRun(repo, { title: "evolve", kind: "self_evolve", evolveLayers: ["docs"] });
   const { dir, config } = resolveRunDir(repo, runId);

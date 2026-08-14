@@ -7,6 +7,7 @@ import {
   ensureDir,
   matchGlob,
   readYamlFile,
+  withFileLock,
   worktreePath,
   writeAtomic,
   type PicodeConfig,
@@ -37,12 +38,12 @@ export interface TaskState {
 /** Default first acceptance gate attached to every chunk/task (P02). */
 const DEFAULT_ACCEPTANCE = [{ id: "C1", type: "command", spec: "<project-test-command>" }];
 
-export function addChunkAndTask(
+export async function addChunkAndTask(
   _repoRoot: string,
   dir: string,
   config: PicodeConfig,
   opts: { chunkId: string; writePaths: string[]; readPaths?: string[] },
-): { taskId: string } {
+): Promise<{ taskId: string }> {
   // 路径安全：chunkId 直接拼成 tasks/task-<id> 目录名，非法值（含 `/`、`..`）拒绝，
   // 防逃逸 run 布局错写其它状态文件（P0）。
   if (!SAFE_CHUNK_ID_RE.test(opts.chunkId)) {
@@ -53,22 +54,25 @@ export function addChunkAndTask(
     throw new Error("goal not active; cannot add implement task");
   }
   const chunksPath = path.join(dir, "chunks.yaml");
-  const data = readYamlFile<{ chunks: Array<Record<string, unknown>> }>(chunksPath)!;
   const taskId = `task-${opts.chunkId}`;
   const writePaths = opts.writePaths;
   const readPaths = opts.readPaths ?? [];
-  data.chunks.push({
-    id: opts.chunkId,
-    write_paths: writePaths,
-    read_paths: readPaths,
-    public_contract: null,
-    depends_on: [],
-    shared_files: [],
-    acceptance: DEFAULT_ACCEPTANCE,
-    status: "ready",
-    task_id: taskId,
+  // 并发安全（P1）：chunks.yaml 读-改-写持锁，多个进程并发 chunk add 不互相覆盖
+  await withFileLock(path.join(dir, ".chunks.lock"), () => {
+    const data = readYamlFile<{ chunks: Array<Record<string, unknown>> }>(chunksPath)!;
+    data.chunks.push({
+      id: opts.chunkId,
+      write_paths: writePaths,
+      read_paths: readPaths,
+      public_contract: null,
+      depends_on: [],
+      shared_files: [],
+      acceptance: DEFAULT_ACCEPTANCE,
+      status: "ready",
+      task_id: taskId,
+    });
+    writeYamlFile(chunksPath, data);
   });
-  writeYamlFile(chunksPath, data);
 
   const task: TaskState = {
     id: taskId,

@@ -205,9 +205,9 @@ export function managementTools(): ToolDef[] {
         read_paths: { type: "array", items: { type: "string" } },
       },
       ["chunk_id", "write_paths"],
-      (p, env) => {
+      async (p, env) => {
         const { repo, dir, config } = requireRun(env, str(p, "run_id"));
-        const task = addChunkAndTask(repo, dir, config, {
+        const task = await addChunkAndTask(repo, dir, config, {
           chunkId: String(p.chunk_id),
           writePaths: strArr(p, "write_paths") ?? [],
           readPaths: strArr(p, "read_paths"),

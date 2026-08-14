@@ -113,7 +113,7 @@ function appendTranscript(
 // C1-b：捕获内容正确（task_status / sessions state+budget / 摘要剔噪 / git 指纹）
 // ---------------------------------------------------------------------------
 
-test("C1-b: captureTaskCheckpoint 捕获内容正确（task_status + 三角会话 + 剔噪摘要 + git 指纹 + 自指纹）", () => {
+test("C1-b: captureTaskCheckpoint 捕获内容正确（task_status + 三角会话 + 剔噪摘要 + git 指纹 + 自指纹）", async () => {
   const { dir, store } = setupRun();
   writeTask(dir, "task-x", "assigned");
   void registerTriadSessions(store);
@@ -177,7 +177,7 @@ test("C1-b: captureTaskCheckpoint 捕获内容正确（task_status + 三角会�
   assert.equal(roundtrip.sha256, sha256);
 });
 
-test("C1-b: 注入相同 now + 未变文件 → 两次捕获内容逐字节一致（纯函数、确定性）", () => {
+test("C1-b: 注入相同 now + 未变文件 → 两次捕获内容逐字节一致（纯函数、确定性）", async () => {
   const { dir, store } = setupRun();
   writeTask(dir, "task-x", "assigned");
   void registerTriadSessions(store);
@@ -199,7 +199,7 @@ test("C1-b: 注入相同 now + 未变文件 → 两次捕获内容逐字节一�
 // C1-c：task 缺失 → null；两次捕获不同 ts 文件且首文件不被覆盖；list 倒序/latest
 // ---------------------------------------------------------------------------
 
-test("C1-c: task 不存在 → capture 返回 null（且不产生目录）", () => {
+test("C1-c: task 不存在 → capture 返回 null（且不产生目录）", async () => {
   const { dir } = setupRun();
   const now = new Date("2026-08-14T00:00:00.000Z");
   assert.equal(captureTaskCheckpoint(dir, "task-missing", { now }), null);
@@ -207,7 +207,7 @@ test("C1-c: task 不存在 → capture 返回 null（且不产生目录）", () 
   assert.ok(!fs.existsSync(path.join(dir, "checkpoints")), "缺失 task 不得产生 checkpoint 目录");
 });
 
-test("C1-c: 两次捕获为不同 ts 文件且首文件不被覆盖（不可变）；list 倒序、latest 取最新", () => {
+test("C1-c: 两次捕获为不同 ts 文件且首文件不被覆盖（不可变）；list 倒序、latest 取最新", async () => {
   const { dir, store } = setupRun();
   writeTask(dir, "task-x", "assigned");
   void registerTriadSessions(store);
@@ -237,7 +237,7 @@ test("C1-c: 两次捕获为不同 ts 文件且首文件不被覆盖（不可变�
 //        转录损坏 → 摘要回退 null 不阻断捕获
 // ---------------------------------------------------------------------------
 
-test("C1-d: 非 git 仓库 → git.fingerprint null，捕获不抛", () => {
+test("C1-d: 非 git 仓库 → git.fingerprint null，捕获不抛", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-cp-nongit-"));
   writeTask(dir, "task-x", "queued");
   const now = new Date("2026-08-14T00:00:00.000Z");
@@ -256,7 +256,7 @@ test("C1-d: 非 git 仓库 → git.fingerprint null，捕获不抛", () => {
   );
 });
 
-test("C1-d: 转录损坏 → 摘要回退 null，不阻断捕获（其余字段完整）", () => {
+test("C1-d: 转录损坏 → 摘要回退 null，不阻断捕获（其余字段完整）", async () => {
   const { dir, store } = setupRun();
   writeTask(dir, "task-x", "assigned");
   void registerTriadSessions(store);
@@ -277,7 +277,7 @@ test("C1-d: 转录损坏 → 摘要回退 null，不阻断捕获（其余字段�
 // C1-e：CLI — --help 命令表含 checkpoint capture/status；capture 落盘可被 status 读到
 // ---------------------------------------------------------------------------
 
-test("C1-e: --help 命令表含 checkpoint capture / checkpoint status（D074 断言模式）", () => {
+test("C1-e: --help 命令表含 checkpoint capture / checkpoint status（D074 断言模式）", async () => {
   const { status, stdout } = runCli(["--help"]);
   assert.equal(status, 0);
   assert.ok(stdout.includes("checkpoint:"), "help shows checkpoint group");
@@ -285,7 +285,7 @@ test("C1-e: --help 命令表含 checkpoint capture / checkpoint status（D074 �
   assert.ok(stdout.includes("picode checkpoint status"), "help lists checkpoint status");
 });
 
-test("C1-e: capture 落盘后 status --task 可读到最新 checkpoint；缺失 task 报 NOT_FOUND", () => {
+test("C1-e: capture 落盘后 status --task 可读到最新 checkpoint；缺失 task 报 NOT_FOUND", async () => {
   const repo = gitInit({ prefix: "picode-cp-cli-" });
   const init = runCli(["init", "--repo", repo, "--goal-title", "t"]);
   assert.equal(init.status, 0, init.stderr);
@@ -348,20 +348,19 @@ function writeChunk(dir: string, chunkId: string, taskId: string): void {
   writeYamlFile(chunksPath, data);
 }
 
-test("C1 checkpoint-auto: 边界常量导出（guardian / pre_merge）", () => {
+test("C1 checkpoint-auto: 边界常量导出（guardian / pre_merge）", async () => {
   assert.equal(GUARDIAN_CHECKPOINT_BOUNDARY, "guardian");
   assert.equal(PRE_MERGE_CHECKPOINT_BOUNDARY, "pre_merge");
 });
 
-test("C1 checkpoint-auto: 默认配置（enabled=true）→ 无登记 task 时仍空结果（C2 翻转后回归）", () => {
+test("C1 checkpoint-auto: 默认配置（enabled=false）→ 空结果（D082 显式捕获行为不变）", async () => {
   const { dir, config } = setupRun();
-  assert.equal(config.self_evolve.checkpoints.enabled, true, "C2: 默认自动捕获开启");
   const r = captureDueGuardianCheckpoints(dir, config);
   assert.deepEqual(r, { boundary: GUARDIAN_CHECKPOINT_BOUNDARY, captured: [] });
-  assert.ok(!fs.existsSync(path.join(dir, "checkpoints")), "无登记 task 不得落任何 checkpoint");
+  assert.ok(!fs.existsSync(path.join(dir, "checkpoints")), "默认关闭不得落任何 checkpoint");
 });
 
-test("C1 checkpoint-auto: enabled + interval=0 → 捕获每个非终态已登记 task（boundary=guardian）", () => {
+test("C1 checkpoint-auto: enabled + interval=0 → 捕获每个非终态已登记 task（boundary=guardian）", async () => {
   const { dir, config, store } = setupRun();
   config.self_evolve.checkpoints.enabled = true;
   config.self_evolve.checkpoints.guardian_interval_sec = 0;
@@ -381,7 +380,7 @@ test("C1 checkpoint-auto: enabled + interval=0 → 捕获每个非终态已登�
   }
 });
 
-test("C1 checkpoint-auto: 终态 task（merged）跳过不捕获", () => {
+test("C1 checkpoint-auto: 终态 task（merged）跳过不捕获", async () => {
   const { dir, config, store } = setupRun();
   config.self_evolve.checkpoints.enabled = true;
   config.self_evolve.checkpoints.guardian_interval_sec = 0;
@@ -393,7 +392,7 @@ test("C1 checkpoint-auto: 终态 task（merged）跳过不捕获", () => {
   assert.ok(!fs.existsSync(path.join(dir, "checkpoints")), "终态任务不得捕获");
 });
 
-test("C1 checkpoint-auto: 节流 —— interval=600 首次捕获、立即重跑跳过、超间隔再捕获", () => {
+test("C1 checkpoint-auto: 节流 —— interval=600 首次捕获、立即重跑跳过、超间隔再捕获", async () => {
   const { dir, config, store } = setupRun();
   config.self_evolve.checkpoints.enabled = true;
   config.self_evolve.checkpoints.guardian_interval_sec = 600;
@@ -414,7 +413,7 @@ test("C1 checkpoint-auto: 节流 —— interval=600 首次捕获、立即重跑
   assert.equal(listTaskCheckpoints(dir, "task-x").length, 2, "不可变：两次捕获两个 ts 文件");
 });
 
-test("C1 checkpoint-auto: 无 task.yaml → 跳过不崩溃", () => {
+test("C1 checkpoint-auto: 无 task.yaml → 跳过不崩溃", async () => {
   const { dir, config } = setupRun();
   config.self_evolve.checkpoints.enabled = true;
   config.self_evolve.checkpoints.guardian_interval_sec = 0;
@@ -423,7 +422,7 @@ test("C1 checkpoint-auto: 无 task.yaml → 跳过不崩溃", () => {
   assert.deepEqual(r.captured, []);
 });
 
-test("C1 checkpoint-auto: guardianCaptureDue 纯函数（interval=0 恒 due；从未捕获 → due；pre_merge 不重置时钟）", () => {
+test("C1 checkpoint-auto: guardianCaptureDue 纯函数（interval=0 恒 due；从未捕获 → due；pre_merge 不重置时钟）", async () => {
   const { dir, store } = setupRun();
   writeTask(dir, "task-x", "assigned");
   void registerTriadSessions(store);
@@ -441,7 +440,7 @@ test("C1 checkpoint-auto: guardianCaptureDue 纯函数（interval=0 恒 due；�
   assert.equal(guardianCaptureDue(dir, "task-x", 600, now), false, "pre_merge 捕获不得重置 guardian 时钟");
 });
 
-test("C1 checkpoint-auto: merge 前捕获边界 → boundary=pre_merge", () => {
+test("C1 checkpoint-auto: merge 前捕获边界 → boundary=pre_merge", async () => {
   const { dir, store } = setupRun();
   writeTask(dir, "task-x", "assigned");
   void registerTriadSessions(store);

@@ -28,7 +28,7 @@ export const taskCommands: Command[] = [
     run: async (ctx: CommandContext) => {
       const id = need(ctx, "--id");
       const write = need(ctx, "--write");
-      const { taskId } = addChunkAndTask(ctx.repo, ctx.dir!, ctx.config!, {
+      const { taskId } = await addChunkAndTask(ctx.repo, ctx.dir!, ctx.config!, {
         chunkId: id,
         writePaths: [write],
       });

@@ -79,7 +79,7 @@ test("rule events are idempotent (re-apply is safe)", async () => {
 test("task_ready wakes the task triad; task_dissolved terminates it (T27 basis)", async () => {
   const { repo, dir, config, store } = setupRun();
   activateGoal(dir);
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });
@@ -101,7 +101,7 @@ test("task_ready wakes the task triad; task_dissolved terminates it (T27 basis)"
 test("DoD: max_awake=2 never leaves 3 awake implementation seats", async () => {
   const { repo, dir, config, store } = setupRun({ maxAwake: 2 });
   activateGoal(dir);
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });

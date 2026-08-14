@@ -16,14 +16,14 @@ function expectCode(e: unknown, code: ErrorCode): void {
   assert.equal(e.code, code);
 }
 
-test("register sponsor throws coded SESSION_HUMAN_ONLY", () => {
+test("register sponsor throws coded SESSION_HUMAN_ONLY", async () => {
   assert.throws(() => freshStore().register("sponsor"), (e: unknown) => {
     expectCode(e, ErrorCode.SESSION_HUMAN_ONLY);
     return true;
   });
 });
 
-test("duplicate register throws coded SESSION_ALREADY_REGISTERED", () => {
+test("duplicate register throws coded SESSION_ALREADY_REGISTERED", async () => {
   const store = freshStore();
   store.register("pm");
   assert.throws(() => store.register("pm"), (e: unknown) => {

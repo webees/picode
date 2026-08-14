@@ -45,7 +45,7 @@ async function wakePlatformSeats(store: SessionStore, agents: string[]): Promise
   for (const a of agents) await store.wake(a, "audit-test");
 }
 
-test("isTerminalGoal: completed/cancelled are terminal; active/intake are not", () => {
+test("isTerminalGoal: completed/cancelled are terminal; active/intake are not", async () => {
   assert.equal(isTerminalGoal("completed"), true);
   assert.equal(isTerminalGoal("cancelled"), true);
   for (const s of ["intake", "draft", "active", "blocked"]) {
@@ -53,7 +53,7 @@ test("isTerminalGoal: completed/cancelled are terminal; active/intake are not", 
   }
 });
 
-test("deriveAuditReport: empty runsRoot yields all-zero summary", () => {
+test("deriveAuditReport: empty runsRoot yields all-zero summary", async () => {
   const { config, root } = setupRuns();
   const report = deriveAuditReport(path.join(root, "does-not-exist"), config);
   assert.deepEqual(report.summary, {
@@ -67,7 +67,7 @@ test("deriveAuditReport: empty runsRoot yields all-zero summary", () => {
   });
 });
 
-test("deriveAuditReport: lists run ids only for dirs with goal.yaml", () => {
+test("deriveAuditReport: lists run ids only for dirs with goal.yaml", async () => {
   const { root } = setupRuns();
   fs.mkdirSync(path.join(root, "not-a-run"), { recursive: true });
   assert.deepEqual(listRunIds(root), []);

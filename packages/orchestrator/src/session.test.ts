@@ -22,7 +22,7 @@ function freshStore(): { dir: string; store: SessionStore } {
   return { dir: runDir, store: new SessionStore(runDir) };
 }
 
-test("T20: init registers all platform roles sleeping; sponsor absent", () => {
+test("T20: init registers all platform roles sleeping; sponsor absent", async () => {
   const repo = tmpGitRepo();
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir } = resolveRunDir(repo, runId);
@@ -91,12 +91,12 @@ test("illegal transitions are rejected", async () => {
   await assert.rejects(() => store.sleep("run-lead", "again"), /illegal session transition/);
 });
 
-test("sponsor cannot be registered (17 §3.1 / T26 basis)", () => {
+test("sponsor cannot be registered (17 §3.1 / T26 basis)", async () => {
   const { store } = freshStore();
   assert.throws(() => store.register("sponsor"), /human-only/);
 });
 
-test("state machine edge table", () => {
+test("state machine edge table", async () => {
   // legal edges from 17 §4: registered→sleeping, sleeping⇄awake, sleeping/awake→terminated
   assert.equal(canTransition("registered", "sleeping"), true);
   assert.equal(canTransition("sleeping", "awake"), true);

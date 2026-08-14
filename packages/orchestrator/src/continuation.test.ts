@@ -623,12 +623,12 @@ test("C2: max_per_session_platform 0 = 平台席不限（预算门放行，0=不
 // 语义续跑（N7 升级）：composeContinuationPrompt 纯函数 + feed 集成注入要点
 // ---------------------------------------------------------------------------
 
-test("C1: composeContinuationPrompt(null) 逐字节等于 CONTINUATION_PROMPT", () => {
+test("C1: composeContinuationPrompt(null) 逐字节等于 CONTINUATION_PROMPT", async () => {
   assert.equal(composeContinuationPrompt(null), CONTINUATION_PROMPT);
   assert.equal(composeContinuationPrompt(null).length, CONTINUATION_PROMPT.length);
 });
 
-test("C1: composeContinuationPrompt(summary) 含模板 + 转录要点段", () => {
+test("C1: composeContinuationPrompt(summary) 含模板 + 转录要点段", async () => {
   const summary = "历史转录共 2 条（outgoing 1 / incoming 1），最近 2 条要点：\n- [t1] 投喂: xxx\n- [t2] 响应: yyy";
   const out = composeContinuationPrompt(summary);
   assert.ok(out.startsWith(CONTINUATION_PROMPT), "模板必须原样置于开头");

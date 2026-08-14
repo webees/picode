@@ -32,7 +32,7 @@ async function setupPreparedTask(opts: { scale?: "S" | "M" | "L" } = {}) {
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["feature works"]);
   setGoalStatus(dir, "active");
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });
@@ -120,11 +120,11 @@ test("merge queue honors chunk depends_on (11 stage 7 topological order)", async
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["works"]);
   setGoalStatus(dir, "active");
-  const { taskId: taskA } = addChunkAndTask(repo, dir, config, {
+  const { taskId: taskA } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/a/**"],
   });
-  const { taskId: taskB } = addChunkAndTask(repo, dir, config, {
+  const { taskId: taskB } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-b",
     writePaths: ["src/b/**"],
   });
@@ -169,11 +169,11 @@ test("merge queue treats a failed dependency as non-blocking (no wedge)", async 
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["works"]);
   setGoalStatus(dir, "active");
-  const { taskId: taskA } = addChunkAndTask(repo, dir, config, {
+  const { taskId: taskA } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/a/**"],
   });
-  addChunkAndTask(repo, dir, config, {
+  await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-b",
     writePaths: ["src/b/**"],
   });
@@ -212,11 +212,11 @@ test("merge queue detects a dependency cycle among queued tasks", async () => {
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["works"]);
   setGoalStatus(dir, "active");
-  const { taskId: taskA } = addChunkAndTask(repo, dir, config, {
+  const { taskId: taskA } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/a/**"],
   });
-  const { taskId: taskB } = addChunkAndTask(repo, dir, config, {
+  const { taskId: taskB } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-b",
     writePaths: ["src/b/**"],
   });
@@ -297,7 +297,7 @@ test("failed merge aborts and leaves the working tree clean (11 stage 7)", async
   const { repo, dir, config, taskId, worktree } = await setupPreparedTask();
   // second task touching the same file to force a conflict — its branch is
   // created directly on main (no need for a full brief/staffing pipeline here)
-  const { taskId: taskB } = addChunkAndTask(repo, dir, config, {
+  const { taskId: taskB } = await await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-conflict",
     writePaths: ["src/module-a/**"],
   });

@@ -25,13 +25,13 @@ function setup() {
   return { repo, runId, dir, config };
 }
 
-test("active is rejected before product acceptance criteria exist (P01)", () => {
+test("active is rejected before product acceptance criteria exist (P01)", async () => {
   const { dir } = setup();
   assert.throws(() => setGoalStatus(dir, "active"), /no product acceptance criteria/);
   assert.equal(readGoal(dir).status, "intake");
 });
 
-test("setProductAcceptance then active succeeds; product/brief.md written", () => {
+test("setProductAcceptance then active succeeds; product/brief.md written", async () => {
   const { dir } = setup();
   setProductAcceptance(dir, ["module-a compiles", "tests pass"]);
   const goal = setGoalStatus(dir, "active");
@@ -42,7 +42,7 @@ test("setProductAcceptance then active succeeds; product/brief.md written", () =
   assert.match(brief, /module-a compiles/);
 });
 
-test("product room members include pm and sponsor (T28)", () => {
+test("product room members include pm and sponsor (T28)", async () => {
   const { dir } = setup();
   const bus = new RoomStore(dir);
   const members = bus.loadMembers("product");

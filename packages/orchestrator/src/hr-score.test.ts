@@ -19,13 +19,13 @@ function tmpGitRepo(): string {
   return dir;
 }
 
-function setup() {
+async function setup() {
   const repo = tmpGitRepo();
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["module-a compiles and tests pass"]);
   setGoalStatus(dir, "active");
-  const { taskId } = addChunkAndTask(repo, dir, config, {
+  const { taskId } = await addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });
@@ -57,7 +57,7 @@ function finishTask(dir: string, taskId: string): void {
 }
 
 test("score: happy path yields ~100 team/persona and persists scores.yaml + knowledge archives", async () => {
-  const { repo, dir, config, taskId } = setup();
+  const { repo, dir, config, taskId } = await setup();
   const staffing = await hire(repo, dir, config, taskId);
   finishTask(dir, taskId);
 
@@ -94,7 +94,7 @@ test("score: happy path yields ~100 team/persona and persists scores.yaml + know
 });
 
 test("score: re-scoring is idempotent (archive records keyed by task+seat)", async () => {
-  const { repo, dir, config, taskId } = setup();
+  const { repo, dir, config, taskId } = await setup();
   const staffing = await hire(repo, dir, config, taskId);
   finishTask(dir, taskId);
   scoreTask(repo, dir, config, taskId);
@@ -107,7 +107,7 @@ test("score: re-scoring is idempotent (archive records keyed by task+seat)", asy
 });
 
 test("score: failed evidence and retries drag the score down", async () => {
-  const { repo, dir, config, taskId } = setup();
+  const { repo, dir, config, taskId } = await setup();
   await hire(repo, dir, config, taskId);
   const tpath = path.join(dir, "tasks", taskId, "task.yaml");
   const task = YAML.parse(fs.readFileSync(tpath, "utf8")) as { status: string; retries: number };
@@ -127,13 +127,13 @@ test("score: failed evidence and retries drag the score down", async () => {
   assert.equal(sdet.breakdown.seat, -5);
 });
 
-test("score: refuses without approved staffing", () => {
-  const { repo, dir, config, taskId } = setup();
+test("score: refuses without approved staffing", async () => {
+  const { repo, dir, config, taskId } = await setup();
   assert.throws(() => scoreTask(repo, dir, config, taskId), /staffing not approved/);
 });
 
 test("score: refuses a task that has not finished (16 §9 P07 gate)", async () => {
-  const { repo, dir, config, taskId } = setup();
+  const { repo, dir, config, taskId } = await setup();
   await hire(repo, dir, config, taskId);
   // task.status is still "queued" (never dissolved) → must refuse
   assert.throws(() => scoreTask(repo, dir, config, taskId), /not finished/);
