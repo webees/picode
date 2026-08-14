@@ -374,19 +374,3 @@ export function useGates(runId: string) {
     staleTime: LIVE_POLL_INTERVAL_MS,
   })
 }
-
-/** GET /api/live/:runId/:agent — serve tokens 实时轮询（D5 2–5s）。 */
-export function useLiveTokens(
-  runId: string,
-  agentId: string,
-  opts: { enabled?: boolean, refetchInterval?: number } = {},
-) {
-  return useQuery({
-    queryKey: ['picode', 'live', runId, agentId],
-    queryFn: () => fetchLiveTokens(runId, agentId),
-    enabled: (opts.enabled ?? true) && !!runId && !!agentId,
-    refetchInterval: opts.refetchInterval ?? LIVE_POLL_INTERVAL_MS,
-    refetchIntervalInBackground: true,
-    staleTime: LIVE_POLL_INTERVAL_MS,
-  })
-}
