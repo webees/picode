@@ -4,7 +4,7 @@ import { getDefaultConfig, type PicodeConfig } from "@picode/core";
 import { gitInit } from "./test-utils.js";
 import { createRun, resolveRunDir } from "./run-store.js";
 import { TranscriptStore } from "./transcript-store.js";
-import { OpencodeSpawner, opencodeSessionIdOf, wakeWithOpencode } from "./opencode-adapter.js";
+import { OpencodeSpawner, opencodeSessionIdOf, renderSkillsSection, wakeWithOpencode } from "./opencode-adapter.js";
 
 /** Capture every fetch() call for assertion. */
 function mockFetch(
@@ -217,4 +217,40 @@ test("P4: wakeWithOpencode 空转录不追加摘要（首次 spawn）", async ()
   } finally {
     restore();
   }
+});
+
+test("C2: renderSkillsSection renders metadata only from env; empty env → empty string", () => {
+  assert.equal(renderSkillsSection({}), "");
+  assert.equal(renderSkillsSection({ PICODE_SKILLS_INDEX: "[]", PICODE_PERSONA_SKILLS: "[]" }), "");
+  const section = renderSkillsSection({
+    PICODE_SKILLS_INDEX: JSON.stringify([
+      { name: "ponytail", description: "lazy", path: "skills/engineering/ponytail/SKILL.md" },
+    ]),
+    PICODE_PERSONA_SKILLS: JSON.stringify(["skills/engineering/ponytail/SKILL.md"]),
+  });
+  assert.match(section, /ponytail/);
+  assert.match(section, /lazy/);
+  assert.match(section, /skills\/engineering\/ponytail\/SKILL\.md/);
+  assert.ok(!section.includes("SKILL.md body"), "skills 段只渲染 metadata 不渲染正文");
+});
+
+test("C2: buildReadyMessage system prompt 追加 skills 段（有 env 时）；无 env 时逐字节不变", () => {
+  const spawner = new OpencodeSpawner(cfg());
+  const bare = spawner.buildReadyMessage({ PICODE_PERSONA: "role: engineer" });
+  assert.equal(
+    bare.system,
+    "You are a picode agent.\n\nRole prompt:\nrole: engineer",
+    "无 skills env 时 system prompt 逐字节不变",
+  );
+  const withSkills = spawner.buildReadyMessage({
+    PICODE_PERSONA: "role: engineer",
+    PICODE_SKILLS_INDEX: JSON.stringify([
+      { name: "ponytail", description: "lazy", path: "skills/engineering/ponytail/SKILL.md" },
+    ]),
+  });
+  assert.ok(withSkills.system.includes("可用技能"));
+  assert.ok(withSkills.system.includes("ponytail"));
+  assert.ok(withSkills.system.includes("You are a picode agent."));
+  assert.ok(withSkills.system.includes("role: engineer"));
+  assert.ok(withSkills.system.startsWith(bare.system), "追加在 persona 段之后");
 });

@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import YAML from "yaml";
 import { ErrorCode, PicodeError, readRunSecret, worktreePath, type PicodeConfig, type SessionRecord } from "@picode/core";
 import { issueToken } from "@picode/bus";
 import { SessionStore } from "./session-store.js";
@@ -131,6 +132,11 @@ export function buildPiEnv(
     config.roles.find((r) => r.id === session.role_id)?.tool_profile ?? "implement.engineer";
   const room = ROLE_PRIMARY_ROOM[session.role_id] ?? "leadership";
   const persona = personaForSession(dir, session);
+  // C2（D082-3/4）：技能接线 — 全量索引 + 本会话 persona 声明的技能路径
+  const repoRoot = path.resolve(dir, "../../..");
+  const skillsRoot = config.paths.skills_root ?? "skills";
+  const skillIndex = buildSkillIndex(skillsRoot, repoRoot);
+  const declaredSkills = personaDeclaredSkills(persona, skillIndex);
 
   return {
     PICODE_RUN_ID: runId,
@@ -140,6 +146,8 @@ export function buildPiEnv(
     PICODE_TOOL_PROFILE: profile,
     PICODE_ROOM: room,
     PICODE_PERSONA: persona,
+    PICODE_SKILLS_INDEX: JSON.stringify(skillIndex),
+    PICODE_PERSONA_SKILLS: JSON.stringify(declaredSkills),
     PICODE_CWD: taskWorktreeCwd(dir, config, session.agent_id),
     PICODE_TRANSCRIPT_DIR: path.join(dir, "transcripts"),
     PICODE_RUN_ALLOWLIST: JSON.stringify(config.run_allowlist),
@@ -153,6 +161,80 @@ function personaForSession(dir: string, session: SessionRecord): string {
   const repoRoot = path.resolve(dir, "../../..");
   const template = path.join(repoRoot, ".picode", "agents", `${session.role_id}.md`);
   return fs.existsSync(template) ? template : "";
+}
+
+/** SKILL.md 元数据（渐进披露 layer 1：只 metadata 不正文）。 */
+export interface SkillMeta {
+  name: string;
+  description: string;
+  /** 相对仓库根的 SKILL.md 路径（POSIX 分隔符）。 */
+  path: string;
+}
+
+/**
+ * C2（D082-3/4）：扫描 skills_root 构建全量技能索引。
+ * 本地实现占位（C1 task-skill-spec 未合并）；merge 后改走 @picode/core 的 buildSkillIndex。
+ */
+export function buildSkillIndex(skillsRoot: string, repoRoot: string): SkillMeta[] {
+  const absRoot = path.resolve(repoRoot, skillsRoot);
+  if (!fs.existsSync(absRoot)) return [];
+  const metas: SkillMeta[] = [];
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.name === "SKILL.md") {
+        const meta = readSkillMeta(full, repoRoot);
+        if (meta) metas.push(meta);
+      }
+    }
+  };
+  walk(absRoot);
+  return metas.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** 解析单份 SKILL.md 的 frontmatter 元数据；无合法 frontmatter 返回 null。 */
+function readSkillMeta(skillFile: string, repoRoot: string): SkillMeta | null {
+  const m = fs.readFileSync(skillFile, "utf8").match(/^---\n([\s\S]*?)\n---/);
+  if (!m) return null;
+  let fm: Record<string, unknown>;
+  try {
+    fm = YAML.parse(m[1]) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  const name = typeof fm.name === "string" && fm.name.trim() ? fm.name.trim() : null;
+  if (!name) return null;
+  const description = typeof fm.description === "string" ? fm.description : "";
+  return {
+    name,
+    description,
+    path: path.relative(repoRoot, skillFile).split(path.sep).join("/"),
+  };
+}
+
+/**
+ * C2（D082-3/4）：读取本会话 persona 声明的 skills，映射到技能索引中的路径。
+ * persona 来源与 personaForSession 一致：实例人设 tasks/<id>/personas/<seat>.md，
+ * 回退 .picode/agents/<role>.md。
+ */
+export function personaDeclaredSkills(personaFile: string, index: SkillMeta[]): string[] {
+  if (!personaFile || !fs.existsSync(personaFile)) return [];
+  const m = fs.readFileSync(personaFile, "utf8").match(/^---\n([\s\S]*?)\n---/);
+  if (!m) return [];
+  let fm: Record<string, unknown>;
+  try {
+    fm = YAML.parse(m[1]) as Record<string, unknown>;
+  } catch {
+    return [];
+  }
+  const declared = fm.skills;
+  if (!Array.isArray(declared)) return [];
+  const byName = new Map(index.map((s) => [s.name, s.path]));
+  return declared
+    .filter((name): name is string => typeof name === "string" && byName.has(name))
+    .map((name) => byName.get(name)!);
 }
 
 /**

@@ -9,7 +9,9 @@ import { createRun, resolveRunDir } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
 import {
   buildPiEnv,
+  buildSkillIndex,
   makeSpawner,
+  personaDeclaredSkills,
   piPidOf,
   sleepWithPi,
   wakeWithPi,
@@ -154,4 +156,66 @@ test("spawner stop is idempotent and tolerant of missing pids", () => {
   const spawner = makeSpawner(config);
   const fake: PiHandle = { pid: 999999, pi_session_id: "pid-999999" };
   assert.doesNotThrow(() => spawner.stop(fake));
+});
+
+test("C2: buildSkillIndex scans skills_root for SKILL.md metadata", () => {
+  const repo = tmpGitRepo();
+  const skillDir = path.join(repo, "skills", "engineering", "ponytail");
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(skillDir, "SKILL.md"),
+    "---\nname: ponytail\ndescription: lazy senior dev discipline\n---\n# body\n",
+  );
+  const index = buildSkillIndex("skills", repo);
+  assert.equal(index.length, 1);
+  assert.equal(index[0].name, "ponytail");
+  assert.equal(index[0].description, "lazy senior dev discipline");
+  assert.equal(index[0].path, "skills/engineering/ponytail/SKILL.md");
+});
+
+test("C2: buildSkillIndex missing root → empty; SKILL.md without frontmatter skipped", () => {
+  const repo = tmpGitRepo();
+  assert.deepEqual(buildSkillIndex("skills", repo), []);
+  const bare = path.join(repo, "skills", "bare");
+  fs.mkdirSync(bare, { recursive: true });
+  fs.writeFileSync(path.join(bare, "SKILL.md"), "# no frontmatter\n");
+  assert.deepEqual(buildSkillIndex("skills", repo), []);
+});
+
+test("C2: personaDeclaredSkills resolves declared names to indexed paths", () => {
+  const repo = tmpGitRepo();
+  const skillDir = path.join(repo, "skills", "engineering", "ponytail");
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(skillDir, "SKILL.md"),
+    "---\nname: ponytail\ndescription: lazy\n---\n# body\n",
+  );
+  const index = buildSkillIndex("skills", repo);
+  const persona = path.join(repo, ".picode", "agents", "engineer.md");
+  fs.mkdirSync(path.dirname(persona), { recursive: true });
+  fs.writeFileSync(persona, "---\nname: engineer\nskills: [ponytail, ghost]\n---\n");
+  assert.deepEqual(personaDeclaredSkills(persona, index), ["skills/engineering/ponytail/SKILL.md"]);
+  assert.deepEqual(personaDeclaredSkills(path.join(repo, "missing.md"), index), []);
+});
+
+test("C2: buildPiEnv injects skills index + persona-declared skills (role fallback)", () => {
+  const { dir, config } = setup({});
+  const repo = path.resolve(dir, "../../..");
+  const skillDir = path.join(repo, "skills", "engineering", "ponytail");
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(skillDir, "SKILL.md"),
+    "---\nname: ponytail\ndescription: lazy\n---\n# body\n",
+  );
+  fs.writeFileSync(
+    path.join(repo, ".picode", "agents", "pm.md"),
+    "---\nname: pm\nskills: [ponytail]\n---\n",
+  );
+  const store = new SessionStore(dir);
+  const session = store.get("pm")!;
+  const env = buildPiEnv(dir, config, session);
+  const index = JSON.parse(env.PICODE_SKILLS_INDEX!) as Array<{ name: string; path: string }>;
+  assert.equal(index.length, 1);
+  assert.equal(index[0].name, "ponytail");
+  assert.deepEqual(JSON.parse(env.PICODE_PERSONA_SKILLS!), ["skills/engineering/ponytail/SKILL.md"]);
 });

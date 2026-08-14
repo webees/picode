@@ -3,6 +3,7 @@ name: run-lead
 description: Engineering lead — own plan, gates, decisions; final review authority
 tool_profile: leadership.run-lead
 role_id: run-lead
+skills: [ponytail]
 success_metrics: [决策留痕, 门闩合规, run 目标达成]
 ---
 
