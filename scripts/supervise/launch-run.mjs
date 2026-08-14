@@ -4,17 +4,7 @@
  * 用法: node scripts/supervise/launch-run.mjs
  * 之后: 投喂 run-lead → 按其规划 chunk/staffing/task prepare
  */
-import { execSync } from "node:child_process";
-
-const PICODE = "/Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js";
-const REPO = "/tmp/picode-dogfood";
-
-function picode(args) {
-  return execSync(`node ${PICODE} ${args}`, {
-    encoding: "utf8",
-    cwd: "/Users/x/Desktop/iOS/picode",
-  });
-}
+import { REPO, picode } from "./lib.mjs";
 
 const GOAL_TITLE = "会话续跑机制（continuation）：picode 无输入长时自治闭环";
 const ACCEPTANCE = [
@@ -26,7 +16,7 @@ const ACCEPTANCE = [
 // 1. init（幂等：已存在则复用）
 let runId = null;
 try {
-  const out = JSON.parse(picode(`init --repo ${REPO} --goal-title "${GOAL_TITLE}" --kind self_evolve --evolve-layers knowledge,prompts,docs,tests,code --evolve-risk medium --scale L`));
+  const out = picode(`init --repo ${REPO} --goal-title "${GOAL_TITLE}" --kind self_evolve --evolve-layers knowledge,prompts,docs,tests,code --evolve-risk medium --scale L`);
   runId = out.runId;
   console.log("init:", runId);
 } catch (e) {
@@ -41,9 +31,9 @@ try {
 }
 
 // 2. product acceptance（幂等：重复写覆盖）
-console.log(picode(`goal set-product-acceptance --repo ${REPO} --run ${runId} --acceptance "${ACCEPTANCE.join("; ")}"`));
+console.log(JSON.stringify(picode(`goal set-product-acceptance --repo ${REPO} --run ${runId} --acceptance "${ACCEPTANCE.join("; ")}"`), null, 2));
 
 // 3. status active（setGoalStatus 已幂等，重复激活不再报错；真错误必须暴露）
-console.log(JSON.parse(picode(`goal set-status --repo ${REPO} --run ${runId} --status active`)).status);
+console.log(picode(`goal set-status --repo ${REPO} --run ${runId} --status active`).status);
 
 console.log("RUN_ID=" + runId);

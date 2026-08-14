@@ -7,14 +7,11 @@
  *       同步投喂并等待模型回合完成（轮询 message history 兜底）
  *   node feed.mjs poll --session oc-ses_xxx            → 最近消息 + tokens（监控）
  */
-const BASE = "http://127.0.0.1:7788";
 const MODEL = { providerID: "opencode-go", modelID: "deepseek-v4-flash" };
 
+import { BASE, flag } from "./lib.mjs";
+
 const args = process.argv.slice(2);
-function flag(name) {
-  const i = args.indexOf(`--${name}`);
-  return i >= 0 && i + 1 < args.length ? args[i + 1] : null;
-}
 const cmd = args[0];
 
 async function req(method, urlPath, body, timeoutMs = 60000) {
@@ -47,16 +44,16 @@ async function lastActivity(sessionId) {
 }
 
 if (cmd === "spawn") {
-  const { id } = await req("POST", "/session", { title: flag("title") ?? "picode:agent" });
+  const { id } = await req("POST", "/session", { title: flag(args, "title") ?? "picode:agent" });
   console.log(`oc-${id}`);
 } else if (cmd === "ask") {
-  const sessionId = (flag("session") ?? "").replace(/^oc-/, "");
-  const text = flag("text");
+  const sessionId = (flag(args, "session") ?? "").replace(/^oc-/, "");
+  const text = flag(args, "text");
   if (!sessionId || !text) {
     console.error("usage: feed.mjs ask --session <id> --text <text> [--timeout ms]");
     process.exit(1);
   }
-  const timeoutMs = Number(flag("timeout") ?? 540000);
+  const timeoutMs = Number(flag(args, "timeout") ?? 540000);
   const before = await lastActivity(sessionId);
   const body = { parts: [{ type: "text", text }], noReply: false, model: MODEL };
   const t0 = Date.now();
@@ -87,7 +84,7 @@ if (cmd === "spawn") {
     last_text: after.lastText,
   }, null, 2));
 } else if (cmd === "poll") {
-  const sessionId = (flag("session") ?? "").replace(/^oc-/, "");
+  const sessionId = (flag(args, "session") ?? "").replace(/^oc-/, "");
   if (!sessionId) {
     console.error("usage: feed.mjs poll --session <id>");
     process.exit(1);

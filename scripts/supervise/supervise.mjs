@@ -8,16 +8,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 
+import { BASE, REPO, flag, picode } from "./lib.mjs";
+
 const args = process.argv.slice(2);
-function flag(name) {
-  const i = args.indexOf(`--${name}`);
-  return i >= 0 && i + 1 < args.length ? args[i + 1] : null;
-}
-const RUN_ID = flag("run");
-const INTERVAL = Number(flag("interval") ?? 300000);
-const RUN_DIR = `/tmp/picode-dogfood/.picode/runs/${RUN_ID}`;
+const RUN_ID = flag(args, "run");
+const INTERVAL = Number(flag(args, "interval") ?? 300000);
+const RUN_DIR = `${REPO}/.picode/runs/${RUN_ID}`;
 const LOG = "/tmp/picode-supervise.log";
-const BASE = "http://127.0.0.1:7788";
 
 // 启动校验：run id 白名单（同时消除 execSync 拼接注入面）+ run 目录真实存在，
 // 否则监督者会在不存在的目录上空转、永不停止。
@@ -50,12 +47,9 @@ async function pollTokens(sessionId) {
   }
 }
 
-function cli(args) {
+function cli(cmdArgs) {
   try {
-    return JSON.parse(execSync(
-      `node /Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js ${args} --repo /tmp/picode-dogfood --run ${RUN_ID}`,
-      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-    ));
+    return picode(cmdArgs, { run: RUN_ID });
   } catch (e) {
     return { error: String(e.stderr || e.message).slice(0, 200) };
   }
@@ -85,7 +79,7 @@ while (true) {
       }
     }
     // worktree 文件数
-    const wt = `/tmp/picode-dogfood/.picode/worktrees/${RUN_ID}`;
+    const wt = `${REPO}/.picode/worktrees/${RUN_ID}`;
     if (fs.existsSync(wt)) {
       row.worktrees = execSync(`find ${wt} -type f -name "*.ts" | wc -l`, { encoding: "utf8" }).trim();
     }

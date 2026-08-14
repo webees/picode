@@ -9,7 +9,7 @@ import YAML from "yaml";
 
 const PICODE = "/Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js";
 const REPO = "/tmp/picode-dogfood";
-const RUN = "run-2026-08-14T10-07-06-439Z";
+const RUN = "run-2026-08-14T11-14-26-837Z";
 const RUN_DIR = `${REPO}/.picode/runs/${RUN}`;
 
 const CHUNKS = {
@@ -301,6 +301,21 @@ const CHUNKS = {
   "supervise-docs": {
     first: "docs/DECISIONS.md",
     write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-14T10-07-06-439Z.md"],
+    skills: "docs,spec",
+  },
+  "checkpoint-status-triad": {
+    first: "packages/orchestrator/src/status.ts",
+    write: ["packages/orchestrator/src/status.ts", "packages/orchestrator/src/status.test.ts", "packages/orchestrator/src/commands/checkpoint.ts", "packages/mcp-server/src/management.ts", "packages/mcp-server/src/management.test.ts"],
+    skills: "typescript,status,mcp",
+  },
+  "checkpoint-auto-default": {
+    first: "packages/core/src/config.ts",
+    write: ["packages/core/src/config.ts", "packages/core/src/config.test.ts", "packages/orchestrator/src/checkpoint-store.ts", "packages/orchestrator/src/checkpoint-store.test.ts"],
+    skills: "typescript,config",
+  },
+  "triad-docs": {
+    first: "docs/DECISIONS.md",
+    write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-14T11-14-26-837Z.md"],
     skills: "docs,spec",
   },
 };
