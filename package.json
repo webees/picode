@@ -22,7 +22,7 @@
     "test": "find packages -name \"*.tsbuildinfo\" -delete && TH=$(mktemp -d /tmp/picode-test-home.XXXXXX) && HOME=$TH npm run test -w @picode/core && HOME=$TH npm run test -w @picode/bus && HOME=$TH npm run test -w @picode/orchestrator && HOME=$TH npm run test -w @picode/pi-extension && HOME=$TH npm run test -w @picode/mcp-server && HOME=$TH npm run test -w @picode/dashboard-server",
     "picode": "node packages/orchestrator/dist/cli.js",
     "mcp": "node packages/mcp-server/dist/index.js",
-    "check": "npm run build -w @picode/core && node packages/core/dist/validate/persona-lint.js . && node packages/core/dist/validate/skill-lint.js .",
+    "check": "npm run build -w @picode/core && node packages/core/dist/validate/persona-lint.js . && node packages/core/dist/validate/skill-lint.js . && node packages/core/dist/validate/decision-lint.js .",
     "test:e2e": "bash scripts/e2e/smoke.sh",
     "typecheck": "tsc -b --pretty false"
   },

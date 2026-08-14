@@ -29,3 +29,5 @@ export * from "./naming.js";
 export * from "./evolve.js";
 // skill harness core (D082): skills_root discovery/index/persona declarations
 export * from "./skills.js";
+// decision ledger lint (D090): DECISIONS numbering integrity + watermark consistency
+export * from "./validate/decision-lint.js";
