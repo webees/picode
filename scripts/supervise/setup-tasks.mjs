@@ -9,7 +9,7 @@ import YAML from "yaml";
 
 const PICODE = "/Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js";
 const REPO = "/tmp/picode-dogfood";
-const RUN = "run-2026-08-13T23-50-59-484Z";
+const RUN = "run-2026-08-14T07-27-45-654Z";
 const RUN_DIR = `${REPO}/.picode/runs/${RUN}`;
 
 const CHUNKS = {
@@ -256,6 +256,21 @@ const CHUNKS = {
   "skill-docs": {
     first: "docs/standards/skill-spec.md",
     write: ["docs/standards/skill-spec.md", "docs/guides/skills/skill-harness.md", "skills/README.md", "docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/knowledge/evolve/run-2026-08-13T23-50-59-484Z.md"],
+    skills: "docs,spec",
+  },
+  "decision-reserve": {
+    first: "docs/decisions/watermark.yaml",
+    write: ["docs/decisions/watermark.yaml", "scripts/decision-reserve.mjs", "scripts/decision-reserve.test.mjs", "docs/DECISIONS.md"],
+    skills: "typescript,scripting",
+  },
+  "decision-lint": {
+    first: "packages/core/src/validate/decision-lint.ts",
+    write: ["packages/core/src/validate/decision-lint.ts", "packages/core/src/validate/decision-lint.test.ts", "package.json", "packages/core/src/index.ts"],
+    skills: "typescript,validation",
+  },
+  "decision-docs": {
+    first: "docs/DECISIONS.md",
+    write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-14T07-27-45-654Z.md"],
     skills: "docs,spec",
   },
 };
