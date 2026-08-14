@@ -50,19 +50,28 @@ if (cmd === "spawn") {
   const { id } = await req("POST", "/session", { title: flag("title") ?? "picode:agent" });
   console.log(`oc-${id}`);
 } else if (cmd === "ask") {
-  const sessionId = flag("session").replace(/^oc-/, "");
+  const sessionId = (flag("session") ?? "").replace(/^oc-/, "");
   const text = flag("text");
+  if (!sessionId || !text) {
+    console.error("usage: feed.mjs ask --session <id> --text <text> [--timeout ms]");
+    process.exit(1);
+  }
   const timeoutMs = Number(flag("timeout") ?? 540000);
   const before = await lastActivity(sessionId);
   const body = { parts: [{ type: "text", text }], noReply: false, model: MODEL };
-  let resp = null;
-  try {
-    resp = await req("POST", `/session/${sessionId}/message`, body, timeoutMs);
-  } catch (e) {
-    console.error(`[feed] POST failed (${e.message}) — falling back to history poll`);
-  }
-  // 等 tokens 增长（模型回合完成）或超时
   const t0 = Date.now();
+  let postOk = false;
+  try {
+    await req("POST", `/session/${sessionId}/message`, body, timeoutMs);
+    postOk = true;
+  } catch (e) {
+    // 仅"请求超时但模型可能仍在工作"才走轮询兜底；网络/HTTP 失败 = 投递失败，如实退出
+    const msg = String(e?.message ?? "");
+    const timedOut = e?.name === "TimeoutError" || /timed?\s*out|abort/i.test(msg);
+    if (!timedOut) throw e;
+    console.error(`[feed] POST timed out (${msg}) — polling history for completion`);
+  }
+  // 等 tokens 增长（模型回合完成）或剩余超时（不再叠加完整超时）
   let after = await lastActivity(sessionId);
   while (
     Date.now() - t0 < timeoutMs &&
@@ -73,12 +82,16 @@ if (cmd === "spawn") {
   }
   const used = after.tokens - before.tokens;
   console.log(JSON.stringify({
-    posted: true,
+    posted: postOk,
     tokens_delta: used,
     last_text: after.lastText,
   }, null, 2));
 } else if (cmd === "poll") {
-  const sessionId = flag("session").replace(/^oc-/, "");
+  const sessionId = (flag("session") ?? "").replace(/^oc-/, "");
+  if (!sessionId) {
+    console.error("usage: feed.mjs poll --session <id>");
+    process.exit(1);
+  }
   const a = await lastActivity(sessionId);
   console.log(JSON.stringify(a));
 } else {

@@ -9,7 +9,7 @@ import YAML from "yaml";
 
 const PICODE = "/Users/x/Desktop/iOS/picode/packages/orchestrator/dist/cli.js";
 const REPO = "/tmp/picode-dogfood";
-const RUN = "run-2026-08-14T08-55-08-366Z";
+const RUN = "run-2026-08-14T10-07-06-439Z";
 const RUN_DIR = `${REPO}/.picode/runs/${RUN}`;
 
 const CHUNKS = {
@@ -286,6 +286,21 @@ const CHUNKS = {
   "ckauto-docs": {
     first: "docs/DECISIONS.md",
     write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-14T08-55-08-366Z.md"],
+    skills: "docs,spec",
+  },
+  "summary-noise-unify": {
+    first: "packages/orchestrator/src/summary-noise.ts",
+    write: ["packages/orchestrator/src/summary-noise.ts", "packages/orchestrator/src/summary-noise.test.ts", "packages/orchestrator/src/opencode-adapter.ts", "packages/orchestrator/src/opencode-adapter.test.ts", "packages/orchestrator/src/continuation.ts", "packages/orchestrator/src/continuation.test.ts", "packages/orchestrator/src/checkpoint-store.ts", "packages/orchestrator/src/checkpoint-store.test.ts"],
+    skills: "typescript,state-machine",
+  },
+  "supervise-command": {
+    first: "packages/orchestrator/src/live.ts",
+    write: ["packages/orchestrator/src/live.ts", "packages/orchestrator/src/live.test.ts", "packages/orchestrator/src/commands/supervise.ts", "packages/orchestrator/src/commands/index.ts", "packages/dashboard-server/src/live.ts", "packages/dashboard-server/src/index.test.ts"],
+    skills: "typescript,cli,http",
+  },
+  "supervise-docs": {
+    first: "docs/DECISIONS.md",
+    write: ["docs/DECISIONS.md", "docs/reference/decision-catalog.md", "docs/guides/operations.md", "docs/knowledge/evolve/run-2026-08-14T10-07-06-439Z.md"],
     skills: "docs,spec",
   },
 };

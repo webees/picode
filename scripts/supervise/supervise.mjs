@@ -19,6 +19,22 @@ const RUN_DIR = `/tmp/picode-dogfood/.picode/runs/${RUN_ID}`;
 const LOG = "/tmp/picode-supervise.log";
 const BASE = "http://127.0.0.1:7788";
 
+// 启动校验：run id 白名单（同时消除 execSync 拼接注入面）+ run 目录真实存在，
+// 否则监督者会在不存在的目录上空转、永不停止。
+if (!RUN_ID || !/^[A-Za-z0-9:_-]+$/.test(RUN_ID)) {
+  console.error("usage: supervise.mjs --run <id> [--interval ms] — run id must match [A-Za-z0-9:_-]+");
+  process.exit(1);
+}
+if (!Number.isFinite(INTERVAL) || INTERVAL <= 0) {
+  console.error(`supervise: invalid --interval ${flag("interval")}`);
+  process.exit(1);
+}
+const sessionsDir = path.join(RUN_DIR, "sessions");
+if (!fs.existsSync(sessionsDir)) {
+  console.error(`supervise: run dir missing: ${RUN_DIR} (sessions/ not found) — check RUN_ID`);
+  process.exit(1);
+}
+
 async function pollTokens(sessionId) {
   try {
     const res = await fetch(`${BASE}/session/${sessionId.replace(/^oc-/, "")}/message`, {
@@ -45,9 +61,7 @@ function cli(args) {
   }
 }
 
-const sessionsDir = path.join(RUN_DIR, "sessions");
 const stale = { rounds: 0, tokens: -1 };
-const seen = new Set(); // 已记录过的会话，用于识别新会话
 
 fs.appendFileSync(LOG, `[supervise] start run=${RUN_ID} interval=${INTERVAL}ms\n`);
 
@@ -62,7 +76,6 @@ while (true) {
         const id = y.match(/pi_session_id: (oc-[\w]+|null)/)?.[1];
         const state = y.match(/^state: (\w+)/m)?.[1];
         if (!id || id === "null") continue;
-        seen.add(id);
         const t = await pollTokens(id);
         if (t < 0) row.agents[f] = "POLL_FAIL";
         else {
