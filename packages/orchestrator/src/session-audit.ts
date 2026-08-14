@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ErrorCode, PicodeError, type PicodeConfig } from "@picode/core";
+import { type PicodeConfig } from "@picode/core";
 import { readGoal } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
+import { closeRun as closeRunFn } from "./self-drive.js";
 
 /**
  * C2 session-audit: 跨 run 会话残留审计 + 清理（product acceptance:
@@ -69,17 +70,6 @@ export type CloseRunFn = (dir: string, config: PicodeConfig) => Promise<CloseRun
  * 惰性加载 C1 `closeRun` 原语（read 面先行：C1 未合并时本模块仍可审计）。
  * 动态 import 让「接通」在 C1 合并后自动发生，无需改本文件。
  */
-async function loadCloseRun(): Promise<CloseRunFn> {
-  const mod = (await import("./self-drive.js")) as { closeRun?: CloseRunFn };
-  if (typeof mod.closeRun !== "function") {
-    throw new PicodeError(
-      ErrorCode.NOT_FOUND,
-      "closeRun 未接通：chunk-run-close（C1）尚未合并，--clean 暂不可用；先合并 C1 或只用审计（--run 过滤）",
-    );
-  }
-  return mod.closeRun;
-}
-
 /** 列 runsRoot 下所有含 goal.yaml 的 run 目录 id（与 dashboard listRuns 同口径）。 */
 export function listRunIds(runsRoot: string): string[] {
   if (!fs.existsSync(runsRoot)) return [];
@@ -169,7 +159,7 @@ export async function cleanResidual(
 
   let closeRun: CloseRunFn;
   try {
-    closeRun = opts.closeRun ?? (await loadCloseRun());
+    closeRun = opts.closeRun ?? closeRunFn;
   } catch (e) {
     return {
       cleaned: [],

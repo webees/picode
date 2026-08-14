@@ -12,7 +12,7 @@ function tmpRun(): string {
   fs.mkdirSync(path.join(tasks, "brief"), { recursive: true });
   fs.mkdirSync(path.join(tasks, "staffing"), { recursive: true });
   fs.mkdirSync(path.join(run, "sessions"), { recursive: true });
-  fs.mkdirSync(path.join(run, "requests", "intake"), { recursive: true });
+  fs.mkdirSync(path.join(run, "intake"), { recursive: true });
   fs.writeFileSync(
     path.join(run, "run.yaml"),
     "run_id: run-board-test\ncreated_at: 2026-08-11T00:00:00Z\n",
@@ -36,8 +36,8 @@ function tmpRun(): string {
     "state: awake\nrole_id: engineer\n",
   );
   fs.writeFileSync(
-    path.join(run, "requests", "intake", "board.yaml"),
-    "id: intake-1\nraw: 甲方新需求\nstatus: received\n",
+    path.join(run, "intake", "feed-1.yaml"),
+    'schema_version: "1"\nid: intake-1\nfrom: sponsor\nts: 2026-08-11T00:00:00Z\ntype: request\nbody: 甲方新需求\nstatus: open\nassigned_to: null\ntriaged_at: null\nclosed_at: null\n',
   );
   fs.writeFileSync(path.join(run, "merge_queue.jsonl"), "");
   return run;
@@ -49,7 +49,7 @@ test("board: intake → Backlog, chunk w/o task → 分块, triad awake → 进�
   const byId = new Map(b.cards.map((c) => [c.id, c]));
 
   assert.equal(byId.get("intake-1")?.column, "Backlog");
-  assert.equal(byId.get("intake-1")?.owner, "甲方");
+  assert.equal(byId.get("intake-1")?.owner, "sponsor");
   assert.equal(byId.get("chunk-b")?.column, "分块");
   assert.equal(byId.get("task-a")?.column, "进行中");
   assert.equal(byId.get("task-a")?.owner, "squad-lead@task-a, engineer@task-a, sdet@task-a");

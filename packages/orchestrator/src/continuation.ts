@@ -212,6 +212,7 @@ export async function feedContinuation(
  * guardian 每 tick 的续跑 sweep：派生候选并逐个投喂；单次失败不阻断整轮
  * （serve 失联等瞬时问题下轮重试）。返回本轮的 fed 列表。
  */
+/** @deprecated 仅供测试 — 生产路径为 sweepContinuationsGated（门控版）。 */
 export async function sweepContinuations(
   dir: string,
   config: PicodeConfig,

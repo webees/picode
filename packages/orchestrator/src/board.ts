@@ -92,27 +92,7 @@ export function buildBoard(dir: string): { run: string; cards: BoardCard[] } {
   }
 
   const cards: BoardCard[] = [];
-
   // Backlog: intake requests not yet decided/started
-  const intakeDir = path.join(dir, "requests", "intake");
-  if (fs.existsSync(intakeDir)) {
-    for (const f of fs.readdirSync(intakeDir).filter((x) => x.endsWith(".yaml"))) {
-      const r = readYamlFile<{ id?: string; raw?: string; status?: string; decision?: string }>(
-        path.join(intakeDir, f),
-      );
-      if (r && r.status !== "done") {
-        cards.push({
-          id: r.id ?? f,
-          kind: "intake",
-          title: (r.raw ?? f).slice(0, 60),
-          column: "Backlog",
-          owner: "甲方",
-          blocked: false,
-          detail: `decision: ${r.decision ?? "待决策"}`,
-        });
-      }
-    }
-  }
 
   // Backlog: sponsor 投喂 feed（intake/）still open
   const feedsDir = path.join(dir, "intake");
