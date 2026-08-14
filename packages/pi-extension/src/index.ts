@@ -610,8 +610,10 @@ export default function picodeExtension(pi: PiApi): void {
       const max = Number(params.max ?? 5);
       try {
         const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+        // 审计 P2-9：web_fetch 有 15s 超时而 web_search 没有 — DDG 慢响应会永久阻塞工具
         const res = await fetch(url, {
           headers: { "User-Agent": "picode-research/0.1" },
+          signal: AbortSignal.timeout(15_000),
         });
         const html = await res.text();
         const results: Array<{ title: string; url: string; snippet: string }> = [];
