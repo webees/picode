@@ -26,6 +26,7 @@ const chunks = computed(() => data.value?.chunks ?? [])
 
 const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   ready: 'default',
+  in_progress: 'default', // 审计 P2-13：此前缺失 → 显示"实施中"却落 outline 徽章
   done: 'secondary',
   blocked: 'destructive',
 }

@@ -71,6 +71,7 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
   blocked: 'destructive',
   intake: 'outline',
   draft: 'outline',
+  parked: 'secondary', // 审计 P2-13：此前缺失 → "已停放"落默认徽章
 }
 </script>
 
