@@ -1,12 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import YAML from "yaml";
 import {
   branchName,
   ensureDir,
   matchGlob,
   readYamlFile,
-  withFileLock,
   worktreePath,
   writeAtomic,
   type PicodeConfig,
@@ -37,12 +37,12 @@ export interface TaskState {
 /** Default first acceptance gate attached to every chunk/task (P02). */
 const DEFAULT_ACCEPTANCE = [{ id: "C1", type: "command", spec: "<project-test-command>" }];
 
-export async function addChunkAndTask(
+export function addChunkAndTask(
   _repoRoot: string,
   dir: string,
   config: PicodeConfig,
   opts: { chunkId: string; writePaths: string[]; readPaths?: string[] },
-): Promise<{ taskId: string }> {
+): { taskId: string } {
   // 路径安全：chunkId 直接拼成 tasks/task-<id> 目录名，非法值（含 `/`、`..`）拒绝，
   // 防逃逸 run 布局错写其它状态文件（P0）。
   if (!SAFE_CHUNK_ID_RE.test(opts.chunkId)) {
@@ -53,25 +53,22 @@ export async function addChunkAndTask(
     throw new Error("goal not active; cannot add implement task");
   }
   const chunksPath = path.join(dir, "chunks.yaml");
+  const data = readYamlFile<{ chunks: Array<Record<string, unknown>> }>(chunksPath)!;
   const taskId = `task-${opts.chunkId}`;
   const writePaths = opts.writePaths;
   const readPaths = opts.readPaths ?? [];
-  // 并发安全（P1）：chunks.yaml 读-改-写持锁，多个进程并发 chunk add 不互相覆盖
-  await withFileLock(path.join(dir, ".chunks.lock"), () => {
-    const data = readYamlFile<{ chunks: Array<Record<string, unknown>> }>(chunksPath)!;
-    data.chunks.push({
-      id: opts.chunkId,
-      write_paths: writePaths,
-      read_paths: readPaths,
-      public_contract: null,
-      depends_on: [],
-      shared_files: [],
-      acceptance: DEFAULT_ACCEPTANCE,
-      status: "ready",
-      task_id: taskId,
-    });
-    writeYamlFile(chunksPath, data);
+  data.chunks.push({
+    id: opts.chunkId,
+    write_paths: writePaths,
+    read_paths: readPaths,
+    public_contract: null,
+    depends_on: [],
+    shared_files: [],
+    acceptance: DEFAULT_ACCEPTANCE,
+    status: "ready",
+    task_id: taskId,
   });
+  writeYamlFile(chunksPath, data);
 
   const task: TaskState = {
     id: taskId,
@@ -142,18 +139,6 @@ export function approveBrief(dir: string, taskId: string, by: string): void {
   writeYamlFile(p, brief);
 }
 
-/**
- * 单一判据（P1：原 self-drive/staffing 各自实现且判据不一致）：
- * brief 已批准 = status==="approved" ∧（配置要求时）approved_by 存在。
- */
-export function isBriefApproved(dir: string, taskId: string, config: PicodeConfig): boolean {
-  if (!config.work_brief.require_run_lead_approval) return true;
-  const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");
-  if (!fs.existsSync(p)) return false;
-  const b = readYamlFile<{ status?: string; approved_by?: string }>(p);
-  return b?.status === "approved" && !!b.approved_by;
-}
-
 export function assertBriefApproved(dir: string, taskId: string, config: PicodeConfig): void {
   if (!config.work_brief.require_run_lead_approval) return;
   const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");
@@ -189,9 +174,9 @@ export function prepareTask(
   // P05 double latch: goal active ∧ work brief approved ∧ staffing approved.
   assertPrepareAllowed(repoRoot, dir, config, taskId);
 
-  const task = readYamlFile<TaskState>(
-    path.join(dir, "tasks", taskId, "task.yaml"),
-  )!;
+  const task = YAML.parse(
+    fs.readFileSync(path.join(dir, "tasks", taskId, "task.yaml"), "utf8"),
+  ) as TaskState;
 
   const wt = worktreePath(repoRoot, config, path.basename(dir), taskId);
   const branch = branchName(config, path.basename(dir), taskId);
@@ -249,13 +234,15 @@ export function printSpawnEnv(
   seat: "squad-lead" | "engineer" | "sdet",
   extensionPath: string,
 ): string {
-  const triad = readYamlFile<{
+  const triad = YAML.parse(
+    fs.readFileSync(path.join(dir, "tasks", taskId, "triad.yaml"), "utf8"),
+  ) as {
     worktree_path: string;
     seats: Record<string, { agent_id: string; token: string }>;
-  }>(path.join(dir, "tasks", taskId, "triad.yaml"))!;
-  const task = readYamlFile<TaskState>(
-    path.join(dir, "tasks", taskId, "task.yaml"),
-  )!;
+  };
+  const task = YAML.parse(
+    fs.readFileSync(path.join(dir, "tasks", taskId, "task.yaml"), "utf8"),
+  ) as TaskState;
   const seatInfo = triad.seats[seat];
   const profile =
     seat === "squad-lead"
