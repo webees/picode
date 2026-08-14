@@ -171,10 +171,14 @@ export async function probeServeHealth(
   const url = config.opencode.base_url.replace(/\/+$/, "");
   try {
     await fetch(url, { signal: AbortSignal.timeout(opts.probeTimeoutMs ?? 5_000) });
-  } catch {
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
     return {
       ok: false,
-      failed: await markServeSessionsError(dir, "serve 健康探测失败（ERR-01 watchdog）"),
+      failed: await markServeSessionsError(
+        dir,
+        `serve 健康探测失败（ERR-01 watchdog）: ${reason.slice(0, 120)}`,
+      ),
     };
   }
   return { ok: true, failed: await recoverServeSessions(dir, config, opts) };
@@ -613,6 +617,9 @@ export interface GuardianOptions {
   baseSha?: string | null;
 }
 
+/** 只保留最近 24 轮 tick 结果（缺省无限 maxTicks 长跑时防 OOM，P2）。 */
+const MAX_TICKS_RETAINED = 24;
+
 /** Summary of a guardian loop run. */
 export interface GuardianSummary {
   ticks: number;
@@ -660,6 +667,7 @@ export async function runGuardian(
         baseSha,
       });
       ticksRun.push(result);
+      if (ticksRun.length > MAX_TICKS_RETAINED) ticksRun.shift();
       if (result.code_updated?.detected && !codeWarned) {
         console.warn(
           `[guardian] 检测到仓库 HEAD 前移：base ${result.code_updated.base_sha} → head ${result.code_updated.head_sha}；` +

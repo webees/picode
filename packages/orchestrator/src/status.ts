@@ -191,7 +191,6 @@ export function checkpointOverview(dir: string): CheckpointTaskOverview[] {
 }
 
 export function statusSnapshot(dir: string, config: PicodeConfig): StatusSnapshot {
-  void config;
   const goal = readGoal(dir);
   const sessions = new SessionStore(dir);
   const list = sessions.list();

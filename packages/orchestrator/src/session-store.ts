@@ -162,9 +162,8 @@ export class SessionStore {
   }
 
   /** Transition awake -> sleeping. */
-  async sleep(agentId: string, reason: string): Promise<SessionRecord> {
+  async sleep(agentId: string, _reason: string): Promise<SessionRecord> {
     return this.transition(agentId, "sleeping", (cur) => {
-      void reason;
       return {
         ...cur,
         pi_session_id: null,

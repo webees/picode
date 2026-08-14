@@ -387,7 +387,11 @@ export async function dissolveTask(
       });
       execFileSync("git", ["worktree", "prune"], { cwd: repoRoot, stdio: "pipe" });
       worktreeRemoved = true;
-    } catch {
+    } catch (e) {
+      // P2: 移除失败必须可见（否则操作员不知残留 worktree）
+      console.warn(
+        `[closure] worktree remove failed: ${wt} — ${e instanceof Error ? e.message : String(e)}`,
+      );
       worktreeRemoved = false;
     }
   }
