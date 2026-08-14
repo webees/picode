@@ -17,6 +17,7 @@ import { windowCommands } from "./window.js";
 import { statusCommands } from "./status.js";
 import { intakeCommands } from "./intake.js";
 import { selfDriveCommands, selfDriveFallback } from "./self-drive.js";
+import { checkpointCommands } from "./checkpoint.js";
 
 export type { Command, CommandContext } from "./types.js";
 
@@ -27,6 +28,7 @@ export const COMMANDS: Command[] = [
   ...sessionCommands,
   ...staffingCommands,
   ...taskCommands,
+  ...checkpointCommands,
   ...mergeCommands,
   ...memoryCommands,
   ...evolveCommands,
@@ -44,6 +46,7 @@ export const DOMAIN_ORDER = [
   "session",
   "staffing",
   "task",
+  "checkpoint",
   "merge",
   "memory",
   "evolve",
