@@ -139,6 +139,15 @@ export function approveBrief(dir: string, taskId: string, by: string): void {
   writeYamlFile(p, brief);
 }
 
+/** 布尔判据（单一事实源，与 assertBriefApproved 同款口径）。 */
+export function isBriefApproved(dir: string, taskId: string, config: PicodeConfig): boolean {
+  if (!config.work_brief.require_run_lead_approval) return true;
+  const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");
+  if (!fs.existsSync(p)) return false;
+  const brief = readYamlFile<{ status?: string; approved_by?: string }>(p);
+  return brief?.status === "approved" && Boolean(brief.approved_by);
+}
+
 export function assertBriefApproved(dir: string, taskId: string, config: PicodeConfig): void {
   if (!config.work_brief.require_run_lead_approval) return;
   const p = path.join(dir, "tasks", taskId, "brief", "brief.yaml");

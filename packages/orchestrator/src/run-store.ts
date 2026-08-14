@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import {
+  ErrorCode,
+  PicodeError,
   assertEvolveTargetRoot,
   ensureDir,
   loadConfig,
@@ -320,6 +322,8 @@ export function resolveRunDir(
 ): { dir: string; config: ReturnType<typeof loadConfig> } {
   const config = loadConfig(repoRoot, runId);
   const dir = runDir(repoRoot, config, runId);
-  if (!fs.existsSync(dir)) throw new Error(`run not found: ${runId}`);
+  if (!fs.existsSync(dir)) {
+    throw new PicodeError(ErrorCode.NOT_FOUND, `run not found: ${runId}`);
+  }
   return { dir, config };
 }

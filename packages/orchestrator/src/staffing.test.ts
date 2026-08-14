@@ -26,14 +26,14 @@ function tmpGitRepo(): string {
   return dir;
 }
 
-async function setup() {
+function setup() {
   const repo = tmpGitRepo();
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   // P01: product acceptance criteria before active (18 phase E).
   setProductAcceptance(dir, ["module-a compiles and tests pass"]);
   setGoalStatus(dir, "active");
-  const { taskId } = await addChunkAndTask(repo, dir, config, {
+  const { taskId } = addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/module-a/**"],
   });
@@ -47,8 +47,8 @@ async function fullHire(repo: string, dir: string, config: ReturnType<typeof res
   return { staffing, wokeSquad };
 }
 
-test("T18/T24: prepare fails without staffing approval (double latch)", async () => {
-  const { repo, dir, config, taskId } = await setup();
+test("T18/T24: prepare fails without staffing approval (double latch)", () => {
+  const { repo, dir, config, taskId } = setup();
   draftBrief(dir, taskId);
   approveBrief(dir, taskId, "run-lead");
   // brief approved, staffing missing → prepare must fail
@@ -56,16 +56,14 @@ test("T18/T24: prepare fails without staffing approval (double latch)", async ()
 });
 
 test("T24: prepare fails without brief approval even when staffed", async () => {
-  const { repo, dir, config, taskId } = await setup();
-  setGoalStatus(dir, "active");
+  const { repo, dir, config, taskId } = setup();
   await fullHire(repo, dir, config, taskId);
   // staffing approved, brief missing → prepare must fail
   assert.throws(() => prepareTask(repo, dir, config, taskId), /work brief/);
 });
 
 test("prepare succeeds only with both latches", async () => {
-  const { repo, dir, config, taskId } = await setup();
-  setGoalStatus(dir, "active");
+  const { repo, dir, config, taskId } = setup();
   draftBrief(dir, taskId);
   approveBrief(dir, taskId, "run-lead");
   await fullHire(repo, dir, config, taskId);
@@ -75,7 +73,7 @@ test("prepare succeeds only with both latches", async () => {
 });
 
 test("T19: people-qa fails when a persona seat is missing", async () => {
-  const { repo, dir, config, taskId } = await setup();
+  const { repo, dir, config, taskId } = setup();
   await createStaffingRequest(dir, config, taskId);
   draftPersonas(repo, dir, config, taskId);
   // delete the sdet persona
@@ -88,7 +86,7 @@ test("T19: people-qa fails when a persona seat is missing", async () => {
 });
 
 test("T25: people-qa fails when persona lacks mission", async () => {
-  const { repo, dir, config, taskId } = await setup();
+  const { repo, dir, config, taskId } = setup();
   await createStaffingRequest(dir, config, taskId);
   draftPersonas(repo, dir, config, taskId);
   // strip mission from engineer persona frontmatter
@@ -104,7 +102,7 @@ test("T25: people-qa fails when persona lacks mission", async () => {
 });
 
 test("staffing request wakes the people cell (17 §5.3)", async () => {
-  const { dir, config, taskId } = await setup();
+  const { dir, config, taskId } = setup();
   await createStaffingRequest(dir, config, taskId);
   const store = new SessionStore(dir);
   const awake = store.awake().map((s) => s.agent_id).sort();
@@ -112,7 +110,7 @@ test("staffing request wakes the people cell (17 §5.3)", async () => {
 });
 
 test("staffing approve locks staffing.yaml and registers triad sessions", async () => {
-  const { repo, dir, config, taskId } = await setup();
+  const { repo, dir, config, taskId } = setup();
   const { staffing } = await fullHire(repo, dir, config, taskId);
   assert.equal(staffing.status, "approved");
   assert.equal(staffing.approved_by, "run-lead");
@@ -131,8 +129,7 @@ test("staffing approve locks staffing.yaml and registers triad sessions", async 
 });
 
 test("double latch fires task_ready (squad awake) when brief already approved", async () => {
-  const { repo, dir, config, taskId } = await setup();
-  setGoalStatus(dir, "active");
+  const { repo, dir, config, taskId } = setup();
   draftBrief(dir, taskId);
   approveBrief(dir, taskId, "run-lead");
   const { wokeSquad } = await fullHire(repo, dir, config, taskId);
@@ -144,7 +141,7 @@ test("double latch fires task_ready (squad awake) when brief already approved", 
 });
 
 test("persona files carry full 17 §6 dimensions after draft", async () => {
-  const { repo, dir, config, taskId } = await setup();
+  const { repo, dir, config, taskId } = setup();
   await createStaffingRequest(dir, config, taskId);
   draftPersonas(repo, dir, config, taskId);
   const { frontmatter } = parsePersonaFile(
@@ -184,7 +181,7 @@ test("persona files carry full 17 §6 dimensions after draft", async () => {
 });
 
 test("naming: personas get a deterministic codename and triad a team name (16 §8)", async () => {
-  const { repo, dir, config, taskId } = await setup();
+  const { repo, dir, config, taskId } = setup();
   await createStaffingRequest(dir, config, taskId, { skills: ["typescript", "testing"] });
   draftPersonas(repo, dir, config, taskId);
   const eng = parsePersonaFile(
@@ -202,7 +199,7 @@ test("naming: personas get a deterministic codename and triad a team name (16 §
 });
 
 test("naming: request overrides win over deterministic generation (16 §8)", async () => {
-  const { repo, dir, config, taskId } = await setup();
+  const { repo, dir, config, taskId } = setup();
   await createStaffingRequest(dir, config, taskId, {
     teamName: "北辰",
     codenameOverrides: { engineer: "白泽" },
@@ -218,7 +215,7 @@ test("naming: request overrides win over deterministic generation (16 §8)", asy
 });
 
 test("naming: unsafe codename/team_name overrides are rejected (16 §8 file-name guard)", async () => {
-  const { repo, dir, config, taskId } = await setup();
+  const { repo, dir, config, taskId } = setup();
   // unsafe team name → approve must fail
   await createStaffingRequest(dir, config, taskId, {
     teamName: "../../escape",
@@ -228,7 +225,7 @@ test("naming: unsafe codename/team_name overrides are rejected (16 §8 file-name
   draftPersonas(repo, dir, config, taskId);
   await assert.rejects(() => approveStaffing(repo, dir, config, taskId), /not a safe name/);
   // unsafe codename → people-qa check must flag it
-  const { dir: dir2, config: config2, taskId: taskId2, repo: repo2 } = await setup();
+  const { dir: dir2, config: config2, taskId: taskId2, repo: repo2 } = setup();
   await createStaffingRequest(dir2, config2, taskId2, {
     teamName: "北辰",
     codenameOverrides: { engineer: "../evil" },
@@ -242,7 +239,7 @@ test("naming: unsafe codename/team_name overrides are rejected (16 §8 file-name
 });
 
 test("naming: non-string codename (YAML number) is rejected, not coerced", async () => {
-  const { repo, dir, config, taskId } = await setup();
+  const { repo, dir, config, taskId } = setup();
   await createStaffingRequest(dir, config, taskId, { skills: ["typescript", "testing"] });
   draftPersonas(repo, dir, config, taskId);
   const p = path.join(dir, "tasks", taskId, "staffing", "personas", "engineer.md");
@@ -257,7 +254,7 @@ test("naming: non-string codename (YAML number) is rejected, not coerced", async
 });
 
 test("D058: wake rejections surface as woke_errors (max_awake=0), event engine stays best-effort", async () => {
-  const { repo, dir, config, taskId } = await setup();
+  const { repo, dir, config, taskId } = setup();
   draftBrief(dir, taskId);
   approveBrief(dir, taskId, "run-lead");
   await createStaffingRequest(dir, config, taskId, { skills: ["typescript", "testing"] });
@@ -283,7 +280,7 @@ test("D058: wake rejections surface as woke_errors (max_awake=0), event engine s
 });
 
 test("D058: no wake errors when max_awake allows the triad", async () => {
-  const { repo, dir, config, taskId } = await setup();
+  const { repo, dir, config, taskId } = setup();
   draftBrief(dir, taskId);
   approveBrief(dir, taskId, "run-lead");
   await createStaffingRequest(dir, config, taskId, { skills: ["typescript", "testing"] });

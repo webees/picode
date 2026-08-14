@@ -42,17 +42,17 @@ function tmpGitRepo(): string {
   return dir;
 }
 
-test("T01: implement task cannot be created before goal is active", async () => {
+test("T01: implement task cannot be created before goal is active", () => {
   const repo = tmpGitRepo();
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
-  await assert.rejects(
-    addChunkAndTask(repo, dir, config, { chunkId: "c1", writePaths: ["src/**"] }),
+  assert.throws(
+    () => addChunkAndTask(repo, dir, config, { chunkId: "c1", writePaths: ["src/**"] }),
     /goal not active/,
   );
 });
 
-test("T02: goal with open questions cannot be activated", async () => {
+test("T02: goal with open questions cannot be activated", () => {
   const repo = tmpGitRepo();
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir } = resolveRunDir(repo, runId);
@@ -64,12 +64,12 @@ test("T02: goal with open questions cannot be activated", async () => {
   assert.throws(() => setGoalStatus(dir, "active"), /open_questions/);
 });
 
-test("T10: init outside a git repository fails", async () => {
+test("T10: init outside a git repository fails", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-nogit-"));
   assert.throws(() => createRun(dir, { title: "x" }), /Not a git repository/);
 });
 
-test("T13: room display_name override does not change the bus room id", async () => {
+test("T13: room display_name override does not change the bus room id", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-t13-"));
   fs.mkdirSync(path.join(dir, ".picode"), { recursive: true });
   fs.writeFileSync(
@@ -90,11 +90,11 @@ test("T13: room display_name override does not change the bus room id", async ()
   // bus room id stays the logical id, display is presentation-only
   const members = store.loadMembers("leadership");
   assert.ok(members.length > 0);
-  // display_name 不是合法 room id：RoomStore 路径安全校验直接拒绝（防逃逸）
+  // 安全校验（P1）：非 ASCII room 名拒绝（display_name 仅展示，bus id 保持逻辑名）
   assert.throws(() => store.loadMembers("领导舱"), /not safe/);
 });
 
-test("T14: disabling a required room without a replacement fails validation", async () => {
+test("T14: disabling a required room without a replacement fails validation", () => {
   const base = getDefaultConfig();
   const broken = {
     ...base,
@@ -105,7 +105,7 @@ test("T14: disabling a required room without a replacement fails validation", as
   assert.throws(() => validateConfig(broken), /required room disabled or missing/);
 });
 
-test("T15: cells.templates pointing at an unknown role fails validation", async () => {
+test("T15: cells.templates pointing at an unknown role fails validation", () => {
   const base = getDefaultConfig();
   const broken = {
     ...base,
@@ -129,7 +129,7 @@ test("T17: engineer spawn env never embeds unapproved research text", async () =
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["works"]);
   setGoalStatus(dir, "active");
-  const { taskId } = await addChunkAndTask(repo, dir, config, {
+  const { taskId } = addChunkAndTask(repo, dir, config, {
     chunkId: "chunk-a",
     writePaths: ["src/a/**"],
   });

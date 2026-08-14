@@ -30,7 +30,7 @@ function freshRun(): { repo: string; runId: string; dir: string } {
   return { repo, runId, dir };
 }
 
-test("P01: goal cannot activate without product acceptance criteria", async () => {
+test("P01: goal cannot activate without product acceptance criteria", () => {
   const { dir } = freshRun();
   assert.throws(() => setGoalStatus(dir, "active"), /no product acceptance criteria/);
   // sponsor (CLI) sets acceptance, then activation works
@@ -41,7 +41,7 @@ test("P01: goal cannot activate without product acceptance criteria", async () =
   assert.ok(fs.existsSync(path.join(dir, "product", "brief.md")));
 });
 
-test("parkGoal rejects non-draft goals; unpark clears park state", async () => {
+test("parkGoal rejects non-draft goals; unpark clears park state", () => {
   const { dir } = freshRun();
   assert.throws(() => parkGoal(dir, "idle"), /only draft goals can be parked/);
   setProductAcceptance(dir, ["x"]);
@@ -54,12 +54,12 @@ test("parkGoal rejects non-draft goals; unpark clears park state", async () => {
   assert.equal(unparked.park_reason, null);
 });
 
-test("resolveRunDir on a missing run fails", async () => {
+test("resolveRunDir on a missing run fails", () => {
   const repo = tmpGitRepo();
   assert.throws(() => resolveRunDir(repo, "run-does-not-exist"), /run not found/);
 });
 
-test("sweepDraftPark parks only idle drafts under the park policy", async () => {
+test("sweepDraftPark parks only idle drafts under the park policy", () => {
   const { dir } = freshRun();
   const config = getDefaultConfig();
   // not a draft → untouched
