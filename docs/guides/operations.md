@@ -1,6 +1,6 @@
 # 运维规程（serve/会话/续跑/guardian 重启/会话生命周期/真相关于文件）
 
-> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）+ D072/D073（run 收尾自动休眠 + session audit 跨 run 残留审计）+ D077/D078（摘要窗口去噪 / 平台席预算分流）。
+> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）+ D072/D073（run 收尾自动休眠 + session audit 跨 run 残留审计）+ D077/D078（摘要窗口去噪 / 平台席预算分流）+ D082（会话 checkpoint）+ D083（re-spawn 摘要去噪）。
 > 遵循本规程可避免已知的 serve 类故障人工踩坑，并正确观察/调整续跑、重启守护热载、管理 run 收尾与跨 run 会话残留。
 
 ## serve 重启规程（ERR-04 缓解）
@@ -25,6 +25,39 @@
 - curl/HTTP 超时 ≠ 消息失败；以 run 状态文件与 worktree git 状态为准
 - serve 日志 /tmp/opencode-serve.log 是故障定位第一现场（stream 挂起/权限 ask/key 缺失均在此可见）
 
+## 会话 checkpoint（D082）
+
+checkpoint = 捕获时刻对文件真相的**只读投影**，写入后不可变。**它是观测/审计产物，不参与任何
+状态决策**——恢复/续跑/调度/合并仍只读 session.yaml / task.yaml / transcripts / git（文件为准，
+D082 边界）。MVP 仅显式捕获，guardian/merge/serve 恢复路径零改动。
+
+### 捕获
+
+```bash
+picode checkpoint capture --repo <path> --run <id> --task <task_id> [--boundary manual]
+```
+
+- 落盘 `runs/<id>/checkpoints/<taskId>/checkpoint-<ts>.yaml`（schema v1：task_status + 三角会话
+  state/budget + 各会话转录摘要（已剔模板噪音）+ git worktree 指纹 + 自指纹 sha256）
+- 重复捕获产生新 ts 文件，**不覆盖**既有（不可变）；task 不存在 → 报 `NOT_FOUND`
+- 语义：同输入同输出（纯函数）；捕获内容可由文件真相重演，不产生第二事实源
+
+### 只读查询
+
+```bash
+picode checkpoint status --repo <path> --run <id> --task <task_id>   # 该 task 全部（最新在前）+ 最新
+picode checkpoint status --repo <path> --run <id>                    # 全部有 checkpoint 的 task 概览
+```
+
+### 排查指引
+
+- 想确认「某个 task 在某时刻的会话/预算/摘要」→ `capture` 后 `status` 查看；checkpoint 只是
+  留痕，**不作为当前状态判定依据**（以文件真相为准）
+- checkpoint 目录缺失/文件损坏 → 不影响任何恢复/续跑路径（best-effort 观测物），无需修复；
+  怀疑状态漂移时重 capture 一次即可
+- 需要自动化定时捕获 → 属后续候选（本轮 MVP 仅手动）；需要三面（status/CLI/MCP）同源展示 →
+  亦为后续候选
+
 ## watchdog（ERR-01）
 
 - self-drive tick 内置 probeServeHealth：serve 失联时标记 awake opencode 会话 error（不自动重 spawn 防风暴）
@@ -34,7 +67,7 @@
 
 续跑 = guardian 对「已 awake ∧ 无 error ∧ 任务未终态 ∧ 预算未耗尽 ∧ 空闲超 `idle_sec`」的 opencode 会话按 D061 noReply 语义投喂续跑 prompt。全部状态落盘、幂等、可恢复。
 
-续跑 prompt 含上一回合要点摘要（`transcripts/<agent>.jsonl` 启发式派生，无 LLM，D076）。转录归档因此也是语义续跑的唯一数据源。摘要窗口可配（`summary_entries` 默认 8）且投喂时剔除固定模板文本噪音（`stripNoise`，D077），避免摘要被机械投喂记录淹没。
+续跑 prompt 含上一回合要点摘要（`transcripts/<agent>.jsonl` 启发式派生，无 LLM，D076）。转录归档因此也是语义续跑的唯一数据源。摘要窗口可配（`summary_entries` 默认 8）且投喂时剔除固定模板文本噪音（`stripNoise`，D077），避免摘要被机械投喂记录淹没；serve 重启后重 spawn（`wakeWithOpencode`）的恢复摘要同样剔除 ready 模板句（D083），与 feed 路径口径一致。
 
 ### 观察续跑状态
 
