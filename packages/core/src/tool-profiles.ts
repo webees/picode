@@ -20,7 +20,8 @@ export type ToolName =
   | "state_read"
   | "session_wake"
   | "session_sleep"
-  | "session_list";
+  | "session_list"
+  | "skill_load";
 
 export interface ToolProfile {
   allow: ToolName[];
@@ -90,6 +91,7 @@ const PROFILES: Record<string, ToolProfile> = {
       "request_cross_room",
       "progress_report",
       "state_read",
+      "skill_load",
     ],
   },
   "implement.engineer": {
@@ -106,6 +108,7 @@ const PROFILES: Record<string, ToolProfile> = {
       "git_commit",
       "request_info",
       "state_read",
+      "skill_load",
     ],
     repo_write_mode: "write_paths",
   },

@@ -181,3 +181,137 @@ export function personaDeclaredSkills(
       : { name, available: false, path: null };
   });
 }
+
+// ---------------------------------------------------------------------------
+// B 按需 skill 加载（C2）：loadSkill —— 按 discoverSkills 索引解析 SKILL.md 完整
+// body + 健康校验 + 体积上限/截断。双轨明界：加载结果仅回调用方（工具结果），
+// 绝不注入 persona 系统提示（与 persona skills[] 声明并存、不重复注入）。
+// 错误为工具内联结构化 code（SkillLoadCode），不进 ErrorCode 枚举（errors.ts 归 C3）。
+// ---------------------------------------------------------------------------
+
+/** 单次加载 body 默认上限（字符数；env PICODE_SKILL_MAX_BYTES 可覆盖，无 config 键）。 */
+export const DEFAULT_SKILL_MAX_BYTES = 64 * 1024;
+
+/** loadSkill 结构化错误码（工具内联，不进 ErrorCode 枚举）。 */
+export const SkillLoadCode = {
+  SKILL_NOT_FOUND: "SKILL_NOT_FOUND",
+  SKILL_PATH_DENIED: "SKILL_PATH_DENIED",
+  SKILL_MD_MISSING: "SKILL_MD_MISSING",
+  SKILL_BAD_FRONTMATTER: "SKILL_BAD_FRONTMATTER",
+} as const;
+
+export type SkillLoadCode = (typeof SkillLoadCode)[keyof typeof SkillLoadCode];
+
+/** 结构化加载错误：code 为 SkillLoadCode（字符串），skillName 为请求的技能名。 */
+export class SkillLoadError extends Error {
+  readonly code: SkillLoadCode;
+  readonly skillName: string;
+
+  constructor(code: SkillLoadCode, skillName: string, message: string) {
+    super(message);
+    this.name = "SkillLoadError";
+    this.code = code;
+    this.skillName = skillName;
+  }
+}
+
+export interface LoadSkillOptions {
+  /** 路径围栏：meta.path 必须落在该目录内（防索引条目逃逸 root）；缺省不做限制。 */
+  cwd?: string;
+  /** body 上限（字符）；0 = 不限；缺省 DEFAULT_SKILL_MAX_BYTES。 */
+  maxBytes?: number;
+}
+
+export interface LoadedSkill {
+  /** 索引名（与请求 name 匹配）。 */
+  name: string;
+  /** SKILL.md 完整 body（含 frontmatter；超限时截断为 head 并标注 truncated）。 */
+  body: string;
+  /** 是否因超限被截断。 */
+  truncated: boolean;
+  /** 实际生效的上限（字符）。 */
+  maxBytes: number;
+  /** 截断前的原始 body 字节数。 */
+  bytes: number;
+  /** SKILL.md 绝对路径。 */
+  path: string;
+  /** SKILL.md 相对 skills root 路径（posix）。 */
+  relPath: string;
+}
+
+/**
+ * 按 discoverSkills 索引解析单个技能的 SKILL.md 完整 body（单次单技能）。
+ * 健康校验：未知名 → SKILL_NOT_FOUND；meta.path 逃逸 cwd → SKILL_PATH_DENIED；
+ * 文件缺失/不可读 → SKILL_MD_MISSING；frontmatter 缺失/坏 → SKILL_BAD_FRONTMATTER。
+ * 体积上限：超过 maxBytes 截断到 head 并置 truncated=true（byte 感知，不劈多字节字符）。
+ */
+export function loadSkill(
+  name: string,
+  metas: SkillMeta[],
+  options: LoadSkillOptions = {},
+): LoadedSkill {
+  const target = String(name ?? "").trim();
+  const meta = metas.find((m) => m.name === target);
+  if (!meta) {
+    throw new SkillLoadError(
+      SkillLoadCode.SKILL_NOT_FOUND,
+      target,
+      `skill not found in index: ${target || "(empty)"}`,
+    );
+  }
+  if (options.cwd !== undefined) {
+    const root = path.resolve(options.cwd);
+    if (meta.path !== root && !meta.path.startsWith(root + path.sep)) {
+      throw new SkillLoadError(
+        SkillLoadCode.SKILL_PATH_DENIED,
+        target,
+        `skill path escapes cwd: ${meta.path}`,
+      );
+    }
+  }
+  let raw: string;
+  try {
+    raw = fs.readFileSync(meta.path, "utf8");
+  } catch {
+    throw new SkillLoadError(
+      SkillLoadCode.SKILL_MD_MISSING,
+      target,
+      `SKILL.md missing or unreadable: ${meta.path}`,
+    );
+  }
+  if (!parseFrontmatter(raw)) {
+    throw new SkillLoadError(
+      SkillLoadCode.SKILL_BAD_FRONTMATTER,
+      target,
+      `SKILL.md has missing or invalid YAML frontmatter: ${meta.path}`,
+    );
+  }
+  const maxBytes =
+    options.maxBytes === undefined
+      ? DEFAULT_SKILL_MAX_BYTES
+      : Math.max(0, Math.floor(options.maxBytes));
+  const bytes = Buffer.byteLength(raw, "utf8");
+  let body = raw;
+  let truncated = false;
+  if (maxBytes > 0 && bytes > maxBytes) {
+    body = truncateToMaxBytes(raw, maxBytes);
+    truncated = true;
+  }
+  return {
+    name: meta.name,
+    body,
+    truncated,
+    maxBytes,
+    bytes,
+    path: meta.path,
+    relPath: meta.relPath,
+  };
+}
+
+/** 按字节上限截断字符串，回退到不劈断多字节字符的边界。 */
+function truncateToMaxBytes(s: string, maxBytes: number): string {
+  const buf = Buffer.from(s, "utf8");
+  let end = maxBytes;
+  while (end > 0 && (buf[end] & 0xc0) === 0x80) end -= 1;
+  return buf.subarray(0, end).toString("utf8");
+}

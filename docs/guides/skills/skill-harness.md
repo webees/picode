@@ -52,11 +52,13 @@ skills: [ponytail]          # 本席位携带的技能名
 ## 5. agent 怎么激活（自判）
 
 1. 读系统 prompt 的可用技能目录 → 找到匹配自己任务的 skill。
-2. `repo_read` 对应 `SKILL.md` 全文（instructions 层）。
+2. 取 SKILL.md 完整 body（instructions 层）：`skill_load <name>`（工具画像授权、单次单技能、maxBytes 截断 truncated 标注）；或 `repo_read` 对应 `SKILL.md` 全文（resource 路径不受限时）。
 3. 按正文需要 `repo_read` `scripts/`/`references/`/`assets/`（resources 层）。
+
+> **双轨明界（C2，一行界定）**：persona `skills[]` 声明 = 系统提示常驻（启动即带元数据目录，现状 D082 接线），`skill_load <name>` = 运行时按需补充完整 body（ACL 受限、体积截断）——两条轨道并存、加载结果仅回工具结果、**绝不重复注入**系统提示。
 
 ## 6. 常见问题
 
-- **正文会污染系统 prompt / 续跑摘要吗？** 不会——SKILL.md 正文永不进 prompt（D084-4）；不进转录，D076 stripNoise 无新负担。
+- **正文会污染系统 prompt / 续跑摘要吗？** 不会——SKILL.md 正文永不进 prompt（D084-4）；`skill_load` 结果只回工具结果、不进系统提示、不进转录，D076 stripNoise 无新负担。
 - **能装第三方 skill 吗？** 双轨：托管只读（随平台更新）或可编辑副本（`~/.agents/skills/`），二选一防双份（skills/README M6）。机械安装器为后续候选（D086）。
 - **allowed-tools 会限制工具吗？** 不会——本轮仅解析不强制（D088 留档），ACL 仍由 tool_profile 六层决定。

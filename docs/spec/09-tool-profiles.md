@@ -32,12 +32,15 @@
 |request_cross_room|-|Y|Y|Y|Y|-|-|-|Y|-|-|-|-|-|-|-|
 |progress_report|Y|Y|Y|-|Y|Y|-|-|**Y**|-|-|Y|Y|-|Y|-|
 |state_read|Y|Y|Y|Y|Y|Y|Y|Y|Y|Y|Y|Y|Y|Y|Y|Y|
+|skill_load|-|-|-|-|-|-|-|-|Y|Y|-|-|-|-|-|-|
 |bare_bash|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|
 
 \* docs\* = docs-lead / tech-writer / docs-qa；people\* = people-lead / recruiter / people-qa（people 默认无 web、无业务写）。  
 † proc-audit 的 bus_post 宜限红灯/drift 类 type 或配置允许房。  
 ‡ sys-arch 可写 run 内规格/public_contract 路径（配置列出），**不是**业务 write_paths。  
 § docs 写 `runs/.../docs`、`skills/`、`docs/knowledge/` 等配置根。  
+
+**skill_load（B 按需加载，C2）：** 运行时按需取 SKILL.md 完整 body 的**工具**（与 persona `skills[]` 声明双轨并存、不重复注入）。画像授权仅 implement 席（squad-lead / engineer）；未授权画像调用 → `TOOL_DENIED`。单次单技能，body 上限 maxBytes（默认 64 KiB，env `PICODE_SKILL_MAX_BYTES` 覆盖），截断结果带 `truncated: true`；未知名技能 → 工具内联 `SKILL_NOT_FOUND`（不进 ErrorCode 枚举）。双轨语义见 [skill-harness 指南](../guides/skills/skill-harness.md)。
 
 **sponsor：** 人类通道，**不**绑定 LLM tool_profile 调用；仅经 CLI/UI 注入允许的 bus 消息。  
 
