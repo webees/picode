@@ -98,7 +98,7 @@
   - `docs/reference/decision-catalog.md`（新增 §12.9「会话 checkpoint（D082）」：快照只读/文件为准边界 + MVP 范围 + 后续候选；§12.8 re-spawn 行更新「已定（D083）」）
   - `docs/guides/operations.md`（checkpoint 小节：`picode checkpoint capture/status` 用法 + 快照只读语义 + 排查指引；续跑摘要小节补 re-spawn 去噪一句）
   - `docs/knowledge/evolve/run-2026-08-13T23-48-54-042Z.md`（E11 纪要：意图/决策/diff/验证/剩余风险/后续候选）
-  - `docs/plans/run-2026-08-13T23-48-54-042Z-plan.md`（本规划，已含）
+  - `docs/plans/2026-08-13-r9-checkpoint-boundary.md`（本规划，已含）
 - **read_paths**：C1/C2 产出、DECISIONS.md D077–D081 既有条目、catalog §12.8、operations 续跑章节
 - **depends_on**：C1、C2（机制落地才写得准）
 - **验收口径**：

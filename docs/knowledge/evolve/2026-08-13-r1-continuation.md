@@ -9,7 +9,7 @@
 
 让 picode 会话完成单回合后由**机械层自动续跑**，不再空等（长时编程能力）；续跑有界（预算/最大续跑次数）且断连可恢复（可靠性）；本轮 run 自身作为验证载体：无人干预完成至少 2 个任务并合并。
 
-依据：监督者观察记录（run-2026-08-12T23-36-04-362Z：单任务投喂后会话自主闭环但回合结束停住，tokens 12 分钟零增长）；prime-agent 研究（Q1 budgets 续跑侧）；sys-arch 评估（心跳重附/会话 checkpoint）。决策清单：docs/plans/run-2026-08-13T01-15-17-073Z-plan.md（N1–N7）。
+依据：监督者观察记录（run-2026-08-12T23-36-04-362Z：单任务投喂后会话自主闭环但回合结束停住，tokens 12 分钟零增长）；prime-agent 研究（Q1 budgets 续跑侧）；sys-arch 评估（心跳重附/会话 checkpoint）。决策清单：docs/plans/2026-08-13-r1-continuation.md（N1–N7）。
 
 决策要点（D066）：
 - N1 continuation 缺口 → 修（本轮核心）：guardian 机械层对已 awake 空闲会话投喂固定续跑 prompt（D061 noReply）
@@ -30,7 +30,7 @@
 
 - **C1 `merge task-continuation-core` = 9ec46c3**（10 文件，+767/−3）：`packages/orchestrator/src/continuation.ts`（新，`deriveContinuationTargets` 纯函数 + `feedContinuation` + `sweepContinuations`）、`continuation.test.ts`（新，383 行）、`self-drive.ts`（guardianTick 接线：checkBudgets 之后 / probeServeHealth 之前执行续跑 sweep）、`session-store.ts`（`budget.continuations` 计数持久化到 session.yaml）、`packages/core/src/session.ts`（`SessionBudgetUsed.continuations`）/`config.ts`（`self_evolve.continuation` 配置 + 校验 + 默认值 `max_per_session: 0` 不限 / `idle_sec: 300`）及测试
 - **C2 `merge task-continuation-recovery` = eb8ec2e**（7 文件，+417/−1）：`self-drive.ts` 续跑与 P1 serve 恢复衔接（error 清后从持久化计数续发，不重算不超发）、`commands/self-drive.ts`（`continuation` 子命令：`--status` 只读预览 / `--feed <agent>` 手动单次投喂）、`commands/self-drive.test.ts`（新，214 行）、`mcp-server/src/management.ts`（`continuation_status` / `continuation_feed` 工具）、test 脚本递归发现 commands/ 下测试（1c5e7ec）
-- **C3 `merge task-continuation-docs` = 35bb1e4**（5 文件，+144/−3）：`docs/DECISIONS.md`（D066）、`docs/reference/decision-catalog.md`（§12 续跑默认值）、`docs/guides/operations.md`（续跑运维规程）、`docs/knowledge/prime-agent-study.md`（continuation 落地小节）、本文档（E6）
+- **C3 `merge task-continuation-docs` = 35bb1e4**（5 文件，+144/−3）：`docs/DECISIONS.md`（D066）、`docs/reference/decision-catalog.md`（§12 续跑默认值）、`docs/guides/operations.md`（续跑运维规程）、`docs/knowledge/pi-agent-study.md`（continuation 落地小节）、本文档（E6）
 
 ## Verification
 
@@ -71,7 +71,7 @@
 # R2 区（continuation 硬化 · 2026-08-13）
 
 > R2 承接 R1 实测「剩余风险」中 3 个小而明确项（merge 终态 / 预算默认有界 / 守护重启观测），
-> 决策归档见 `docs/plans/run-2026-08-13T01-15-17-073Z-plan-r2.md`（(a) 处置决策 1-5、(b) chunk、(c) 分配、(d) R3 候选）。
+> 决策归档见 `docs/plans/2026-08-13-r2-continuation-hardening.md`（(a) 处置决策 1-5、(b) chunk、(c) 分配、(d) R3 候选）。
 
 ## R2 Diff（三 chunk，串行 merge 列车 D036）
 

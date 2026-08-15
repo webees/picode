@@ -34,7 +34,7 @@
 |----|------|------|------|
 |`name`|必填|string|逻辑 id = `role_id`（terminology / glossary 已列）|
 |`description`|必填|string|一句英文摘要（≤1 行）；工具目录 / 选择器用|
-|`tool_profile`|必填|string|席位工具画像（[09-tool-profiles](../spec/09-tool-profiles.md) 矩阵；与 `default-config.snippet.yaml` 一致）|
+|`tool_profile`|必填|string|席位工具画像（[09-tool-profiles](../spec/09-tool-profiles.md) 矩阵；与 `default-config.example.yaml` 一致）|
 |`role_id`|必填|string|seat 逻辑 id（= name）；防复制改名漂移（lint 用）|
 |`vibe`|可选|string|一句话人格气质 / 语气（低优先；研究 A6）|
 |`success_metrics`|可选|list|机器可读成功指标，与正文 §3.4 一致（16 §9 评分对照用）|

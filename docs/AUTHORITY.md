@@ -74,7 +74,7 @@
 ## 6. 一致性自检（文档维护时）
 
 1. 正文 ID 是否均能在 `terminology`（on）或 `glossary`（全目录）中找到。  
-2. 默认 on 是否与 `terminology` + `default-config.snippet.yaml` + 代码 defaults **三方一致**。  
+2. 默认 on 是否与 `terminology` + `default-config.example.yaml` + 代码 defaults **三方一致**。  
 3. 是否在第二处复制了流程步骤或全量房岗表。  
 4. Agent 细节是否只指向 **17**，实现缺口是否只指向 **18**。  
 5. Schema 样例是否与 16/17 字段一致。  

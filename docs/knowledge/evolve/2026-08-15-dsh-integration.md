@@ -68,7 +68,7 @@
 - 官方全量 `npm test`（HOME 隔离）：**562/562 exit 0**（core 155 / bus 19 / orchestrator 318 / pi-extension 36 / mcp-server 18 / dashboard-server 16）
 - `npm run check`：三 lint 全绿（persona-lint OK / skill-lint OK / decision-lint **0 error 0 warning**）
 - decision-lint 0 error：C2/C3 基线 2 条 `D104 REF_UNRESOLVED` warning（spec 04 §10.4 / C2 evidence 口径）随 D104 落地消解
-- diff 门禁（C5）：5 文件 ⊆ write_paths（docs/DECISIONS.md、docs/decisions/watermark.yaml、docs/reference/decision-catalog.md、docs/reference/default-config.snippet.yaml、本纪要）
+- diff 门禁（C5）：5 文件 ⊆ write_paths（docs/DECISIONS.md、docs/decisions/watermark.yaml、docs/reference/decision-catalog.md、docs/reference/default-config.example.yaml、本纪要）
 - 决策编号闭环：`--reserve`（104-108，count 5）→ 表行+详条（编号对齐）→ `--land` 完成；watermark next_number=104 → 109
 - 上轮遗留消解：D103 治理流程本轮 C3 复证（node_modules 断链再复现、重建自链有效）
 

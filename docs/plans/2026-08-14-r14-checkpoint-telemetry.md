@@ -139,7 +139,7 @@
   - `docs/guides/operations.md`（checkpoint 观测命令：`picode status`（checkpoint 段）/ `picode checkpoint status` / MCP `checkpoint_status` 用法；自动捕获默认开启说明 + `enabled: false` 关闭；merge push 规程节——合并成功自动 push、失败 best-effort 记录、`git.auto_push: false` 关闭；**吞吐调度规程**——写集互斥下并行三角、单写者文件合并/串行、并行度 ≤ max_parallel_triads=3）
   - `docs/PROCESSES.md`（P05 调度节补写集互斥并行规则：chunk write_paths 两两互斥即可并行，共享文件（单写者）须合并同 chunk 或串行——sponsor 吞吐建议 1/3 的规程化）
   - `docs/knowledge/evolve/run-2026-08-14T11-14-26-837Z.md`（E15 纪要：D095/D096/D098 diff/验证/剩余风险/后续候选 + 默认翻转评估记录 + sponsor push 机制化记录 + 吞吐反馈处置（建议 1/3 采纳、2 不采纳原因、批量 merge 缓））
-  - `docs/plans/run-2026-08-14T11-14-26-837Z-plan.md`（本规划，已含）
+  - `docs/plans/2026-08-14-r14-checkpoint-telemetry.md`（本规划，已含）
 - **read_paths**：C1/C2 产出、DECISIONS 现状、catalog checkpoint/merge 节、operations checkpoint/merge 节、PROCESSES P05 调度节、D082/D091 详条、E14 纪要
 - **depends_on**：C1、C2（机制落地才写得准；`npm run check` 在 C1+C2+C3 齐后全绿）
 - **验收口径**：

@@ -458,7 +458,7 @@
   - **兼容**：既有用户配置含已删键仍可加载（分层 merge 不拒未知键、validateConfig 不查已删键，loader.test.ts 新用例守护）
 - 实现：`packages/core/src/config.ts` + `config.test.ts`（D4 断言 :85 self_evolve.enabled 同步）+ `loader.test.ts`
 - 验证：core 122/122、官方 npm test 全绿（FULL_TEST_EXIT=0）；残留键配置可加载
-- commit: d229eea（C1 task-config-singleton）；docs 侧摘录同步（default-config.snippet.yaml）归 C6（D101 落地）；spec 17/19 历史 yaml 示例仍含已删键字样（非运行时引用，C6 不动，见 E16 剩余风险留档）
+- commit: d229eea（C1 task-config-singleton）；docs 侧摘录同步（default-config.example.yaml）归 C6（D101 落地）；spec 17/19 历史 yaml 示例仍含已删键字样（非运行时引用，C6 不动，见 E16 剩余风险留档）
 
 ## D102 — ponytail 清理（死导出×3 + 薄壳×3 + 夹具单源 · C1/C3/C4/C5）
 - 2026-08-15 · 来源：run-2026-08-15T01-12-43-3NZ（plan (e) 排期：死导出 / 薄壳并入 / 夹具单源）

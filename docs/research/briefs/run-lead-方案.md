@@ -59,7 +59,7 @@ spec 10 已登记 `check_signoff` type，文件/流程格式本就「留待 spec
 ## (b) chunk 分块建议（4 个，depends_on 串行/并行编排）
 
 **C1 `chunk-problem-docs`（无代码依赖 · 最先）**
-- write_paths：`docs/problems/**`、`docs/knowledge/prime-agent-study.md`、`docs/knowledge/evolve/`、`docs/plans/**`（均在 docs/knowledge/docs 层内）
+- write_paths：`docs/problems/**`、`docs/knowledge/pi-agent-study.md`、`docs/knowledge/evolve/`、`docs/plans/**`（均在 docs/knowledge/docs 层内）
 - 目标：本决策清单落盘（处置结论可审计）+ prime-agent 机制映射文档（ind-res 取证后）→ 满足 product_acceptance 1/2/3 的文档部分
 - depends_on：无
 

@@ -57,7 +57,7 @@
 ## 4. 改造后自检（落地前人工对照）
 
 - [ ] frontmatter 4 必填齐全，且 `name` = `role_id` = 文件名。
-- [ ] `tool_profile` 在 `default-config.snippet.yaml` / 09 工具矩阵内。
+- [ ] `tool_profile` 在 `default-config.example.yaml` / 09 工具矩阵内。
 - [ ] 原文「禁止」语义全部保留（无遗漏）。
 - [ ] 四节齐全、每节非空；Success Metrics 可核对（16 §9 文件事实优先）。
 - [ ] 未引入新逻辑 id、未改展示名、未复制房岗全表（doc-style §1 单点权威）。

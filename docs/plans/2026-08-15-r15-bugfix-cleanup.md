@@ -87,7 +87,7 @@
   `sleepIdleSessions` opt-in），**不得删除**，保留并刷新注释标记 reserved。
 - **兼容**：既有用户配置含已删键仍可加载（分层 merge 不拒未知键、validateConfig 不查已删键，
   loader.test.ts 新用例守护）。
-- **边界**：docs 侧键同步（docs/spec/17、19、DECISIONS、reference/default-config.snippet.yaml）归 C6。
+- **边界**：docs 侧键同步（docs/spec/17、19、DECISIONS、reference/default-config.example.yaml）归 C6。
 
 ### co-001 变更单（run-lead 变更单，非决策编号）
 

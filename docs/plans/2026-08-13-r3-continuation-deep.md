@@ -94,7 +94,7 @@
   - `docs/DECISIONS.md`（D067 idle 时钟=回合完成时间；D068 平台席策略 + 续跑 gate 可选接入；D069 续跑遥测）
   - `docs/reference/decision-catalog.md`（§12 补平台席策略/gate/遥测条目，若有 C1/C2 未覆盖部分）
   - `docs/guides/operations.md`（gate 运维规程 + 平台席续跑策略说明，若 C3 未覆盖）
-  - `docs/plans/run-2026-08-13T09-36-28-520Z-plan.md`（本决策归档）
+  - `docs/plans/2026-08-13-r3-continuation-deep.md`（本决策归档）
 - **read_paths**：C1-C3 产出、research/prime-agent-continuation.md、plan-r2 (d)
 - **depends_on**：R3-C1、R3-C2、R3-C3 合并后
 - **验收**：

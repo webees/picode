@@ -13,7 +13,7 @@
 3. 续跑状态可观测（status/CLI/MCP 可见）
 
 另修监督者本轮实测缺陷（idle 时钟基于投喂时间而非回合完成时间）。
-决策清单：docs/plans/run-2026-08-13T09-36-28-520Z-plan.md（(a) 处置决策 1-6）。
+决策清单：docs/plans/2026-08-13-r3-continuation-deep.md（(a) 处置决策 1-6）。
 
 ## 决策要点（D067–D069）
 

@@ -1,5 +1,5 @@
 # .picode/config.yaml — illustrative project config
-# Full defaults: reference/default-config.snippet.yaml + packages/core
+# Full defaults: reference/default-config.example.yaml + packages/core
 config_schema_version: "1"
 active_profile: default
 

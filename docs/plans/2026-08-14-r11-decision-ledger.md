@@ -110,7 +110,7 @@
   - `docs/reference/decision-catalog.md`（新增 §16 决策编号机制：水位 ledger / reserve 流程 / decision-lint / 纪律；§15 编号核对无改动）
   - `docs/standards/doc-style.md` 或 `docs/standards/terminology.md`（补一句：新 D 编号必须先 `decision-reserve` 再落 plan——M5 维护纪律延展）
   - `docs/knowledge/evolve/run-2026-08-14T07-27-45-654Z.md`（E12 纪要：根因/决策/diff/验证/剩余风险/后续候选 + 编号修复对照表）
-  - `docs/plans/run-2026-08-14T07-27-45-654Z-plan.md`（本规划，已含）
+  - `docs/plans/2026-08-14-r11-decision-ledger.md`（本规划，已含）
 - **read_paths**：C1/C2 产出、DECISIONS 现状、catalog §15、E11、skill-spec、commit.md（提交规范）
 - **depends_on**：C1、C2（机制落地才写得准；`npm run check` 三 lint 在 C2+C3 齐后全绿）
 - **验收口径**：

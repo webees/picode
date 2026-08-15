@@ -12,7 +12,7 @@ sponsor 指令：基于 shadcn-vue-admin 技术栈的监控面板，直观展示
 `.picode/runs` YAML + opencode serve API，可本地运行并接入真实 run 数据。
 四 product_acceptance：技术栈（Vue3+Vite+TS+shadcn-vue）/ 直观展示 run 细节 /
 数据源 = YAML + serve / 可本地运行接真实 run。
-决策清单：docs/plans/run-2026-08-13T12-16-26-548Z-plan.md（(a) 决策 D1–D10）。
+决策清单：docs/plans/2026-08-13-r4-dashboard.md（(a) 决策 D1–D10）。
 
 ## 决策要点（D070）
 

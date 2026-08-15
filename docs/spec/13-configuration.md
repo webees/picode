@@ -321,7 +321,7 @@ Agent prompt 渲染 MUST 走上述 API，避免硬编码中文名。
 内置 defaults MUST 提供当前 **terminology 默认 on** 的 rooms/roles/cells  
 （含 `leadership`/`product`/`program`/… 与 `sponsor`/`sess-mgr`/`run-lead`/`pm`/…），  
 保证零配置可 init 出完整花名册（会话是否 awake 见 17/18）。  
-用户配置只覆盖想改的部分。权威摘录：[default-config.snippet.yaml](../reference/default-config.snippet.yaml)。
+用户配置只覆盖想改的部分。权威摘录：[default-config.example.yaml](../reference/default-config.example.yaml)。
 
 ## 15. 与不变量关系
 

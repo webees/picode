@@ -21,7 +21,7 @@
 |[members.yaml](./members.yaml)|房间成员|bus-system · 02|
 |[bus-envelope.yaml](./bus-envelope.yaml)|消息信封|10 · bus-system|
 |[cell.yaml](./cell.yaml)|cell 模板片段|02 · 13|
-|[config.yaml](./config.yaml)|项目配置摘录|13 · [default-config.snippet.yaml](../default-config.snippet.yaml)|
+|[config.yaml](./config.yaml)|项目配置摘录|13 · [default-config.example.yaml](../default-config.example.yaml)|
 
 **约定：**
 

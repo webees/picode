@@ -96,7 +96,7 @@
   - `docs/reference/decision-catalog.md`（§12.8 摘要窗口与去噪：`SUMMARY_STRIP_NOISE` 唯一列表 + re-spawn 口径收拢；新增 supervise 监控命令节——`picode supervise --once/--interval` + STOPPED 语义 + live 原语上移）
   - `docs/guides/operations.md`（supervise 命令用法：`--once` 单次 / `--interval` 循环 / `--log` JSONL / STOPPED 判定；feed.mjs 能力映射表：spawn→session wake、ask→continuation_feed MCP、poll→supervise/live tokens、审计→session audit）
   - `docs/knowledge/evolve/run-2026-08-14T10-07-06-439Z.md`（E14 纪要：D092/D093 diff/验证/剩余风险/后续候选 + 循环依赖解法记录）
-  - `docs/plans/run-2026-08-14T10-07-06-439Z-plan.md`（本规划，已含）
+  - `docs/plans/2026-08-14-r13-stripnoise-supervise.md`（本规划，已含）
 - **read_paths**：C1/C2 产出、DECISIONS 现状、catalog §12.8/§12.9、operations 现有 session/checkpoint 节、D083 详条、E13 纪要
 - **depends_on**：C1、C2（机制落地才写得准；`npm run check` 在 C2+C3 齐后全绿）
 - **验收口径**：

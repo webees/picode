@@ -96,7 +96,7 @@
   - `docs/reference/decision-catalog.md`（§12.3 补摘要质量句：stripNoise 剔模板句 + summary_entries 窗口可配；新增 §12.8「续跑预算按角色」：平台席独立 `max_per_session_platform` 默认 2 的保守行为变更说明）
   - `docs/guides/operations.md`（续跑小节：摘要剔模板句说明 + `summary_entries` / `max_per_session_platform` 配置一句话）
   - `docs/knowledge/evolve/run-2026-08-13T21-32-57-118Z.md`（E10 纪要：意图/决策/diff/验证/剩余风险/后续候选）
-  - `docs/plans/run-2026-08-13T21-32-57-118Z-plan.md`（本规划，已含）
+  - `docs/plans/2026-08-13-r8-summary-quality.md`（本规划，已含）
 - **read_paths**：C1/C2 产出、continuation.ts/transcript-store.ts/status.ts（决策措辞依据）
 - **depends_on**：C1、C2（机制落地才写得准）
 - **验收口径**：

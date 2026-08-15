@@ -60,7 +60,7 @@
   - `docs/reference/decision-catalog.md`（§12.3「续跑内容语义」：transcript 摘要注入从候选改为**已定**，补 D076 落地点）
   - `docs/guides/operations.md`（续跑语义小节补「续跑 prompt 含上一回合要点摘要（transcripts/<agent>.jsonl 启发式派生，无 LLM）」一句话）
   - `docs/knowledge/evolve/run-2026-08-13T18-29-39-276Z.md`（E9 纪要：意图/决策/diff/验证/剩余风险）
-  - `docs/plans/run-2026-08-13T18-29-39-276Z-plan.md`（本规划，已含）
+  - `docs/plans/2026-08-13-r7-semantic-continuation.md`（本规划，已含）
 - **read_paths**：C1 产出、continuation.ts/transcript-store.ts（决策措辞依据）
 - **depends_on**：C1（机制落地才写得准）
 - **验收口径**：

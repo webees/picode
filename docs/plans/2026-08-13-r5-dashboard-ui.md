@@ -117,7 +117,7 @@ dashboard-server 与 9 端点**零改动**（验收 #4 硬约束）；所有新�
   - `docs/guides/operations.md`（面板运维补：三视图说明、--repo 指向、如何观察进度/人员/房间）
   - `README.md`（Dashboard 章节补检修说明 + 三视图）
   - `docs/knowledge/evolve/run-2026-08-13T15-08-28-705Z.md`（E7 纪要：意图/决策/diff/验证/剩余风险）
-  - `docs/plans/run-2026-08-13T15-08-28-705Z-plan.md`（本决策归档，已含）
+  - `docs/plans/2026-08-13-r5-dashboard-ui.md`（本决策归档，已含）
 - **read_paths**：C1–C3 产出；基线 5f9de08 diff；`rooms/*/members.json` 与 `.picode/agents/*.md`（角色描述来源）
 - **depends_on**：C1–C3（机制落地才写得准）
 - **验收口径**：

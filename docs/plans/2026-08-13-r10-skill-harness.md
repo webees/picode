@@ -60,7 +60,7 @@
   - `packages/core/src/config.ts`（`skills_root` 移除 `Reserved (D055)` 注释；`validateConfig` 补相对路径校验——非空、非绝对、不含 `..` 逃逸）
   - `packages/core/src/index.ts`（导出 skills 模块）
   - `package.json`（`npm run check` 追加 skill-lint）
-  - `docs/reference/schemas/config.yaml` + `docs/reference/default-config.snippet.yaml`（`skills_root` 注释去 D055）
+  - `docs/reference/schemas/config.yaml` + `docs/reference/default-config.example.yaml`（`skills_root` 注释去 D055）
 - **read_paths**：`config.ts`（PicodeConfig 结构 / SAFE_ID_RE）、`persona-lint.ts`（镜像模式）、`skills/engineering/*/SKILL.md`（现有种子，规范依据）
 - **public_contract**：`@picode/core` 新增导出 `resolveSkillsRoot/discoverSkills/buildSkillIndex/personaDeclaredSkills` + `SkillMeta`；新 CLI `skill-lint`；`skills_root` 成为有效配置键（默认 "skills"，行为兼容——未配置目录时 discover 返回空）
 - **depends_on**：无
@@ -98,7 +98,7 @@
   - `docs/guides/skills/README.md` 或新增 `docs/guides/skills/skill-harness.md`（人读页：如何写/校验/注入 skill）
   - `skills/README.md`（索引补「校验入口：npm run check 内 skill-lint」）
   - `docs/knowledge/evolve/run-2026-08-13T23-50-59-484Z.md`（E11 纪要：意图/决策/diff/验证/剩余风险/后续候选）
-  - `docs/plans/run-2026-08-13T23-50-59-484Z-plan.md`（本规划，已含）
+  - `docs/plans/2026-08-13-r10-skill-harness.md`（本规划，已含）
 - **read_paths**：C1/C2 产出、skills.ts / skill-lint.ts / pi-adapter.ts / opencode-adapter.ts（措辞依据）、anthropics spec 摘要
 - **depends_on**：C1、C2（机制落地才写得准）
 - **验收口径**：

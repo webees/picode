@@ -96,7 +96,7 @@ layers=[knowledge,docs]
 |---|---|---|
 | 死导出 ×3（roomDisplay / isPicodeError / canConsumeModel） | **done** | isPicodeError/canConsumeModel 已合并（C3 = f4c4a4b，grep 三面零残留）；roomDisplay 定义+测试引用清理随 C1（d229eea → merge 2df7486）|
 | 薄壳 ×3（mcp-server errors.ts/schema.ts、orchestrator jsonl.ts） | **done** | C4 流岚：toMcpError/toZodShape → mcp-server index.ts；readJsonl → rules-engine 单宿主导出 + merge.ts 跨引（9f5a2f2 复制粘贴被复核打回 → 279c8d7 修正）；测试 helper 进 test-utils；merge 6fa14ab |
-| yagni 死配置（D055 reserved 6 处） | **done** | 5 删 1 留（idle_sleep_sec 保留，D101），随 C1 合并；docs 摘录 default-config.snippet.yaml 已同步（C6）|
+| yagni 死配置（D055 reserved 6 处） | **done** | 5 删 1 留（idle_sleep_sec 保留，D101），随 C1 合并；docs 摘录 default-config.example.yaml 已同步（C6）|
 | 夹具单源 ×24（mcp-server ×2 + orchestrator ×22） | **done** | C5 归一：两包 test-utils 共享 `gitInit`（branch 选项）+ `tmpGitRepo` 包装，24 文件本地定义归零（A 类 5 直换 / B 类 15 / C 类 2 特殊步骤 / D 类 2 branch:null 逐字保留）；merge 1f93f55；官方 npm test 502/502（core 125/bus 19/orch 307/pi 17/mcp 18/dash 16）|
 
 ## 基线失败记录（C6 终态处置）

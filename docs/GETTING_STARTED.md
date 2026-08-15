@@ -149,4 +149,4 @@ PICODE_REPO=. npm run mcp        # stdio 服务器
 
 ## 7. 配置房间/角色名
 
-编辑项目或 picode 仓库的 `.picode/config.yaml`（见 `docs/spec/13-configuration.md`；默认值摘录 `docs/reference/default-config.snippet.yaml`）。
+编辑项目或 picode 仓库的 `.picode/config.yaml`（见 `docs/spec/13-configuration.md`；默认值摘录 `docs/reference/default-config.example.yaml`）。

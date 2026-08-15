@@ -77,7 +77,7 @@
 |[glossary.md](./reference/glossary.md)|命名律 · 岗位全目录 · 分层|
 |[decision-catalog.md](./reference/decision-catalog.md)|**选项 + ★默认**（历史拍板总表）|
 |[schemas/](./reference/schemas/)|YAML 形状样例（[索引](./reference/schemas/README.md)）|
-|[default-config.snippet.yaml](./reference/default-config.snippet.yaml)|默认配置摘录|
+|[default-config.example.yaml](./reference/default-config.example.yaml)|默认配置摘录|
 
 ### E · 入口与指南
 
@@ -111,7 +111,7 @@
 |自我进化|**19** + `evolve` 命令|
 |文档小组|**15** + P03/P08/P11|
 |人事招聘|**16** + P04/P05|
-|可配置|13 + terminology + default-config.snippet.yaml|
+|可配置|13 + terminology + default-config.example.yaml|
 |岗位目录 / 命名律|**glossary**|
 |选项与默认|**decision-catalog**|
 |agent 唤醒/人设|**17-agent-runtime**|

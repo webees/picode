@@ -84,7 +84,7 @@
   - `docs/reference/decision-catalog.md`（§12.9 表格：`boundary` 枚举补 `guardian_tick`/`pre_merge`；「checkpoint 自动捕获」行从缓项改为已定（D091）并注明配置键）
   - `docs/guides/operations.md`（决策编号规程补 `start`/`count` 字段说明 + `--plan` 预检提示；checkpoint 小节补自动捕获：配置键、boundary 枚举、防抖语义、merge 前捕获）
   - `docs/knowledge/evolve/run-2026-08-14T08-55-08-366Z.md`（E12 纪要：D091/D092 diff/验证/剩余风险/后续候选 + 编号机制自验实测记录 + D092-1 缺陷修复对照）
-  - `docs/plans/run-2026-08-14T08-55-08-366Z-plan.md`（本规划，已含）
+  - `docs/plans/2026-08-14-r12-checkpoint-auto.md`（本规划，已含）
 - **read_paths**：C1/C2 产出、DECISIONS 现状、catalog §12.9、operations 现有 checkpoint 节、D082/D083 详条
 - **depends_on**：C1、C2（机制落地才写得准；`npm run check` 三 lint 在 C2+C3 齐后全绿）
 - **验收口径**：

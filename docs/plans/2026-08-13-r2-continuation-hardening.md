@@ -54,7 +54,7 @@
   - R2-C3-c 文档：operations.md 增「guardian 重启规程」小节（合并后重启步骤 + 为何不热载）
 
 ### R2-C4 `chunk-round2-docs`（知识归档 · docs 层）
-- **write_paths**：`docs/knowledge/evolve/run-2026-08-13T01-15-17-073Z.md`（E6 追加 R2）、`docs/knowledge/research/README.md`（登记 prime-agent-continuation.md）、`docs/plans/run-2026-08-13T01-15-17-073Z-plan-r2.md`（本决策归档）
+- **write_paths**：`docs/knowledge/evolve/run-2026-08-13T01-15-17-073Z.md`（E6 追加 R2）、`docs/knowledge/research/README.md`（登记 prime-agent-continuation.md）、`docs/plans/2026-08-13-r2-continuation-hardening.md`（本决策归档）
 - **read_paths**：C1-C3 产出、docs/knowledge/research/prime-agent-continuation.md
 - **depends_on**：R2-C1、R2-C2、R2-C3 合并后
 - **验收**：

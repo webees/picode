@@ -40,7 +40,7 @@
 |------|----------|
 |[glossary.md](./reference/glossary.md)|命名律（R1–R7 强制）+ 岗位全量目录 + 分层/分组/默认启用一览|
 |[decision-catalog.md](./reference/decision-catalog.md)|产品与运行时决策目录：选项 + ★当前默认（改默认须同步 DECISIONS 与权威正文）|
-|[default-config.snippet.yaml](./reference/default-config.snippet.yaml)|默认配置摘录（与 `packages/core` DEFAULTS 保持同步，非运行源）|
+|[default-config.example.yaml](./reference/default-config.example.yaml)|默认配置摘录（与 `packages/core` DEFAULTS 保持同步，非运行源）|
 |[schemas/README.md](./reference/schemas/README.md)|Schemas 索引：各 YAML 形状样例的一览表与用途说明|
 
 ### reference/schemas/（落盘文件形状样例）
