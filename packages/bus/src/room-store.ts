@@ -1,7 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { ErrorCode, PicodeError, ensureDir, withFileLock, writeAtomic } from "@picode/core";
+import {
+  ErrorCode,
+  PicodeError,
+  ensureDir,
+  readYamlFile,
+  withFileLock,
+  writeAtomic,
+} from "@picode/core";
 import { groupByWindow, windowIdOf } from "./window.js";
 
 export type Access = "post" | "read";
@@ -67,6 +74,20 @@ export interface BusMessage {
 /** room id safe-name pattern: becomes path segments under rooms/ and bus/. */
 const SAFE_ROOM_RE = /^[A-Za-z0-9_-]+$/;
 
+/** I5: agent id safe-name pattern (mirrors orchestrator session-store SAFE_AGENT_ID_RE). */
+const SAFE_AGENT_ID_RE = /^[A-Za-z0-9_-]+(@[A-Za-z0-9_-]+)?$/;
+
+/**
+ * Room metadata (I5): `rooms/<room>/meta.yaml` — the room's owning session.
+ * `owner_session` = the session this room belongs to (子代理房 = 子代理实例 id，
+ * e.g. `subagent@task-x`); the owner fence reads that session's roster record
+ * (I3 `parent_session` / `delegation_depth`) to derive who may post.
+ */
+export interface RoomMeta {
+  room_id: string;
+  owner_session?: string | null;
+}
+
 export class RoomStore {
   constructor(private runDir: string) {}
 
@@ -121,6 +142,94 @@ export class RoomStore {
     writeAtomic(p, JSON.stringify({ room_id: room, members }, null, 2));
   }
 
+  /** I5: declare the session that owns this room (`rooms/<room>/meta.yaml`). */
+  setRoomOwner(room: string, ownerSession: string): void {
+    this.assertSafeRoom(room);
+    // ownerSession 拼入 meta.yaml 值（非路径），但仍须安全 agent id——围栏按它
+    // 读 run 花名册，非法值一律拒绝（与 orchestrator SAFE_AGENT_ID_RE 同口径）。
+    if (!SAFE_AGENT_ID_RE.test(ownerSession)) {
+      throw new PicodeError(
+        ErrorCode.BAD_ARGS,
+        `owner session "${ownerSession}" is not a safe agent id`,
+      );
+    }
+    const p = this.roomMetaPath(room);
+    ensureDir(path.dirname(p));
+    writeAtomic(p, YAML.stringify({ room_id: room, owner_session: ownerSession }));
+  }
+
+  /** I5: the room's owning session (meta.yaml `owner_session`), or null. */
+  roomOwner(room: string): string | null {
+    this.assertSafeRoom(room);
+    const p = this.roomMetaPath(room);
+    if (!fs.existsSync(p)) return null;
+    try {
+      const meta = YAML.parse(fs.readFileSync(p, "utf8")) as RoomMeta | null;
+      return meta?.owner_session ?? null;
+    } catch {
+      throw new PicodeError(
+        ErrorCode.CONFIG_INVALID,
+        `room meta file corrupt (${p}) — fix or remove the file`,
+      );
+    }
+  }
+
+  private roomMetaPath(room: string): string {
+    this.assertSafeRoom(room);
+    return path.join(this.runDir, "rooms", room, "meta.yaml");
+  }
+
+  /**
+   * I5: read a run-roster session record (`sessions/<agentId>.yaml`, I3 shape).
+   * bus→core 文件真相读取（D002：围栏读 parent_session，不派生新真相源）。
+   * 非安全 agent id / 会话不存在 → null（ACL 仍兜底）。
+   */
+  private loadSession(
+    agentId: string,
+  ): { delegation_depth?: number; parent_session?: string | null } | null {
+    if (!SAFE_AGENT_ID_RE.test(agentId)) return null;
+    const p = path.join(this.runDir, "sessions", `${agentId}.yaml`);
+    if (!fs.existsSync(p)) return null;
+    return readYamlFile<{ delegation_depth?: number; parent_session?: string | null }>(p);
+  }
+
+  /**
+   * I5 owner 围栏（叠加在 ACL 之上，更严）：目标为子代理会话房（room 元数据
+   * `owner_session` 指向的会话是子代理：delegation_depth>0 ∧ parent_session）
+   * 且发送者非其父会话 → ROOM_POST_DENIED（agent-busy 语义等价物）。
+   * 非子代理房间零变更。
+   */
+  private assertOwnerFence(room: string, agentId: string): void {
+    const owner = this.roomOwner(room);
+    if (!owner) return;
+    const ownerSession = this.loadSession(owner);
+    const parent = ownerSession?.parent_session ?? null;
+    const isSubagentRoom =
+      !!ownerSession && (ownerSession.delegation_depth ?? 0) > 0 && !!parent;
+    if (isSubagentRoom && agentId !== parent) {
+      throw new PicodeError(
+        ErrorCode.ROOM_POST_DENIED,
+        `post denied for ${agentId} in room ${room}: subagent session room owned by ${owner} — only parent ${parent} may post (owner fence)`,
+      );
+    }
+  }
+
+  /**
+   * I5 发送者围栏（须经父转达）：发送者为子代理（delegation_depth>0 ∧
+   * parent_session）时，仅可向其父会话可发言的房间发言——子代理不可直达
+   * sponsor/领导层房（问人禁令，17 §9）；成员/类型校验仍作兜底。
+   */
+  private assertSenderFence(room: string, agentId: string): void {
+    const s = this.loadSession(agentId);
+    if (!s || (s.delegation_depth ?? 0) <= 0 || !s.parent_session) return;
+    if (!this.canPost(room, s.parent_session)) {
+      throw new PicodeError(
+        ErrorCode.ROOM_POST_DENIED,
+        `post denied for ${agentId} in room ${room}: subagent may only post where parent ${s.parent_session} can post (must relay via parent)`,
+      );
+    }
+  }
+
   canPost(room: string, agentId: string, type?: string): boolean {
     const m = this.loadMembers(room).find((x) => x.id === agentId);
     if (!m || m.access !== "post") return false;
@@ -148,6 +257,10 @@ export class RoomStore {
     if (!this.canPost(room, agentId, msg.type)) {
       throw new PicodeError(ErrorCode.ROOM_POST_DENIED, `post denied for ${agentId} in room ${room}`);
     }
+    // I5: owner 围栏叠加在 ACL 之上（校验序 = type → members ACL → owner 围栏，
+    // 蓝图 §7 #5）：子代理会话房仅父可路由；子代理发送者须经父转达。
+    this.assertOwnerFence(room, agentId);
+    this.assertSenderFence(room, agentId);
     const full: BusMessage = {
       ts: new Date().toISOString(),
       id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

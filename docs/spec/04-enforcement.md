@@ -24,7 +24,17 @@ bus.history({ room, limit })
 2. 加载 `rooms/<room>/members.yaml`  
 3. `from` 是否 `access` 含 `post`  
 4. 否 → 拒绝；追加 `violations.log`  
-5. 是 → 锁文件后 append 到 RoomStore
+5. 是 → **owner 围栏（I5，叠加在 ACL 之上，更严）**：
+   - **目标侧（子代理会话房仅父可路由）**：`rooms/<room>/meta.yaml` 声明 `owner_session`
+     （该房间归属的会话）且该会话为子代理（`delegation_depth>0` 且 `parent_session` 非空）
+     → 发送者非其 `parent_session` → `ROOM_POST_DENIED`（agent-busy 语义等价物，
+     消息含 owner 围栏标记）；父→子经父→子消息通道，其它成员须经父转达或显式授权。
+   - **发送侧（子代理不可问人）**：发送者为子代理（`delegation_depth>0` 且
+     `parent_session` 非空）→ 仅可向其父会话可发言的房间发言（成员/类型校验兜底）——
+     子代理不得直接向 sponsor/领导层房提问，须经父转达。
+6. 是 → 锁文件后 append 到 RoomStore
+
+非子代理房间（无 `owner_session` 元数据 / 发送者非子代理）语义零变更。
 
 ### 1.3 history 校验
 
@@ -46,6 +56,12 @@ bus.history({ room, limit })
 3. MUST NOT 写入其它 chunk 的 write 集（除非 shared 且本 chunk 为 owner）  
 4. 否则拒绝 + violation  
 5. 实现 MUST 在 **task worktree** 内写入（06 §1）  
+
+**子代理只收窄（I4）**：子代理任务（task.yaml 声明可选 `parent_task`）有效写集 =
+父 task `write_paths` ∩ 本 task 声明 `write_paths`（**只收窄、不放宽**）——
+staffing `draftPersonas` 生成子代理 persona 时即落有效写集；people-qa `checkPersonas`
+校验子 persona `write_paths` ⊆ 父 task `write_paths`，子宽于父 → 结构化拒绝；
+父 task 缺失 → fail-loud。无父链（顶层任务）时规则退化为上述静态白名单语义（零变更）。
 
 > **沙箱叠加（E，§10）**：`write_paths` 静态白名单语义不变（机械校验仍是第一道门）；
 > 会话级 sandbox mode（read-only / workspace-write / danger-full-access）叠加其上作

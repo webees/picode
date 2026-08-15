@@ -87,6 +87,11 @@ export function readTaskYaml(dir: string, taskId: string): {
   acceptance: Array<{ id: string; type: string; spec: string }>;
   triad: Record<string, string>;
   work_room: string;
+  /**
+   * I4: 子代理任务可选的父任务 id（task.yaml 可选字段）。缺省 = 顶层任务，
+   * 规则退化为现状（04 §2.1 每 task 静态白名单）。
+   */
+  parent_task?: string | null;
 } {
   const task = readYamlFile<Record<string, unknown>>(
     path.join(dir, "tasks", taskId, "task.yaml"),
@@ -98,7 +103,27 @@ export function readTaskYaml(dir: string, taskId: string): {
     acceptance: Array<{ id: string; type: string; spec: string }>;
     triad: Record<string, string>;
     work_room: string;
+    parent_task?: string | null;
   };
+}
+
+/** I4: task id safe-name pattern — becomes `tasks/<id>` path segments (P0). */
+const SAFE_TASK_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+/** I4: 子代理任务的父任务 id（task.yaml `parent_task` 可选字段；空/非法 → null）。 */
+function parentTaskIdOf(task: { parent_task?: string | null }): string | null {
+  const p = task.parent_task;
+  if (typeof p !== "string" || p.trim().length === 0) return null;
+  const tid = p.trim();
+  return SAFE_TASK_ID_RE.test(tid) ? tid : null;
+}
+
+/** I4: 父 task write_paths（task.yaml 文件真相；父任务缺失/非法 → null）。 */
+function parentTaskWritePaths(dir: string, parentTaskId: string): string[] | null {
+  const parent = readYamlFile<{ write_paths?: unknown }>(
+    path.join(dir, "tasks", parentTaskId, "task.yaml"),
+  );
+  return Array.isArray(parent?.write_paths) ? (parent.write_paths as string[]) : null;
 }
 
 /** `staffing request`: run-lead standard → people. Wakes the people cell. */
@@ -172,6 +197,19 @@ export function draftPersonas(
 
   const roles = new Map(config.roles.map((r) => [r.id, r]));
   const overrides = request.codename_overrides ?? {};
+  // I4: 子代理任务（task.yaml 声明 parent_task）有效写集 = 父 write_paths ∩ 本
+  // task 声明 write_paths（只收窄不放宽，蓝图 §3.2）；无父链 → 现状语义。
+  const parentTaskId = parentTaskIdOf(task);
+  let effectiveWritePaths = task.write_paths;
+  if (parentTaskId) {
+    const parentWp = parentTaskWritePaths(dir, parentTaskId);
+    if (!parentWp) {
+      throw new Error(
+        `parent task not found: tasks/${parentTaskId}/task.yaml (I4 narrowing, cannot draft personas)`,
+      );
+    }
+    effectiveWritePaths = task.write_paths.filter((w) => parentWp.includes(w));
+  }
   // 16 §8 + codename-ledger: draft already avoids names taken by earlier
   // approved tasks in this run (auto -rN suffix); the task's own records are
   // excluded so re-drafting stays deterministic. approve re-checks authoritatively.
@@ -192,14 +230,14 @@ export function draftPersonas(
       codename: disambiguateName(overrides[seat] ?? generateCodename(instanceId), used.codenames),
       display_name: role?.display_name ?? seat,
       mission: `完成 ${taskId} 的职责(见 brief 与 acceptance)`,
-      scope_in: task.write_paths,
+      scope_in: effectiveWritePaths,
       scope_out: ["修改 write_paths 之外文件", ...request.constraints],
       skills: request.skills_wanted,
       stack: [],
       communication: "concise",
       risk_posture: "conservative",
       tool_profile: profile,
-      write_paths: task.write_paths,
+      write_paths: effectiveWritePaths,
       read_paths: task.read_paths,
       reports_to: seat === "squad-lead" ? "run-lead" : `${"squad-lead"}@${taskId}`,
       handoff_to:
@@ -269,6 +307,24 @@ export function checkPersonas(dir: string, config: PicodeConfig, taskId: string)
       (w) => !task.write_paths.includes(w),
     );
     if (outOfWrite.length) problems.push(`write_paths outside task: ${outOfWrite.join(", ")}`);
+    // I4: 子代理收窄 — 子 persona write_paths ⊆ 父 task write_paths（只收窄、
+    // 不放宽；沿用 persona⊆task 精确子集先例）。无父链（顶层任务）退化为现状。
+    const parentTaskId = parentTaskIdOf(task);
+    if (parentTaskId) {
+      const parentWp = parentTaskWritePaths(dir, parentTaskId);
+      if (!parentWp) {
+        problems.push(`parent task not found: tasks/${parentTaskId}/task.yaml (I4 narrowing)`);
+      } else {
+        const widerThanParent = (frontmatter.write_paths ?? []).filter(
+          (w) => !parentWp.includes(w),
+        );
+        if (widerThanParent.length) {
+          problems.push(
+            `write_paths outside parent task ${parentTaskId}: ${widerThanParent.join(", ")}`,
+          );
+        }
+      }
+    }
     // E7 (19 §5): self_evolve personas must declare forbidden paths and stay
     // inside the allowed-layer write paths. The allow decision is per-layer
     // (Bug B: 按层分组判定 — carve-outs only veto their own layer), shared
