@@ -5,7 +5,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  canConsumeModel,
   canTransition,
   assertTransition,
 } from "@picode/core";
@@ -58,11 +57,13 @@ test("T21: sleeping agent cannot consume model calls; awake can", async () => {
   const { store } = freshStore();
   store.register("pm", { initialState: "sleeping" });
   const sleeping = store.get("pm")!;
-  assert.equal(canConsumeModel(sleeping), false);
+  // T21 gate inlined (dead helper export removed; prod refs were 0): only an
+  // awake session may consume model calls (17 §4 MUST).
+  assert.notEqual(sleeping.state, "awake");
 
   await store.wake("pm", "intake_start");
   const awake = store.get("pm")!;
-  assert.equal(canConsumeModel(awake), true);
+  assert.equal(awake.state, "awake");
   assert.ok(awake.last_wake_at);
   assert.equal(awake.wake_reason, "intake_start");
 
@@ -125,7 +126,7 @@ test("T22: max_awake limits concurrent awake sessions", async () => {
     (e: unknown) => (e as { code?: string }).code === "MAX_AWAKE_EXCEEDED",
   );
   assert.equal(store.awake().length, 2);
-  // orchestrator force-wake (17 §4: allow_orch_force_wake) may bypass
+  // orchestrator force-wake (17 §4) may bypass the soft limit
   await store.wake("ind-res", "force: intake", { maxAwake: 2, force: true });
   assert.equal(store.awake().length, 3);
 });

@@ -66,10 +66,6 @@ export class PicodeError extends Error {
   }
 }
 
-export function isPicodeError(e: unknown): e is PicodeError {
-  return e instanceof PicodeError;
-}
-
 /** Extract the code from any thrown value (plain errors have none). */
 export function errorCodeOf(e: unknown): ErrorCode | null {
   if (e instanceof PicodeError) return e.code;

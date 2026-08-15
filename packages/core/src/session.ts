@@ -57,11 +57,6 @@ export function assertTransition(from: SessionState, to: SessionState, agentId: 
   }
 }
 
-/** Only an awake session may consume model calls (17 §4 MUST; T21). */
-export function canConsumeModel(session: Pick<SessionRecord, "state">): boolean {
-  return session.state === "awake";
-}
-
 /** Human sponsor must never be registered as a session (17 §3.1 / T26).
  * 生产消费方：orchestrator session-store（C8 收敛；原 orchestrator 本地 HUMAN_ONLY_ROLES 删除）。 */
 export const HUMAN_ONLY_ROLES: readonly string[] = ["sponsor"] as const;
