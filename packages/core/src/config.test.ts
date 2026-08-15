@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { getDefaultConfig, validateConfig } from "./config.js";
+import {
+  DEFAULTS,
+  deepMerge,
+  getDefaultConfig,
+  validateConfig,
+  type PicodeConfig,
+} from "./config.js";
 import { loadConfig } from "./loader.js";
 import { ErrorCode, PicodeError } from "./errors.js";
 
@@ -82,7 +88,56 @@ test("D4: reserved keys keep their defaults but are documented (no reads in impl
   assert.equal(cfg.git.merge_serial, true);
   assert.equal(cfg.i18n.locale, "zh-CN");
   assert.equal(cfg.bus.adapter, "file");
-  assert.equal(cfg.self_evolve.enabled, true);
+  assert.equal(cfg.paths.prompts_root, ".picode/prompts");
+});
+
+test("Bug A: deepMerge 未覆盖嵌套子树返回独立副本（不共享 DEFAULTS 引用）", () => {
+  const merged = deepMerge(DEFAULTS, {}) as PicodeConfig;
+  assert.notEqual(merged, DEFAULTS);
+  assert.notEqual(merged.opencode, DEFAULTS.opencode, "未覆盖嵌套子树必须是独立副本");
+  assert.notEqual(merged.self_evolve.continuation, DEFAULTS.self_evolve.continuation);
+  assert.notEqual(merged.rooms, DEFAULTS.rooms, "数组顶层也必须独立");
+  assert.notEqual(merged.rooms[0], DEFAULTS.rooms[0], "数组按 id 合并的副本项也必须独立");
+  // 修改返回对象不得污染 DEFAULTS 单例
+  merged.opencode.enabled = true;
+  merged.opencode.base_url = "http://127.0.0.1:9999";
+  merged.self_evolve.continuation.max_per_session = 99;
+  merged.rooms[0].display_name = "HACKED";
+  assert.equal(DEFAULTS.opencode.enabled, false);
+  assert.equal(DEFAULTS.opencode.base_url, "http://127.0.0.1:7788");
+  assert.equal(DEFAULTS.self_evolve.continuation.max_per_session, 5);
+  assert.equal(DEFAULTS.rooms[0].display_name, "工程领导");
+  // 也不影响后续 deepMerge 结果
+  const again = deepMerge(DEFAULTS, {}) as PicodeConfig;
+  assert.equal(again.opencode.enabled, false);
+  assert.equal(again.rooms[0].display_name, "工程领导");
+});
+
+test("13 §2: 数组按 id 合并 —— 同 id 覆盖字段、无 id 追加、enabled:false/_delete 删除", () => {
+  const a = {
+    rooms: [
+      { id: "leadership", display_name: "工程领导", enabled: true },
+      { id: "product", display_name: "产品共创", enabled: true },
+      { id: "research", display_name: "行业研究", enabled: true },
+    ],
+  };
+  const b = {
+    rooms: [
+      { id: "leadership", display_name: "领导舱" },
+      { id: "product", enabled: false },
+      { id: "research", _delete: true },
+      { id: "collab", display_name: "跨组协同", enabled: true },
+    ],
+  };
+  const out = deepMerge(a, b) as typeof a;
+  assert.deepEqual(out.rooms, [
+    { id: "leadership", display_name: "领导舱", enabled: true },
+    { id: "collab", display_name: "跨组协同", enabled: true },
+  ]);
+  // 合并结果数组与输入数组、输入项均不共享引用
+  assert.notEqual(out.rooms, a.rooms);
+  assert.notEqual(out.rooms, b.rooms);
+  assert.notEqual(out.rooms[0], a.rooms[0]);
 });
 
 test("C1: self_evolve.budgets conservative defaults (0 = unlimited, 20 wake-turns)", () => {
