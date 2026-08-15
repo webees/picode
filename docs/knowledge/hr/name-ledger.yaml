@@ -2118,3 +2118,29 @@ entries:
     task_id: chunk-c4-continuable-blueprint
     seat: sdet
     first_used_at: 2026-08-15T09:55:15Z
+
+  # —— run-2026-08-15T02-30-00-DSH（波2：运斤）——
+  - kind: team_name
+    name: 运斤
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: task-chunk-c2-skill-load
+    seat: null
+    first_used_at: 2026-08-15T11:20:00Z
+  - kind: codename
+    name: 匠石
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: task-chunk-c2-skill-load
+    seat: squad-lead
+    first_used_at: 2026-08-15T11:20:00Z
+  - kind: codename
+    name: 庖丁
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: task-chunk-c2-skill-load
+    seat: engineer
+    first_used_at: 2026-08-15T11:20:00Z
+  - kind: codename
+    name: 承蜩
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: task-chunk-c2-skill-load
+    seat: sdet
+    first_used_at: 2026-08-15T11:20:00Z
