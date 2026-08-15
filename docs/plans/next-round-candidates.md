@@ -54,3 +54,10 @@
 - 人设程序化生成（模板 + chunks.yaml 注入）；双门闩合并单一简报批准
 - 交接包 2 件（evidence + handoff.md）；重复汇报治理（增量报告制）
 - 验收：同标准下轮次省 30-40%，事故拦截率不降；产出对比纪要
+
+## Sponsor 方案改造候选（2026-08-15 新增 · 试点核心实验项）
+
+**评分驱动招聘回路闭合**：来源 docs/knowledge/feedback/scoring-driven-hiring-evaluation-2026-08-15.md。
+- 公式加质量维度（handoff 完整性/打回）拉开区分度 + 每条评分产出一句话画像
+- 招聘强制消费：people 先读 knowledge/hr/ → 人设写画像对标段 + 低分教训入 forbidden → docs-qa 核验
+- 与原 A 级简化同轮试点；验收：同 run 分数标准差 > 0、画像引用 100% 核验通过
