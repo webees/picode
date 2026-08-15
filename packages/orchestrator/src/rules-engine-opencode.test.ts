@@ -69,14 +69,19 @@ test("D057: rules-engine wake with opencode.enabled provisions a real session (o
     mock.restore();
   }
 
-  // symmetric teardown: sleepAgent / terminateAgent DELETE the server session
+  // symmetric teardown: I2 起 sleep 保留 opencode 会话（零 DELETE）；terminate 仍终态销毁
   const mock2 = mockServe();
   try {
     await sleepAgent(dir, config, "pm", "idle");
     assert.equal(store.get("pm")!.state, "sleeping");
+    assert.equal(
+      store.get("pm")!.pi_session_id,
+      "oc-ses_rule",
+      "sleep 保留 oc-<id> 平台持久会话引用（I2）",
+    );
     assert.ok(
-      mock2.calls.some((c) => c.method === "DELETE" && c.url.includes("/session/ses_rule")),
-      "DELETE issued on sleep",
+      !mock2.calls.some((c) => c.method === "DELETE"),
+      "sleep 不再 DELETE（I2 保留会话）",
     );
     await terminateAgent(dir, config, "pm", "closed");
     assert.equal(store.get("pm")!.state, "terminated");
