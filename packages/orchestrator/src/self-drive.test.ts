@@ -823,6 +823,19 @@ test("C1 checkpoint-auto: enabled + interval=0 → guardianTick 捕获已登记�
   config.self_evolve = structuredClone(config.self_evolve);
   config.self_evolve.checkpoints.enabled = true;
   config.self_evolve.checkpoints.guardian_interval_sec = 0;
+  // 进度新鲜化（co-001）：task 无 progress.json 会被 sweepProgress 判为 overdue 并
+  // 触发 progress_due 唤醒 squad-lead——该唤醒属进度扫描机制，与 checkpoint 捕获无关；
+  // 本用例只验证 checkpoint「只写不读」，需写一份新鲜进度文件隔离这条独立唤醒路径。
+  fs.writeFileSync(
+    path.join(dir, "tasks", taskId, "progress.json"),
+    JSON.stringify({
+      task_id: taskId,
+      phase: "briefing",
+      blocked: false,
+      summary: "fresh",
+      updated_at: new Date().toISOString(),
+    }),
+  );
 
   const res = await guardianTick(dir, config);
   assert.deepEqual(res.checkpoints.boundary, "guardian");
