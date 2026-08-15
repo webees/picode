@@ -46,3 +46,11 @@
 - **yagni 5删1留**（C1，随 d229eea 待合并）：sess_mgr.enabled / allow_orch_force_wake / self_evolve.enabled / require_sponsor_merge / knowledge_log_glob 删除；idle_sleep_sec 保留（真实读取点）
 - **deepMerge 污染修复（Bug A）**（C1，随 d229eea 待合并）：cloneValue 深拷贝，同进程两次 loadConfig 互不影响；co-001 变更单修复 checkpoint-auto 假绿（188b057）；官方 npm test 全仓全绿（`FULL_TEST_EXIT=0`）
 - **命名台账补录**：云岫 / 星汉 / 松风 / 流岚 4 队 + 12 codename（docs/knowledge/hr/name-ledger.yaml）
+
+## Sponsor 反馈候选（2026-08-15 新增 · 强制输入）
+
+**流程简化试点（A 级）**：来源 docs/knowledge/feedback/sponsor-feedback-and-process-audit-2026-08-15.md。
+- 双人组（engineer+sdet）试点；squad-lead 职责并入 run-lead + 自动化
+- 人设程序化生成（模板 + chunks.yaml 注入）；双门闩合并单一简报批准
+- 交接包 2 件（evidence + handoff.md）；重复汇报治理（增量报告制）
+- 验收：同标准下轮次省 30-40%，事故拦截率不降；产出对比纪要
