@@ -9,7 +9,6 @@ import YAML from "yaml";
 import {
   getDefaultConfig,
   loadConfig,
-  roomDisplay,
   validateConfig,
   writeAtomic,
 } from "@picode/core";
@@ -83,7 +82,10 @@ test("T13: room display_name override does not change the bus room id", () => {
   );
   execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
   const config = loadConfig(dir);
-  assert.equal(roomDisplay(config, "leadership"), "领导舱");
+  // 数组按 id 合并语义（13 §2）：display_name 覆盖默认项，id 保持逻辑名
+  const room = config.rooms.find((r) => r.id === "leadership");
+  assert.equal(room?.display_name, "领导舱");
+  assert.equal(room?.enabled, true);
   const { runId } = createRun(dir, { title: "g" });
   const { dir: runDir } = resolveRunDir(dir, runId);
   const store = new RoomStore(runDir);

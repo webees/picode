@@ -53,12 +53,11 @@ export interface SessMgrRule {
 }
 
 export interface SessMgrConfig {
-  /** Reserved (D055): declared per 17 §10; not read by any implementation path yet. */
-  enabled: boolean;
-  /** Reserved (D055): idle-sleep timer is not implemented; sweeps use timeouts.task_timeout_sec. */
+  /**
+   * Idle-sleep timer: sessions awake beyond this many seconds are slept by
+   * `sleepIdleSessions` (self-drive.ts, opt-in via guardian --idle-sleep).
+   */
   idle_sleep_sec: number;
-  /** Reserved (D055): force-wake is currently allowed unconditionally via `--force`. */
-  allow_orch_force_wake: boolean;
   max_awake: number;
   always_register: boolean;
   /** Deterministic event→action table (17 §5.3); LLM arbitration only beyond it. */
@@ -220,8 +219,6 @@ export interface AutoRefineGateConfig {
 
 /** self_evolve config (19 §10 draft). */
 export interface SelfEvolveConfig {
-  /** Reserved (D055): enabled is declared per 19 §10; goal.kind drives evolution, not this flag. */
-  enabled: boolean;
   /** Ordinary runs default to delivery; evolution must be declared. */
   default_kind: GoalKind;
   /** ★ default: knowledge, prompts, docs, tests; code/policy explicit. */
@@ -230,12 +227,8 @@ export interface SelfEvolveConfig {
   verify_commands: string[];
   /** Runaway protection (C1): per-session turn/token/time ceilings. */
   budgets: EvolveBudgetsConfig;
-  /** Reserved (D055): sponsor merge approval is not mechanically enforced yet (E3/E6 gate). */
-  require_sponsor_merge: boolean;
   /** code layer ⇒ code-review MUST be woken (E5). */
   require_code_review_on_code_layer: boolean;
-  /** Reserved (D055): E6 knowledge log path is fixed at knowledge/evolve/<run_id>.md. */
-  knowledge_log_glob: string;
   /** §4 MUST: target_repo must contain one of these markers. */
   platform_root_markers: string[];
   forbidden_path_globs: string[];
@@ -310,7 +303,7 @@ export interface PicodeConfig {
   features: Record<string, boolean>;
   /** Reserved (D055): only the "file" adapter exists; "messenger" is declared per 13 §3. */
   bus: { adapter: "file" | "messenger" };
-  /** `locale` reserved (D055): only i18n.strings is read by roomDisplay/roleDisplay. */
+  /** `locale` reserved (D055): i18n.strings has no implementation read path (roomDisplay/roleDisplay removed). */
   i18n: { locale: string; strings?: Record<string, string> };
   pi: PiConfig;
   opencode: OpencodeConfig;
@@ -323,9 +316,8 @@ export interface PicodeConfig {
 export const DEFAULTS: PicodeConfig = {
   config_schema_version: "1",
   sess_mgr: {
-    enabled: true,
+    // idle-sleep timer (self-drive.ts sleepIdleSessions, opt-in); 600s default
     idle_sleep_sec: 600,
-    allow_orch_force_wake: true,
     max_awake: 8,
     always_register: true,
     rules: [
@@ -470,7 +462,6 @@ export const DEFAULTS: PicodeConfig = {
   // pi-extension tool. Default empty = tool returns COMMAND_NOT_ALLOWLISTED.
   run_allowlist: [],
   self_evolve: {
-    enabled: true,
     default_kind: "delivery",
     allowed_layers: ["knowledge", "prompts", "docs", "tests"],
     verify_commands: ["npm run build && npm test"],
@@ -482,9 +473,7 @@ export const DEFAULTS: PicodeConfig = {
       timeoutMs: 0,
       gate_commands: [],
     },
-    require_sponsor_merge: true,
     require_code_review_on_code_layer: true,
-    knowledge_log_glob: "docs/knowledge/evolve/",
     platform_root_markers: ["package.json"],
     forbidden_path_globs: ["**/.env", "**/.env.*", "**/secrets/**", "**/*.pem"],
     // C1 auto-refine gate conservative defaults: heuristic on, evidence+noise
@@ -529,10 +518,31 @@ export function isPlainObject(v: unknown): v is Record<string, unknown> {
 }
 
 /**
+ * Deep-copy a config subtree (plain objects / arrays recursively). Primitives,
+ * functions and `undefined` are returned as-is. Used by `deepMerge` so a
+ * merged result never shares references with DEFAULTS or any overlay layer
+ * (Bug A: mutating a loaded config used to corrupt the DEFAULTS singleton and
+ * poison every later `loadConfig` in the same process).
+ */
+function cloneValue(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map((item) => cloneValue(item));
+  if (isPlainObject(v)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v)) out[k] = cloneValue(x);
+    return out;
+  }
+  return v;
+}
+
+/**
  * Layered deep merge (13 §2): maps/objects merge recursively; arrays merge by
  * `id` (same id overrides fields, `_delete: true` / `enabled: false` removes);
  * items without an id are appended. Used by the loader for
  * DEFAULTS → project → profile → run override.
+ *
+ * The result is fully independent of both inputs: unoverridden nested
+ * subtrees (objects *and* arrays) are deep-copied, so mutating the merged
+ * config never leaks back into DEFAULTS or an overlay layer (Bug A).
  */
 export function deepMerge(a: unknown, b: unknown): unknown {
   if (Array.isArray(a) && Array.isArray(b)) {
@@ -540,8 +550,8 @@ export function deepMerge(a: unknown, b: unknown): unknown {
     const rest: unknown[] = [];
     for (const item of a) {
       if (isPlainObject(item) && typeof item.id === "string") {
-        byId.set(item.id, { ...item });
-      } else rest.push(item);
+        byId.set(item.id, cloneValue(item) as Record<string, unknown>);
+      } else rest.push(cloneValue(item));
     }
     for (const item of b) {
       if (isPlainObject(item) && typeof item.id === "string") {
@@ -551,18 +561,21 @@ export function deepMerge(a: unknown, b: unknown): unknown {
         }
         const prev = byId.get(item.id) ?? {};
         byId.set(item.id, deepMerge(prev, item) as Record<string, unknown>);
-      } else rest.push(item);
+      } else rest.push(cloneValue(item));
     }
     return [...byId.values(), ...rest];
   }
   if (isPlainObject(a) && isPlainObject(b)) {
-    const out: Record<string, unknown> = { ...a };
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(a)) {
+      out[k] = k in b ? deepMerge(v, b[k]) : cloneValue(v);
+    }
     for (const [k, v] of Object.entries(b)) {
-      out[k] = k in a ? deepMerge(a[k], v) : v;
+      if (!(k in a)) out[k] = cloneValue(v);
     }
     return out;
   }
-  return b === undefined ? a : b;
+  return b === undefined ? cloneValue(a) : b;
 }
 
 /** Throw a coded config-validation error (方向 A2: uniform ErrorCode registry). */
@@ -774,13 +787,6 @@ export function validateConfig(config: PicodeConfig): void {
   if (typeof cp.pre_merge !== "boolean") {
     configError("self_evolve.checkpoints.pre_merge must be a boolean");
   }
-}
-
-export function roomDisplay(config: PicodeConfig, id: string): string {
-  const key = `room.${id}`;
-  if (config.i18n.strings?.[key]) return config.i18n.strings[key];
-  const room = config.rooms.find((r) => r.id === id);
-  return room?.display_name ?? id;
 }
 
 export function getDefaultConfig(): PicodeConfig {
