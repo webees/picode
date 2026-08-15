@@ -518,7 +518,8 @@ export function disarmGoal(dir: string, expectedRevision?: number): GoalState {
 
 /**
  * 阻塞带政策码 + 解释（A3）：status → blocked（GOAL_TRANSITIONS 围栏内合法
- * 迁移 active→blocked / draft→blocked），blocked_reason = {code, message}。
+ * 迁移 active→blocked / draft→blocked），blocked_reason = {code, message}，
+ * 同时 activation → disarmed（blocked = 不再授权续跑；resume 时重新置 armed）。
  * 政策码须 lower-kebab（如 draft-idle / round-limit / provider-limit / queue-failed）。
  */
 export function blockGoal(
@@ -542,6 +543,8 @@ export function blockGoal(
     }
     goal.status = "blocked";
     goal.blocked_reason = { code, message };
+    // blocked = 不再授权续跑（guardian 对 blocked 零投喂）；resume 时重新置 armed。
+    goal.activation = "disarmed";
   });
 }
 

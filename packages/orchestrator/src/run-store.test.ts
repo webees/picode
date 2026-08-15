@@ -173,10 +173,11 @@ test("A3: resume/disarm/block —— activation 门闩 + 政策码 + GOAL_TRANSI
   assert.equal(resumeGoal(dir).activation, "armed");
   // disarm → disarmed
   assert.equal(disarmGoal(dir).activation, "disarmed");
-  // block active → blocked + 政策码
+  // block active → blocked + 政策码 + 置 disarmed（blocked = 不再授权续跑）
   const blocked = blockGoal(dir, "provider-limit", "provider down");
   assert.equal(blocked.status, "blocked");
   assert.deepEqual(blocked.blocked_reason, { code: "provider-limit", message: "provider down" });
+  assert.equal(blocked.activation, "disarmed", "block 后不再授权续跑");
   // resume 清除 blocker 回 active 且置 armed
   const resumed = resumeGoal(dir);
   assert.equal(resumed.status, "active");
