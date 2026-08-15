@@ -301,6 +301,11 @@
 |D101|**yagni 死配置清理（D055 局部解除 · C1 task-config-singleton）**：5 删 1 留——删 `sess_mgr.enabled`/`sess_mgr.allow_orch_force_wake`/`self_evolve.enabled`/`self_evolve.require_sponsor_merge`/`self_evolve.knowledge_log_glob`（接口+DEFAULTS 同步删，grep 零读取）；留 `sess_mgr.idle_sleep_sec`（`sleepIdleSessions` opt-in 真实读取点，仅刷新注释标记 reserved）。既有用户配置含已删键仍可加载（分层 merge 不拒未知键）|
 |D102|**ponytail 清理（死导出×3 + 薄壳×3 + 夹具单源）**：死导出 `roomDisplay`（C1）/`isPicodeError`/`canConsumeModel`（C3）删除，grep 三面零残留；单导出薄壳 mcp-server `errors.ts`/`schema.ts`、orchestrator `jsonl.ts` 并入调用方（C4，readJsonl 单宿主导出+跨引）；24 处本地 `tmpGitRepo`/mkdtemp 夹具收敛 test-utils 共享单源（C5，行为不变）|
 |D103|**环境教训：工作房 node_modules 断链治理（C1/C2/C4 同型问题）**：worktree 内 node_modules 指向不存在的 `.picode/node_modules` 断链，`@picode/core` 解析落主仓陈旧 dist——三次复现均以重建自链修复（gitignored 零 repo diff）；工作房环境治理流程（node_modules 自链 + tsbuildinfo 清理 + HOME 隔离）沉淀为 run 标准操作，后续工作房统一布局|
+|D104|**goal 跨轮跟踪：激活/回合预算/政策码（C1 goal-crossrun，守 D002 文件真相）**：goal.yaml 增增量字段——`revision`（CAS 围栏，仅并发校验**不重建状态**）、`rounds_started`/`max_goal_rounds`（回合预算，默认 0=不限）、`activation`（armed\|disarmed，默认 disarmed，唯一 arm 入口 = `picode goal resume`）、`blocked_reason` 政策码（lower-kebab：draft-idle/round-limit/provider-limit/queue-failed）；guardian 投喂=会话级机械续跑（受 activation 门闩：disarmed 零投喂）、goal resume=goal 级激活授权（明界写入 spec 17 §5.4）；达上限 guardian 自动 block(round-limit) 不静默续；配置旋钮最小化——仅新键 `self_evolve.goal.max_rounds`（createRun 落盘 goal.yaml，显式字段可覆盖）|
+|D105|**skill_load 双轨（C2 skill-load）**：persona `skills[]` 声明 = 系统提示常驻元数据（D084 渐进披露 metadata 层）；`skill_load <name>` 工具 = 运行时按需加载完整 body（SKILL.md 全文含 frontmatter）——ACL 受限（implement.engineer/squad-lead，未授权 TOOL_DENIED）、单次单技能、`DEFAULT_SKILL_MAX_BYTES=64KiB` 超限 byte 感知截断（truncated:true）、未知名 `SKILL_NOT_FOUND` 内联码（不进 ErrorCode 枚举）；加载结果仅回工具结果**不注入 persona 系统提示**（不重复注入）；体积上限 env `PICODE_SKILL_MAX_BYTES` 覆盖、不新增 config 键|
+|D106|**沙箱三态 + 一次性升级审批 + read-before-edit（C3 sandbox-approval）**：repo_write 每调用 resolve sandbox mode（read-only/workspace-write/danger-full-access，会话 env 覆盖 > 默认，叠加于 write_paths 静态白名单之上不替代）；越界写 → 结构化拒绝（含生效 mode + `[sandbox: ...]` 标记）→ `sandbox_permissions`+`justification` 成对申请一次性升级（WIDER_MODES 严格更宽，无理由 ESCALATION_MALFORMED）→ 审批 ask/never（默认 ask，answerer=run-lead 代批，policy 层 sponsor 人工）→ allowed-once 单次放行 + asked/decided 同文件成对审计；read-before-edit 守卫（未读已存在文件 → FS_NOT_OBSERVED，`PICODE_READ_BEFORE_EDIT` 默认开 fail-closed）；三处开关全走会话 env、零 config 键（配置旋钮最小化）|
+|D107|**continuable 子代理蓝图存档（C4 blueprint，纯 docs，下轮实现输入）**：本轮只出蓝图 `docs/plans/continuable-subagents-blueprint.md`（守 D002：采用「转录+摘要+续跑投喂增强」，拒绝事件溯源恢复）；Pi 持久化可行性结论 = **支持（部分接口限制）**——opencode 原生 durable session（SQLite `ses_...`）+ cold resume（同 sessionID `POST /session/{id}/message`），关键限制在 picode 侧使用方式（sleep/terminate 现走 DELETE 销毁会话，需改保留/归档 + wake resume）；降级 = 增量 steer 而非整体重投；三道围栏（深度 ≤N / 父子写集只收窄 / 所有权围栏）只产修订点清单；下轮 I1-I7 实现时逐一过决策编号 + 双门闩|
+|D108|**co-002 变更单 + 工具计数断言教训（C2 流程教训 · 含环境教训复证）**：工具注册表「20 spec-09 tools」硬编码计数断言在合法新增工具（skill_load，D105）时失效，须 run-lead 经 co-002 变更单授权最小写集扩展（2 文件）才全绿——教训：注册表/清单测试应偏好**成员断言**（expected 数组）而非计数断言（`tools.size === N`）；变更单模式（co-002：决策依据 + scope_limit 行级语义 + new_acceptance）沉淀为越写集修复标准流程；node_modules 断链问题本轮 C3 再次复现，D103 治理流程复证有效（复证非新决策）|
 ## D084 — Skill harness 落地（技能承载体系）
 - 2026-08-14 · 来源：run-lead 自治规划 run-2026-08-13T23-50-59-484Z（从 anthropics/skills + agentskills spec 学习，改 picode 自身技能承载体系）
 - 问题：`paths.skills_root` 是 D055 死键（声明零读取），两个种子 SKILL.md 无任何校验守卫，新 skill 可任意书写；`Persona.skills[]` 是必填维度但零消费；ready 消息若硬注入 skill 正文会爆 context
@@ -472,3 +477,67 @@
 - 影响：后续 run 工作房统一布局（node_modules 自链 + 缓存清理 + HOME 隔离）；不改变任何业务语义，纯环境/工具面治理
 - 验证：C4 evidence（精卫）按此流程双跑取证（/private/tmp/picode-base-c4-*、picode-chunk-c4-*）；C5 全量 502/502 复证
 - commit: 无独立提交（流程沉淀，证据见各 chunk handoff/evidence.yaml）
+
+## D104 — goal 激活/回合预算/政策码（C1 chunk-c1-goal-crossrun · 守 D002 文件真相）
+- 2026-08-15 · 来源：run-2026-08-15T02-30-00-DSH C1（团队 周晷，提交 2f8ceba + 8cb44b7 → merge 6a4a1ba）+ survey §2 #1@118-131（DSH dsh-goal：CAS revision / roundsStarted+maxGoalRounds / activation armed|disarmed / blockedReason 政策码）+ intake §6 A1-A6 + spec 17 §5.4（明界，C1 写入）
+- 问题：goal.yaml 无 revision CAS（并发写 = 最后写胜）、无回合预算、无 disarm/resume 激活语义（跨进程恢复即静默续跑风险）、blocked 只有自由文本 park_reason 无政策码
+- 决定（逐项）：
+  - **revision 仅 CAS 围栏，不重建状态**（守 D002/D082）：goal.yaml 仍文件真相；`updateGoal(dir, expectedRevision, fn)` 函数层 CAS，陈旧 expected → `PicodeError(ILLEGAL_TRANSITION, "... stale revision ...")`——复用既有错误码不新增（errors.ts 归 C3 域，C1 零触碰，D1/D8）；读侧免锁（writeYamlFile temp+rename 原子可见）
+  - **激活语义（guardian 投喂 vs goal resume 明界）**：`activation: armed|disarmed` 持久化于 goal.yaml；新 run 默认 disarmed；`setGoalStatus`→active **不自动 arm**（D3）；block→disarmed；**唯一 arm 入口 = `picode goal resume`**（blocked→active + 清 blocked_reason + armed；intake/completed 等非 allowed 状态 GOAL_TRANSITIONS 围栏拒绝，D5）。guardian 投喂 = 会话级机械续跑（active∧armed 可投喂；active∧disarmed 零投喂）；goal resume = goal 级激活授权；activation=disarmed 只门闩续跑投喂、**不阻断 run 文件事件推进**（task_ready/merge_ready/progress_due 照常）。明界写入 spec 17 §5.4
+  - **旧格式向后兼容**：readGoal 对无 activation 字段的旧 active goal 默认 armed（视为曾由 set-status 授权，行为兼容，D3/K4）；其余 → disarmed；旧格式 max_goal_rounds 默认 0（D7）
+  - **回合预算**：`rounds_started` 每次成功续跑投喂（feedContinuation 成功）→ +1，resume/disarm/block 不计数（D2）；`rounds_started ≥ max_goal_rounds`（0=不限）→ guardian 自动 `blockGoal(code:"round-limit")` 零投喂（D6，sweep 级预算检查先于候选派生）；resume 也拒绝（预算硬天花板，round budget exhausted，D5）
+  - **政策码**：`block --code` 接受任意 lower-kebab（格式校验，不硬白名单）；规范码 `draft-idle` / `round-limit` / `provider-limit` / `queue-failed`；guardian 自动码 round-limit（D4）
+  - **配置旋钮最小化（衔接 D106）**：仅此一个 config 新键 `self_evolve.goal.max_rounds`（非负整数，默认 0=不限，validateConfig 拒绝非法值）；createRun 时落盘 goal.yaml `max_goal_rounds`（文件真相；goal.yaml 显式字段可编辑覆盖；运行期预算读 goal.yaml 不回查 config，D7）
+  - **同步锁取舍（D1）**：goal 变更走同步文件锁 `withSyncFileLock`（`.goal.lock`，O_EXCL + {pid,at} 陈旧恢复 + 有界重试，镜像 withFileLock 语义——mcp-server/self-drive 同步调用面不可改 async）统一入口 `updateGoal`，写侧串行
+- 观察项（C1 K1/K2，C5 记录）：① CLI 无 `--expected` 乐观锁参数——CAS 在函数层强制执行（单测守护 A3）；命令层并发写经同步文件锁串行化（sdet ev-4-lock 实测：两并行 block 进程先到者成功、后者被 GOAL_TRANSITIONS 围栏拒绝，goal.yaml 无损坏）；如需 CLI 级乐观锁可扩展 `--expected` 标志（留观察）；② withSyncFileLock 与 atomic.ts withFileLock 两套并存（协议等价、调用面不同），后续可统一（留观察）
+- 验证：C1 evidence（run-store.test A1/A3/A4、goal.test lifecycle/block USAGE、continuation-gate.test A2 跨进程门闩/A4 预算自动 block）；官方 npm test（HOME 隔离）519/519；合并后 562/562（C2 终态）；decision-lint 前向引用消解（spec 04-enforcement §10.4 引用 D104，C5 落地后 0 warning）
+- commit: 2f8ceba（C1 提交）+ 8cb44b7（fix：block 同时置 activation=disarmed，与交接包 D3 对齐）→ merge **6a4a1ba**
+
+## D105 — skill_load 双轨（persona skills[] 声明 vs 运行时按需加载 · C2 chunk-c2-skill-load）
+- 2026-08-15 · 来源：run-2026-08-15T02-30-00-DSH C2（团队 运斤，run-lead 接管提交 d3bb0c2 → merge 83df029）+ survey §2 #3@153-165（dsh-tool-skill 渐进披露：系统提示只挂目录，`ctx.skills.get(name)`@126 调用时取完整 body；catalogDescriptionMaxLength@27）+ intake §6 B1-B3 + D084（技能承载体系基线）
+- 决定：
+  - **双轨明界（声明 vs 按需）**：persona `skills[]` 声明 = 系统提示常驻**元数据**（D084 渐进披露 metadata 层，有界截断；SKILL.md 正文绝不进系统提示）；`skill_load <name>` = 运行时按需取**完整 body**（SKILL.md 全文含 frontmatter）。加载结果仅回工具结果、**不注入 persona 系统提示**——两轨并存不重复注入（B2）。一行界定写入 `docs/guides/skills/skill-harness.md` §5
+  - **ACL 受限（B1）**：core `loadSkill(name, metas, {cwd, maxBytes})` 按 discoverSkills 索引解析 SKILL.md 完整 body；pi-extension 注册 `skill_load` 工具；tool-profiles ToolName 增 `skill_load`，画像授权 implement.engineer / implement.squad-lead；未授权画像 → TOOL_DENIED 结构化拒绝（extension-acl.test 守护）
+  - **健康校验结构化错误**：SKILL.md 缺失 → SKILL_MD_MISSING；坏 frontmatter → SKILL_BAD_FRONTMATTER；越界路径 → SKILL_PATH_DENIED（cwd 围栏纵深防御——工具侧 metas 来自 `discoverSkills(<cwd>/skills)` 天然受限）
+  - **未知名技能内联码**：`SKILL_NOT_FOUND`（skills.ts 本地 SkillLoadCode 常量），**不进 ErrorCode 枚举**（errors.ts 归 C3，本 chunk 零 diff）
+  - **体积有界（B2）**：`DEFAULT_SKILL_MAX_BYTES = 64KiB`；env `PICODE_SKILL_MAX_BYTES` 可覆盖（**唯一旋钮，不新增 config 键**，衔接 D106 配置旋钮最小化；skills_root 配置化覆盖不在本轮范围——C2 known_issues §3）；超限 byte 感知截断（不劈多字节字符）标注 `truncated: true` + `bytes`/`maxBytes` 字段
+  - **共享文件纪律**：pi-extension/src/index.ts owner=C3（52d22ae 已合并），C2 纯增量追加（import +4 符号、尾部工具注册区、文件底 skillMaxBytes helper），C3 区（repo_write/repo_read/沙箱/审批/守卫）零改动；git diff 复核零删除行
+- 越写集处置（co-002，衔接 D108）：全量测试唯一失败 = extension.test.ts「all 20 spec-09 tools are registered」计数断言（C2 按验收 B1 合法注册 skill_load 第 21 个工具）；该文件不在 C2 write_paths（diff 门禁）；run-lead 经 **co-002** 变更单（2026-08-15T10:44:45Z）授权最小写集扩展（extension.test.ts 20→21 + mcp-server execution.ts 09 matrix 20→21 校验；registry.test.ts 保持 20 成员语义）后全量 562/562
+- 验证：C2 evidence（sdet 承蜩 verdict pass）：官方 npm test（HOME 隔离）562/562 exit 0（core 155/bus 19/orch 318/pi-extension 36/mcp-server 18/dashboard-server 16）；npm run check 三 lint 0 error；sdet 独立驱动实测 `skill_load ponytail` 返回完整 body（11/11 + 独立脚本 8/8，body 与磁盘 SKILL.md 全文 6637 字节逐字一致）；ACL 拒绝（implement.sdet / governance.sess-mgr → TOOL_DENIED）；未知 ghost-skill → SKILL_NOT_FOUND；env maxBytes=100 → truncated=true
+- commit: d3bb0c2（C2 提交，run-lead 接管；庖丁会话 failed）→ merge **83df029**
+
+## D106 — 沙箱三态 + 一次性升级审批 + read-before-edit（C3 chunk-c3-sandbox-approval）
+- 2026-08-15 · 来源：run-2026-08-15T02-30-00-DSH C3（团队 锁钥，提交 2e50375 → merge 52d22ae）+ survey §2 #2@135-149（SANDBOX_MODES@26 / WIDER_MODES@29 / approveEscalation@92 / APPROVAL_POLICIES@36 / 审计对@144,155 / allowed-once）+ survey §2 #7@222-233（ObservedStateGate@16 / editIntent@89 FS_NOT_OBSERVED）+ intake §6 E1-E5 + intake Q4@168 + goal.yaml constraints:20（sponsor 2026-08-15 确认：升级请求 run-lead 代批，policy 层变更走 sponsor 人工）
+- 决定（逐项）：
+  - **沙箱三态（E1，双轨定位）**：core `SANDBOX_MODES = [read-only, workspace-write, danger-full-access]`；每调用 `resolveSandboxMode`（会话 env `PICODE_SANDBOX_MODE` 覆盖 > 默认 workspace-write；非法 env fail-loud SANDBOX_MODE_INVALID）。**定位 = write_paths 静态白名单之上的动态兜底围栏，不替代**（E4）：read-only 拒一切写（含白名单内）；workspace-write 白名单内可写、越界结构化拒绝（WRITE_PATH_DENIED 含生效 mode + `[sandbox: file access denied under <mode> mode]` 标记 + 升级提示）；danger-full-access 工作房（cwd）内任意路径可写、**仍拒 path escape 出 cwd**（比 DSH full 更保守，宁紧勿松）
+  - **一次性升级阶梯（E2）**：越界写可申请升级——`repo_write` 携带 `sandbox_permissions` + `justification` **成对**（缺一/空白/非法 mode → ESCALATION_MALFORMED；非严格更宽 → SANDBOX_ESCALATION_INVALID，WIDER_MODES 执行时校验：read-only→[workspace-write, danger-full-access]、workspace-write→[danger-full-access]、danger-full-access→[]）；审批策略 `PICODE_APPROVAL_POLICY` 默认 ask（ask → 请求落 `runs/<id>/approvals/pending-<id>.json`；never → fail-closed APPROVAL_DENIED **不落请求文件**）；**allowed-once 是唯一授权**：重试 `repo_write` 带 approval_id（且 sandbox_permissions+path 与请求一致）单次放行，消费后 status=used，重试再验 APPROVAL_ALREADY_USED；pending/rejected/未知/无 answerer 一律 fail-closed（APPROVAL_PENDING/APPROVAL_REJECTED/APPROVAL_NOT_FOUND）
+  - **审批 answerer（Q4 决策）**：`picode approval list [--status …]` 观测；`picode approval decide --id <id> --approve|--reject --note`——answerer=**run-lead 代批**（picode 无实时人类通道的务实默认）；policy 层动作（不可代行的终裁）走 sponsor 人工（goal.yaml constraints:20）
+  - **审计成对**：asked+decided **同文件**（approvals/pending-<id>.json，status 流转 pending→approved/rejected→used + used_at），成对审计闭环；落盘一律经 withFileLock（atomic.ts，与 goal/checkpoint CAS 同源）；D071：审批观测走 run 目录文件，零 dashboard 端点
+  - **read-before-edit 守卫（E3）**：repo_read 记录本会话（extension 进程内 observed 集）读过的文件；repo_write 目标为**已存在**文件且本会话未读过 → `FS_NOT_OBSERVED`（"edit requires reading first"）；新建文件（createIfAbsent 语义）免预读；`PICODE_READ_BEFORE_EDIT` 默认**开**（fail-closed：0/false/off/no 显式关闭，其余保持开）
+  - **配置旋钮最小化（衔接 D104）**：沙箱/审批/守卫三处开关全走会话 env（PICODE_SANDBOX_MODE / PICODE_APPROVAL_POLICY / PICODE_READ_BEFORE_EDIT）+ core 常量，**本轮不新增 config 键**（spec 04-enforcement §10.4）
+- 实现取舍/观察项（C3 known_issues §4）：① 会话级 env 在扩展 load 时解析一次（picode 无会话内 mode 切换事件，等价 DSH「每调用 resolve」于固定会话 env）；② read-before-edit 只认 repo_read（repo_grep 等内部读取不记录 observed，可扩展 readText 统一记录——观察）；③ danger-full-access 下 escalation 参数被忽略（mode 围栏短路 tryEscalation，写直接由 mode 授权放行；判定**非阻断**——该写本被授权、无安全边界突破；如后续要求 danger 模式对成对参数一致性校验可增强，非本轮验收）；④ approval decide 无 CLI 身份认证（操作约定，policy 层 sponsor 人工兜底）
+- 验证：C3 evidence（ev-1..ev-7 + E5 实测全链路 exit 0：升级 → run-lead 批准 → 单次放行 → 重试再验 APPROVAL_ALREADY_USED + never 对照 APPROVAL_DENIED 不落请求）；官方 npm test（HOME 隔离）552/552（+50 用例：sandbox 10/approval 12/extension-sandbox 16/commands approval 9/pi-adapter 2/errors 1）；npm run check 0 error（1 warning = D104 前向引用，C5 落地后消解）
+- commit: 2e50375（C3 提交，run-lead 代提交）→ merge **52d22ae**
+
+## D107 — continuable 子代理蓝图存档（C4 chunk-c4-continuable-blueprint · 下轮实现输入）
+- 2026-08-15 · 来源：run-2026-08-15T02-30-00-DSH C4（团队 经纬：d7f743b v0 + 73953db v1 写实 + 4131637 v1.1 复核补正 → merge 048cd94）+ survey §2 #10@268-281（durable descriptor / depth 围栏 / 冷恢复 / 权限边界）+ intake §6 C1-C3 + research/briefs/pi-persistence.md（ind-res，落盘 2026-08-15T17:05+0700）
+- 决定：**本轮只存档蓝图、不落代码**——`docs/plans/continuable-subagents-blueprint.md`（v1 写实，四要素）作为下轮 C 实现输入（验收 C3：run-lead 审阅存档）
+  - **取舍论证（守 D002）**：采用方案 A「转录+摘要+续跑投喂增强」（现状 continuation.ts 语义延伸）**拒绝方案 B 事件溯源恢复**——B 的「日志即真相」与 D002 结构性冲突、与 D082 只读先例相悖；蓝图 §1.3 结论 + 依据链（D002/D082/intake non_goal/survey #10）
+  - **Pi 持久化可行性结论（brief 写实）**：picode 实际集成运行时是 **opencode**（opencode.ai/Anomaly，≠ pi.dev，brief §1 澄清）——原生支持 durable session identity（`ses_...` SQLite 持久化，跨 serve 重启有效）+ cold resume（同一 sessionID `POST /session/{id}/message`，无独立 resume 端点）+ 全量历史拉取（GET /session/{id}/message）；**关键限制在 picode 侧使用方式**：`sleepAgent`/`terminateAgent` 现走 `DELETE /session/{id}` 销毁会话（pi-adapter.ts:350/367 → opencode-adapter.ts:269-276）→「睡眠/终止即销毁 durable 身份」；cold resume 需 sleep 改保留/归档（或 PATCH archived）+ wake 走 resume（复用现成 sendReady；self-drive.ts:256 serve 恢复路径已是「同会话续写」现成范例，仅需补 wake 路径接线）
+  - **分支裁决（蓝图 §5.2）**：分支① resume API 直连激活为主路径（`pi_session_id` oc-<id> 作「平台持久会话引用」指针，仍守 D002/D082 边界）；§4 降级方案转「resume API 失效/serve 数据目录迁移时的兜底」+「投喂语义增强（增量 steer）」；子代理可恢复性由 picode 侧用 oc-<id> 句柄 + 路径 A 实现，无需自建会话存储
+  - **三道围栏（只产修订点清单，不改 spec 17 正文，蓝图 §3）**：深度围栏 ≤N（建议默认 3）/ 父子写集继承只收窄（子 ⊆ 父 write_paths）/ 所有权围栏（子会话仅父可路由 + 子代理不可直接问人）
+  - **下轮实现建议（蓝图 §6，I1-I7）**：I1 投喂分级 followup/steer/inject + wake 门闩 / I2 resume API 接线 + sleep 保留改造 / I3 深度围栏 / I4 写集继承 / I5 所有权围栏 / I6 结算通知（复用事件词汇）/ I7 cancel 保留队列——实现时须逐一过决策编号（D104 起，D089 领号流程）与双门闩；依赖顺序 I1 → I2/I3 → I4/I5 → I6
+- 衔接风险（C4 known_issues KI-6）：I1 与 D104 的 guardian 续跑必须合并防两套续跑逻辑——下轮实现优先在 continuation.ts 内收敛，不新建模块
+- 验证：C4 evidence（sdet 复核）+ diff 门禁（仅 1 文件 ⊆ write_paths）+ 零代码/零配置 + 不引入事件溯源（蓝图 §1.3 明确拒绝）
+- commit: d7f743b + 73953db + 4131637 → merge **048cd94**
+
+## D108 — co-002 变更单 + 工具计数断言教训（C2 流程教训 · 含环境教训复证）
+- 2026-08-15 · 来源：run-2026-08-15T02-30-00-DSH C2 实施期（全量测试唯一失败 = 计数断言过期）+ change_orders/co-002.yaml（run-lead applied 2026-08-15T10:44:45Z）
+- 问题：`packages/pi-extension/src/extension.test.ts`「all 20 spec-09 tools are registered」断言 `tools.size === expected.length(20)`——C2 按验收 B1 合法注册 `skill_load`（第 21 个工具）→ 计数断言失效，npm test 链停住；该文件不在 C2 write_paths，diff 门禁（R8/R9）禁止 C2 自行修改
+- 决定/处置：
+  - **co-002 变更单（run-lead applied）**：授权 C2 最小写集扩展 2 文件——extension.test.ts 工具计数/清单断言 20→21（expected 数组追加 skill_load）+ mcp-server execution.ts 09 matrix 硬编码 20→21 校验；scope_limit：行级断言语义（mcp-server registry.test.ts 保持 20 成员语义——skill_load 不注册于 mcp-server 执行面，仅成员断言无计数）；new_acceptance：C2 合并后 pi-extension 全量测试全绿（含 all 21 spec-09 tools 断言）
+  - **教训（沉淀为测试/流程纪律）**：① 注册表/清单测试偏好**成员断言**（expected 数组逐项 in）而非**计数断言**（size === N）——计数对合法扩展脆弱（本次 skill_load 是验收要求的合法新增，断言先于工具面过期）；② 越写集修复走变更单（co-002 模式：决策依据 + scope_limit 行级语义 + new_acceptance），不自行越写集——与 D074（验收 test 目标修正）同类流程纪律
+  - **环境教训复证（非新决策）**：node_modules 悬空 symlink 问题本轮 C3 再次复现（known_issues §3：「与上轮 C1 同源问题」，重建自链修复）——D103 治理流程（自链 + tsbuildinfo 清理 + HOME 隔离）本轮复证有效；D103 为权威决策，本条目只记录复证、不重复立号
+- 遗留观察（C2 summary 提示，C5 记录）：mcp-server/src/registry.test.ts 测试标题仍为「carries the 20 spec-09 tools」（co-002 scope_limit 保持 20 语义：仅成员断言、无计数）——措辞性不影响正确性，后续可顺手更名（不在本 chunk 写集）
+- 验证：co-002 应用后 C2 全量官方 npm test（HOME 隔离）562/562 exit 0；npm run check 三 lint 0 error；diff 门禁 9 文件 = 7 write_paths + co-002 授权 2 文件
+- commit: d3bb0c2（C2 提交，含 co-002 授权 2 文件）→ merge **83df029**

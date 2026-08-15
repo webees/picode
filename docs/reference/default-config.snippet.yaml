@@ -158,3 +158,6 @@ self_evolve:
   require_code_review_on_code_layer: true
   platform_root_markers: ["package.json"]
   forbidden_path_globs: ["**/.env", "**/.env.*", "**/secrets/**", "**/*.pem"]
+  goal:
+    max_rounds: 0              # C1 goal-crossrun（D104）：单 goal 回合预算上限（guardian 续跑轮数）；0 = 不限（默认）。
+                               # createRun 落盘 goal.yaml max_goal_rounds（文件真相，显式字段可编辑覆盖；运行期不回查 config）。

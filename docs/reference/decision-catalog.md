@@ -865,3 +865,113 @@ staffing.ts **双处同病**）。
 |清理 `*.tsbuildinfo`|`find packages -name "*.tsbuildinfo" -delete`，避免瞬时 TS2688|
 |官方 `npm test`（HOME 隔离）|`npm test` 自带 mktemp；补充包级跑另设 `TH=$(mktemp -d)`|
 |sdet/审查复建环境重复上述步骤|C4 evidence 按此流程双跑取证（/private/tmp/picode-base-c4-*、picode-chunk-c4-*）|
+
+## 23. goal 激活/回合预算（D104）/ skill_load 双轨（D105）/ 沙箱与审批（D106）/ C 蓝图存档（D107）/ 变更单纪律（D108）
+
+### 23.1 goal 激活语义与回合预算（D104 · chunk-c1-goal-crossrun）
+
+权威正文：spec 17 §5.4（guardian 续跑 vs goal resume 明界）+ DECISIONS D104 详条。
+
+**D104 已定：goal.yaml 增增量字段，守 D002 文件真相（revision 仅 CAS 围栏、不重建状态）。**
+
+|维度|语义|
+|------|------|
+|`revision`|CAS 围栏：`updateGoal(expectedRevision)` 陈旧 expected → ILLEGAL_TRANSITION；不引入事件日志重建状态|
+|`activation`|`armed\|disarmed`，新 run 默认 **disarmed**；`picode goal resume` 是**唯一 arm 入口**；`set-status`→active 不自动 arm；block→disarmed|
+|guardian 投喂 vs goal resume|guardian 投喂 = 会话级机械续跑（active∧armed 可投喂；active∧disarmed 零投喂）；goal resume = goal 级激活授权（blocked→active + 清 blocker + armed）；disarmed 只门闩续跑，不阻断 run 文件事件推进|
+|`rounds_started` / `max_goal_rounds`|每次成功续跑投喂 +1；达上限（0=不限）guardian 自动 `block(code:"round-limit")` 零投喂；resume 拒绝|
+|`blocked_reason.code`|lower-kebab 政策码：`draft-idle` / `round-limit` / `provider-limit` / `queue-failed`（格式校验，不硬白名单）|
+|旧格式兼容|无 activation 字段的旧 active goal 默认 armed（行为兼容）；旧格式 max_goal_rounds=0|
+
+**回合预算默认：`self_evolve.goal.max_rounds: 0`（不限）**——唯一新增 config 键；createRun 落盘 goal.yaml
+`max_goal_rounds`（文件真相，显式字段可覆盖，运行期不回查 config）。
+
+### 23.2 skill_load 双轨（D105 · chunk-c2-skill-load）
+
+权威正文：docs/guides/skills/skill-harness.md §5（双轨明界）+ docs/spec/09-tool-profiles.md（ACL）+ DECISIONS D105 详条。
+
+**D105 已定：persona `skills[]` 声明与 `skill_load` 工具双轨并存、不重复注入。**
+
+|轨道|机制|
+|------|------|
+|persona `skills[]` 声明（D084 基线）|系统提示常驻 **metadata**（渐进披露，有界截断）；SKILL.md 正文**绝不**进系统提示|
+|`skill_load <name>` 工具（D105）★|运行时按需加载**完整 body**（SKILL.md 全文含 frontmatter）；结果仅回工具结果、不注入 persona 系统提示|
+
+|行为|默认/规则|
+|------|------|
+|ACL|画像 implement.engineer / implement.squad-lead；未授权 → TOOL_DENIED|
+|体积上限|`DEFAULT_SKILL_MAX_BYTES = 64KiB`；env `PICODE_SKILL_MAX_BYTES` 覆盖（**不新增 config 键**）；超限 byte 感知截断（`truncated: true` + `bytes`/`maxBytes`）|
+|健康校验|SKILL.md 缺失 → SKILL_MD_MISSING；坏 frontmatter → SKILL_BAD_FRONTMATTER；越界路径 → SKILL_PATH_DENIED；未知名 → SKILL_NOT_FOUND（内联码，不进 ErrorCode 枚举）|
+|单次语义|单次单技能；加载结果不注入 persona 系统提示（与声明双轨不重复注入）|
+
+### 23.3 沙箱三态（D106 · chunk-c3-sandbox-approval）
+
+权威正文：spec 04-enforcement §10（10.1 定位 / 10.2 升级 / 10.3 守卫 / 10.4 旋钮）+ DECISIONS D106 详条。
+
+**D106 已定：沙箱为 write_paths 静态白名单之上的动态兜底围栏（双轨，不替代）；每调用 resolve。**
+
+|mode|行为|
+|------|------|
+|`read-only`|拒一切写（含 write_paths 内）|
+|`workspace-write`（默认）★|write_paths 内可写；越界结构化拒绝（含生效 mode + `[sandbox: …]` 标记），可申请一次性升级|
+|`danger-full-access`|工作房（cwd）内任意路径可写；仍拒 path escape 出 cwd（比 DSH full 更保守）|
+
+会话 env `PICODE_SANDBOX_MODE` 覆盖 > 默认；非法 env → SANDBOX_MODE_INVALID。
+
+### 23.4 审批 ask/never（D106）
+
+**D106 已定：升级请求成对参数 + 审批策略 + allowed-once 单次放行 + 成对审计。**
+
+|策略|行为|
+|------|------|
+|`ask`（默认）★|越界升级请求落 `runs/<id>/approvals/pending-<id>.json`；`picode approval list/decide` 决策|
+|`never`|fail-closed 直接拒绝（APPROVAL_DENIED），不落请求文件|
+
+|规则|内容|
+|------|------|
+|参数成对|`sandbox_permissions` + `justification`；缺一/空白/非法 → ESCALATION_MALFORMED；非严格更宽 → SANDBOX_ESCALATION_INVALID（WIDER_MODES 执行时校验）|
+|answerer|**run-lead 代批**（`approval decide --approve|--reject --note`）；policy 层动作走 sponsor 人工|
+|allowed-once|重试带 approval_id 单次放行；消费后 status=used；重试再验 APPROVAL_ALREADY_USED|
+|审计成对|asked+decided 同文件（status 流转 pending→approved/rejected→used + used_at）；D071 零 dashboard 端点|
+
+### 23.5 read-before-edit 守卫（D106）
+
+**D106 已定：未读已存在文件禁编辑（fail-closed 默认开）。**
+
+|行为|规则|
+|------|------|
+|`repo_read` 记录 observed|本会话（extension 进程内）读过才放行编辑已存在文件|
+|编辑未读已存在文件|`FS_NOT_OBSERVED`（"edit requires reading first"）|
+|新建文件|免预读（createIfAbsent 语义）|
+|开关|`PICODE_READ_BEFORE_EDIT` 默认**开**；`0/false/off/no` 显式关闭，其余 fail-closed 保持开|
+
+**配置旋钮最小化（D104/D106）：** 沙箱/审批/守卫三处开关全走会话 env（`PICODE_SANDBOX_MODE` /
+`PICODE_APPROVAL_POLICY` / `PICODE_READ_BEFORE_EDIT`）+ core 常量，**零 config 键**；config 面本轮仅
+`self_evolve.goal.max_rounds`（D104）。
+
+### 23.6 continuable 子代理蓝图存档（D107 · chunk-c4-continuable-blueprint）
+
+权威正文：docs/plans/continuable-subagents-blueprint.md（v1 写实）+ DECISIONS D107 详条。
+
+**D107 已定（本轮只存档蓝图，不落代码）：** 下轮 C 实现输入 = 蓝图四要素——
+
+1. **取舍**：采用「转录+摘要+续跑投喂增强」（方案 A，continuation.ts 语义延伸），拒绝事件溯源恢复（方案 B，守 D002/D082）
+2. **可行性结论**（research/briefs/pi-persistence.md，ind-res 落盘 2026-08-15T17:05+0700）：opencode 原生 durable session + cold resume **支持（部分接口限制）**——限制在 picode 侧使用方式（sleep/terminate 现走 DELETE，需改保留/归档 + wake resume 接线，复用现成 sendReady）
+3. **三道围栏修订点清单**（不改 17 正文）：深度围栏 ≤N（默认 3）/ 父子写集继承只收窄（子 ⊆ 父 write_paths）/ 所有权围栏（子会话仅父可路由 + 子代理不可直接问人）
+4. **降级**：resume API 失效时增量 steer 而非整体重投（I1）
+
+下轮 I1-I7 实现时逐一过决策编号（D104 起，D089 领号流程）与双门闩；I1 须与 D104 guardian 续跑合并防双逻辑（continuation.ts 内收敛）。
+
+### 23.7 变更单 + 工具计数断言纪律（D108 · co-002 教训）
+
+权威正文：change_orders/co-002.yaml + DECISIONS D108 详条。
+
+**D108 已定（流程/测试纪律）：**
+
+|项|纪律|
+|------|------|
+|注册表/清单测试|偏好**成员断言**（expected 数组逐项）而非**计数断言**（`tools.size === N`）——计数对合法扩展脆弱（skill_load 新增使「20 spec-09 tools」断言过期）|
+|越写集修复|走变更单（co-002 模式：决策依据 + scope_limit 行级语义 + new_acceptance），不自行越写集|
+|环境教训复证|node_modules 断链治理以 D103 为权威（本轮 C3 再次复现，治理流程复证有效）|
+
+遗留观察：mcp-server registry.test.ts 标题仍为「carries the 20 spec-09 tools」（co-002 scope_limit 保持 20 成员语义，措辞性）——后续可顺手更名。
