@@ -13,12 +13,8 @@ import {
   listRunIds,
 } from "./session-audit.js";
 
-function tmpGitRepo(): string {
-  return gitInit({ prefix: "picode-session-audit-" });
-}
-
 function setupRuns() {
-  const repo = tmpGitRepo();
+  const repo = gitInit({ prefix: "picode-session-audit-" });
   const config = loadConfig(repo);
   const root = runsRoot(repo, config);
   const makeRun = (title: string) => {

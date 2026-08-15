@@ -1,25 +1,20 @@
 import { test } from "node:test";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance, readGoal } from "./run-store.js";
 import { RoomStore } from "@picode/bus";
 
-function tmpGitRepo(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-test-"));
-  execFileSync("git", ["init", "-q"], { cwd: dir });
-  execFileSync("git", ["config", "user.email", "test@picode"], { cwd: dir });
-  execFileSync("git", ["config", "user.name", "picode-test"], { cwd: dir });
-  fs.writeFileSync(path.join(dir, "README.md"), "# test\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
-
 function setup() {
-  const repo = tmpGitRepo();
+  // product 原夹具为全手工 git init（无 -b main）；branch: null 保留该形态
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    branch: null,
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   return { repo, runId, dir, config };

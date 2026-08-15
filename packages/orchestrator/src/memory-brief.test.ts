@@ -1,9 +1,8 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import YAML from "yaml";
 import {
   createRun,
@@ -18,15 +17,6 @@ import { addChunkAndTask, draftBrief } from "./task.js";
 import { writeMemoryBrief, ackMemoryBrief, listMemoryBriefs } from "./docs-memory.js";
 import { createChangeOrder, transitionChangeOrder, readChangeOrders } from "./memory.js";
 
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-test-", email: "t@p" });
-  fs.writeFileSync(path.join(dir, "README.md"), "# t\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
-
-
 /** 构造 draft 状态（直写文件，绕开迁移校验——本文件测 park，不测迁移）。 */
 function forceDraft(dir: string): void {
   const gp = path.join(dir, "goal.yaml");
@@ -34,7 +24,7 @@ function forceDraft(dir: string): void {
 }
 
 async function setup() {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-test-", email: "t@p", readme: "# t\n" });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["compiles"]);

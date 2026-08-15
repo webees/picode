@@ -1,5 +1,5 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -23,14 +23,6 @@ function runCli(args: string[]): { status: number; stdout: string; stderr: strin
       stderr: String(err.stderr ?? ""),
     };
   }
-}
-
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-cli-" });
-  fs.writeFileSync(path.join(dir, "README.md"), "# t\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
 }
 
 test("E2: --help groups commands by domain and lists every registered command", async () => {
@@ -83,7 +75,7 @@ test("E3: unknown subcommand names the offending verb", async () => {
 });
 
 test("E3: run-level errors carry the originating code (config validation)", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-cli-", readme: "# t\n" });
   // break the v1-fixed sponsor contract via project config
   fs.mkdirSync(path.join(repo, ".picode"), { recursive: true });
   fs.writeFileSync(
@@ -96,7 +88,7 @@ test("E3: run-level errors carry the originating code (config validation)", asyn
 });
 
 test("intake E2E: add(open, board Backlog) → triage(triaged+bus, leaves board) → close(done)", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-cli-", readme: "# t\n" });
   const init = runCli(["init", "--repo", repo, "--goal-title", "t"]);
   assert.equal(init.status, 0);
   const { runId } = JSON.parse(init.stdout) as { runId: string };

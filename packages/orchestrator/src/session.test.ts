@@ -11,18 +11,13 @@ import {
 import { createRun, resolveRunDir } from "./run-store.js";
 import { SessionStore, PLATFORM_ROLES } from "./session-store.js";
 
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-test-" });
-  return dir;
-}
-
 function freshStore(): { dir: string; store: SessionStore } {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-run-"));
   return { dir: runDir, store: new SessionStore(runDir) };
 }
 
 test("T20: init registers all platform roles sleeping; sponsor absent", async () => {
-  const repo = tmpGitRepo();
+  const repo = gitInit({ prefix: "picode-test-" });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir } = resolveRunDir(repo, runId);
   const store = new SessionStore(dir);

@@ -1,9 +1,6 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
 import { addChunkAndTask } from "./task.js";
 import { statusSnapshot, checkpointOverview } from "./status.js";
@@ -11,16 +8,13 @@ import { SessionStore } from "./session-store.js";
 import { TranscriptStore } from "./transcript-store.js";
 import { captureTaskCheckpoint, DEFAULT_CHECKPOINT_BOUNDARY } from "./checkpoint-store.js";
 
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-test-", email: "test@picode", name: "picode-test" });
-  fs.writeFileSync(path.join(dir, "README.md"), "# test\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
-
 test("status snapshot reflects goal, sessions, tasks and merge queue", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["a", "b"]);
@@ -43,7 +37,12 @@ test("status snapshot reflects goal, sessions, tasks and merge queue", async () 
 });
 
 test("R3-C3: status snapshot exposes continuation telemetry section", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-tel", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   const store = new SessionStore(dir);
@@ -75,7 +74,12 @@ test("R3-C3: status snapshot exposes continuation telemetry section", async () =
 });
 
 test("R3-C3: in-flight = 末条转录为 outgoing（投喂后无响应）", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-inflight", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   const store = new SessionStore(dir);
@@ -93,7 +97,12 @@ test("R3-C3: in-flight = 末条转录为 outgoing（投喂后无响应）", asyn
 });
 
 test("C2: 平台席 row 反映 max_per_session_platform，task 席反映 max_per_session", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-cap", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   config.self_evolve = structuredClone(config.self_evolve);
@@ -120,7 +129,12 @@ test("C2: 平台席 row 反映 max_per_session_platform，task 席反映 max_per
 });
 
 test("C1: status snapshot exposes per-task latest checkpoint overview segment", () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-cp", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["a"]);
@@ -146,7 +160,12 @@ test("C1: status snapshot exposes per-task latest checkpoint overview segment", 
 });
 
 test("C1: checkpointOverview derivation is the single source used by status segment", () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-cp2", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["a"]);

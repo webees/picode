@@ -18,11 +18,6 @@ import {
   type PiHandle,
 } from "./pi-adapter.js";
 
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-test-" });
-  return dir;
-}
-
 /** Long-running mock "Pi" process. */
 function writeMockPi(): string {
   const p = path.join(os.tmpdir(), `mock-pi-${process.pid}.mjs`);
@@ -38,7 +33,7 @@ function writeMockPi(): string {
 }
 
 function setup(opts: { piEnabled?: boolean; command?: string }) {
-  const repo = tmpGitRepo();
+  const repo = gitInit({ prefix: "picode-test-" });
   // role templates live at <repo>/.picode/agents/<role>.md
   fs.mkdirSync(path.join(repo, ".picode", "agents"), { recursive: true });
   for (const role of ["pm", "ind-res", "run-lead"]) {
@@ -159,7 +154,7 @@ test("spawner stop is idempotent and tolerant of missing pids", async () => {
 });
 
 test("C2: buildSkillIndex scans skills_root for SKILL.md metadata", async () => {
-  const repo = tmpGitRepo();
+  const repo = gitInit({ prefix: "picode-test-" });
   const skillDir = path.join(repo, "skills", "engineering", "ponytail");
   fs.mkdirSync(skillDir, { recursive: true });
   fs.writeFileSync(
@@ -174,7 +169,7 @@ test("C2: buildSkillIndex scans skills_root for SKILL.md metadata", async () => 
 });
 
 test("C2: buildSkillIndex missing root → empty; SKILL.md without frontmatter skipped", async () => {
-  const repo = tmpGitRepo();
+  const repo = gitInit({ prefix: "picode-test-" });
   assert.deepEqual(buildSkillIndex("skills", repo), []);
   const bare = path.join(repo, "skills", "bare");
   fs.mkdirSync(bare, { recursive: true });
@@ -183,7 +178,7 @@ test("C2: buildSkillIndex missing root → empty; SKILL.md without frontmatter s
 });
 
 test("C2: personaDeclaredSkills resolves declared names to indexed paths", async () => {
-  const repo = tmpGitRepo();
+  const repo = gitInit({ prefix: "picode-test-" });
   const skillDir = path.join(repo, "skills", "engineering", "ponytail");
   fs.mkdirSync(skillDir, { recursive: true });
   fs.writeFileSync(
