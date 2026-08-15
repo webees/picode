@@ -17,6 +17,10 @@ export * from "./atomic.js";
 export * from "./yaml-io.js";
 // unified error registry (方向 A2)
 export * from "./errors.js";
+// E sandbox 三态 + 审批策略解析（chunk-c3-sandbox-approval）
+export * from "./sandbox.js";
+// E 升级审批阶梯（ask/never + 成对审计 + allowed-once）
+export * from "./approval.js";
 // tool profiles (09 matrix)
 export * from "./tool-profiles.js";
 // session state machine (17 §4)

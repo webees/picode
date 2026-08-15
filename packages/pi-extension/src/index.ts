@@ -11,12 +11,23 @@ import { execFileSync } from "node:child_process";
 import { isIP } from "node:net";
 import YAML from "yaml";
 import {
+  APPROVAL_POLICY_ENV,
+  ApprovalStore,
   ErrorCode,
+  READ_BEFORE_EDIT_ENV,
+  SANDBOX_MODE_ENV,
+  WIDER_MODES,
   errorCodeOf,
+  isSandboxMode,
   matchGlob,
+  modeAllowsWrite,
   PicodeError,
   profileAllows,
+  readBeforeEditEnabled,
   readRunSecret,
+  resolveApprovalPolicy,
+  resolveSandboxMode,
+  sandboxDenialMarker,
   withFileLock,
   type ToolName,
 } from "@picode/core";
@@ -42,8 +53,12 @@ function jsonResult(obj: unknown) {
   return { content: [{ type: "text", text: JSON.stringify(obj, null, 2) }] };
 }
 
-function err(code: ErrorCode, message: string) {
-  return jsonResult({ ok: false, code, message });
+function err(
+  code: ErrorCode,
+  message: string,
+  extra: Record<string, unknown> = {},
+) {
+  return jsonResult({ ok: false, code, message, ...extra });
 }
 
 /** sess-mgr command queue: runs/<id>/session_commands.jsonl (18 phase B). */
@@ -100,6 +115,15 @@ export default function picodeExtension(pi: PiApi): void {
   const runDir = runId && runsRoot ? path.join(runsRoot, runId) : "";
   const store = runDir ? new RoomStore(runDir) : null;
   const secret = runDir ? readRunSecret(runDir) : "dev-secret";
+  const taskId = env("PICODE_TASK_ID");
+
+  // E 沙箱/审批/守卫（C3）：会话级 env 由 orchestrator pi-adapter 注入，
+  // 加载时解析一次（会话内不变，等价 DSH 每调用 resolve 于固定会话 env）。
+  const sandboxMode = resolveSandboxMode(env(SANDBOX_MODE_ENV));
+  const approvalPolicy = resolveApprovalPolicy(env(APPROVAL_POLICY_ENV));
+  const readBeforeEdit = readBeforeEditEnabled(env(READ_BEFORE_EDIT_ENV));
+  /** E3 observed 集：本会话（extension 进程内）通过 repo_read 读过的文件。 */
+  const observed = new Set<string>();
 
   function auth(): string | null {
     if (!agentId || !token) return "TOKEN_INVALID: missing PICODE_AGENT_ID/TOKEN";
@@ -174,15 +198,164 @@ export default function picodeExtension(pi: PiApi): void {
     },
   });
 
+  /**
+   * E2 一次性升级通道（C3）：越界写可申请升级（sandbox_permissions+justification
+   * 成对，无理由 = ESCALATION_MALFORMED；非严格更宽 = SANDBOX_ESCALATION_INVALID）。
+   * policy ask → 请求落 runs/<id>/approvals/pending-<id>.json（asked 记录）→
+   * run-lead `picode approval decide --id <id> --approve` → 重试带 approval_id
+   * 单次放行（allowed-once，used 后重试再验拒绝）；never = fail-closed 直接拒绝不落请求。
+   */
+  async function tryEscalation(
+    rel: string,
+    params: Record<string, unknown>,
+  ): Promise<{ granted: boolean; result?: ReturnType<typeof err> }> {
+    const perms = params.sandbox_permissions;
+    const justification = params.justification;
+    const hasEscalation =
+      perms !== undefined || justification !== undefined || params.approval_id !== undefined;
+    if (!hasEscalation) {
+      return {
+        granted: false,
+        result: err(
+          ErrorCode.WRITE_PATH_DENIED,
+          `${sandboxDenialMarker(sandboxMode)} path not in write_paths: ${rel} — ` +
+            "retry once with sandbox_permissions+justification to escalate (唯一豁免)",
+          { mode: sandboxMode },
+        ),
+      };
+    }
+    // 成对校验：sandbox_permissions 必须是合法 mode 值；justification 非空
+    if (typeof perms !== "string" || !isSandboxMode(perms)) {
+      return {
+        granted: false,
+        result: err(
+          ErrorCode.ESCALATION_MALFORMED,
+          `escalation malformed: sandbox_permissions must be one of: ${WIDER_MODES[sandboxMode].join(", ") || "(none — current mode is danger-full-access)"}`,
+          { mode: sandboxMode, requested: perms ?? null },
+        ),
+      };
+    }
+    if (typeof justification !== "string" || !justification.trim()) {
+      return {
+        granted: false,
+        result: err(
+          ErrorCode.ESCALATION_MALFORMED,
+          "escalation malformed: justification required (escalation without a reason is rejected)",
+          { mode: sandboxMode, requested: perms },
+        ),
+      };
+    }
+    // 严格更宽、执行时校验
+    if (!WIDER_MODES[sandboxMode].includes(perms)) {
+      return {
+        granted: false,
+        result: err(
+          ErrorCode.SANDBOX_ESCALATION_INVALID,
+          `${perms} is not strictly wider than current mode ${sandboxMode}`,
+          { mode: sandboxMode, requested: perms },
+        ),
+      };
+    }
+    // 策略 never = fail-closed：直接拒绝，不落请求
+    if (approvalPolicy === "never") {
+      return {
+        granted: false,
+        result: err(
+          ErrorCode.APPROVAL_DENIED,
+          `approval policy is never: fail-closed — escalation rejected without a request (${SANDBOX_MODE_ENV} allows upgrade but ${APPROVAL_POLICY_ENV}=never blocks it)`,
+          { mode: sandboxMode, requested: perms },
+        ),
+      };
+    }
+    if (!runDir) {
+      return { granted: false, result: err(ErrorCode.NO_RUN, "PICODE_RUN_ID/RUNS_ROOT not set") };
+    }
+    const approvalId = params.approval_id;
+    if (typeof approvalId !== "string" || !approvalId) {
+      // 首轮：落升级请求（asked 记录）
+      const rec = await new ApprovalStore(runDir).request({
+        fromAgent: agentId,
+        taskId,
+        path: rel,
+        mode: perms,
+        reason: String(justification).trim(),
+      });
+      return {
+        granted: false,
+        result: err(
+          ErrorCode.APPROVAL_PENDING,
+          `escalation requested for ${rel} → ${perms}; ask run-lead to approve: ` +
+            `picode approval decide --id ${rec.id} --approve, then retry repo_write with ` +
+            "the same sandbox_permissions+justification and approval_id",
+          { mode: sandboxMode, requested: perms, approval_id: rec.id, path: rel },
+        ),
+      };
+    }
+    // 重试：按 approval_id 验决策（allowed-once）
+    const store = new ApprovalStore(runDir);
+    const rec = store.get(approvalId);
+    if (!rec) {
+      return {
+        granted: false,
+        result: err(ErrorCode.APPROVAL_NOT_FOUND, `approval not found: ${approvalId}`, {
+          approval_id: approvalId,
+        }),
+      };
+    }
+    if (rec.asked.path !== rel || rec.asked.mode !== perms) {
+      return {
+        granted: false,
+        result: err(
+          ErrorCode.SANDBOX_ESCALATION_INVALID,
+          `approval ${approvalId} was granted for path=${rec.asked.path} mode=${rec.asked.mode}, ` +
+            `not path=${rel} mode=${perms}`,
+          { approval_id: approvalId, mode: sandboxMode, requested: perms },
+        ),
+      };
+    }
+    try {
+      await store.consumeOnce(approvalId); // approved→used；pending/rejected/used 均抛 fail-closed
+      return { granted: true };
+    } catch (e) {
+      return {
+        granted: false,
+        result: err(
+          errorCodeOf(e) ?? ErrorCode.APPROVAL_DENIED,
+          e instanceof Error ? e.message : String(e),
+          { approval_id: approvalId, mode: sandboxMode, requested: perms },
+        ),
+      };
+    }
+  }
+
   pi.registerTool({
     name: "repo_write",
     label: "Picode Repo Write",
-    description: "Write a file inside write_paths of the current task worktree",
+    description:
+      "Write a file inside write_paths of the current task worktree. " +
+      "Sandbox mode (default workspace-write, PICODE_SANDBOX_MODE) is a dynamic backstop on top " +
+      "of the static write_paths whitelist. Denied (out-of-whitelist) writes may be retried ONCE " +
+      "with sandbox_permissions + justification to escalate; under approval policy ask the request " +
+      "lands in runs/<id>/approvals/pending-*.json and is granted once after `picode approval decide " +
+      "--id <id> --approve` (answerer=run-lead), then retry with the returned approval_id. " +
+      "Editing an existing file requires reading it first via repo_read (read-before-edit guard).",
     parameters: {
       type: "object",
       properties: {
         path: { type: "string", description: "Relative path in worktree" },
         content: { type: "string" },
+        sandbox_permissions: {
+          type: "string",
+          description: "Requested wider mode (workspace-write | danger-full-access); must be strictly wider than the session mode",
+        },
+        justification: {
+          type: "string",
+          description: "Required with sandbox_permissions; escalation without a reason is rejected",
+        },
+        approval_id: {
+          type: "string",
+          description: "Approval id returned by an APPROVAL_PENDING denial, after run-lead approved it",
+        },
       },
       required: ["path", "content"],
     },
@@ -191,15 +364,32 @@ export default function picodeExtension(pi: PiApi): void {
       const a = auth();
       if (a) return err(ErrorCode.TOKEN_INVALID, a);
       const rel = String(params.path).replace(/^\/+/, "");
-      // fail-closed: empty write set means NO writes are granted (default deny)
-      if (writePaths.length === 0 || !matchGlob(rel, writePaths)) {
-        return err(ErrorCode.WRITE_PATH_DENIED, `path not in write_paths: ${rel}`);
+      // E1: read-only 拒一切写（mode 围栏先于白名单）
+      if (!modeAllowsWrite(sandboxMode)) {
+        return err(
+          ErrorCode.SANDBOX_DENIED,
+          `${sandboxDenialMarker(sandboxMode)} read-only mode rejects all writes: ${rel}`,
+          { mode: sandboxMode },
+        );
+      }
+      // E4: write_paths 静态白名单语义不变（空写集 = 默认拒绝）
+      const inWhitelist = writePaths.length > 0 && matchGlob(rel, writePaths);
+      if (!inWhitelist && sandboxMode !== "danger-full-access") {
+        const esc = await tryEscalation(rel, params);
+        if (!esc.granted) return esc.result!;
       }
       let abs: string;
       try {
         abs = resolveInCwd(rel);
       } catch {
-        return err(ErrorCode.WRITE_PATH_DENIED, "path escapes cwd");
+        return err(ErrorCode.WRITE_PATH_DENIED, "path escapes cwd", { mode: sandboxMode });
+      }
+      // E3: read-before-edit 守卫 — 目标已存在且本会话未读 → FS_NOT_OBSERVED
+      if (readBeforeEdit && fs.existsSync(abs) && !observed.has(rel)) {
+        return err(
+          ErrorCode.FS_NOT_OBSERVED,
+          `edit requires reading first: ${rel} (call repo_read before repo_write; set ${READ_BEFORE_EDIT_ENV}=0 to disable)`,
+        );
       }
       fs.mkdirSync(path.dirname(abs), { recursive: true });
       fs.writeFileSync(abs, String(params.content), "utf8");
@@ -234,6 +424,8 @@ export default function picodeExtension(pi: PiApi): void {
         return err(ErrorCode.READ_PATH_DENIED, "path escapes cwd");
       }
       if (!fs.existsSync(abs)) return err(ErrorCode.NOT_FOUND, rel);
+      // E3: 记录 observed（read-before-edit 守卫依据）
+      observed.add(rel);
       return jsonResult({ ok: true, path: rel, content: fs.readFileSync(abs, "utf8") });
     },
   });

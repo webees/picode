@@ -74,6 +74,39 @@ test("buildPiEnv carries token/profile/room/persona/transcript (18 phase C)", as
   assert.equal(env.PICODE_RUN_ALLOWLIST, JSON.stringify(config.run_allowlist), "ERR-05: allowlist 注入");
 });
 
+test("E: buildPiEnv 注入沙箱/审批/守卫会话 env — 默认值（workspace-write/ask/开）", async () => {
+  const { dir, config } = setup({});
+  const store = new SessionStore(dir);
+  const session = store.get("pm")!;
+  const env = buildPiEnv(dir, config, session);
+  assert.equal(env.PICODE_SANDBOX_MODE, "workspace-write");
+  assert.equal(env.PICODE_APPROVAL_POLICY, "ask");
+  assert.equal(env.PICODE_READ_BEFORE_EDIT, "1");
+});
+
+test("E: buildPiEnv 透传 operator env 覆盖（会话级配置，不新增 config 键 D104）", async () => {
+  const prev: Record<string, string | undefined> = {};
+  for (const k of ["PICODE_SANDBOX_MODE", "PICODE_APPROVAL_POLICY", "PICODE_READ_BEFORE_EDIT"]) {
+    prev[k] = process.env[k];
+  }
+  try {
+    process.env.PICODE_SANDBOX_MODE = "read-only";
+    process.env.PICODE_APPROVAL_POLICY = "never";
+    process.env.PICODE_READ_BEFORE_EDIT = "0";
+    const { dir, config } = setup({});
+    const store = new SessionStore(dir);
+    const env = buildPiEnv(dir, config, store.get("pm")!);
+    assert.equal(env.PICODE_SANDBOX_MODE, "read-only");
+    assert.equal(env.PICODE_APPROVAL_POLICY, "never");
+    assert.equal(env.PICODE_READ_BEFORE_EDIT, "0");
+  } finally {
+    for (const k of Object.keys(prev)) {
+      if (prev[k] === undefined) delete process.env[k];
+      else process.env[k] = prev[k];
+    }
+  }
+});
+
 test("buildPiEnv: task seat cwd falls back to repo root before prepare (ERR-03)", async () => {
   const { dir, config } = setup({});
   const store = new SessionStore(dir);

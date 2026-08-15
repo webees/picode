@@ -47,6 +47,12 @@ bus.history({ room, limit })
 4. 否则拒绝 + violation  
 5. 实现 MUST 在 **task worktree** 内写入（06 §1）  
 
+> **沙箱叠加（E，§10）**：`write_paths` 静态白名单语义不变（机械校验仍是第一道门）；
+> 会话级 sandbox mode（read-only / workspace-write / danger-full-access）叠加其上作
+> **动态兜底围栏**——read-only 拒一切写；workspace-write（默认）白名单内可写、越界可申请
+> 一次性升级（run-lead 代批，allowed-once）；danger-full-access 工作房内任意写（仍拒 path
+> escape 出 cwd）。越界无授权仍以 `WRITE_PATH_DENIED` 结构化拒绝。  
+
 ### 2.2 关闭前
 
 成功 closed 前 MUST 校验：
@@ -117,3 +123,57 @@ shared_files:
 ## 9. 状态文件
 
 `runs/` 写 MUST 经 atomic rename + flock（07 §5）；worktree **不**免除该要求。
+
+## 10. 沙箱三态 + 升级审批 + read-before-edit（E）
+
+> 实现域：`core/src/sandbox.ts` / `core/src/approval.ts`（单写者 chunk-c3-sandbox-approval）；
+> 会话 env 由 orchestrator pi-adapter `buildPiEnv` 注入。本轮不新增 config 键（D104）。
+
+### 10.1 定位（E4：双轨）
+
+`write_paths` 静态白名单语义不变（§2.1 机械校验仍为第一道门），sandbox mode 是叠加其上的
+**动态兜底围栏**：
+
+| mode | 行为 |
+|---|---|
+| `read-only` | **拒一切写**（含 write_paths 内）；mode 围栏先于白名单，`SANDBOX_DENIED`（含生效 mode 标记） |
+| `workspace-write`（默认） | write_paths 内可写；越界拒绝（`WRITE_PATH_DENIED` 含生效 mode），可申请一次性升级 |
+| `danger-full-access` | 工作房（cwd）内任意路径可写（仍拒 path escape 出 cwd） |
+
+每调用 resolve：会话 env `PICODE_SANDBOX_MODE` 覆盖 > 默认 `workspace-write`；非法 env 值
+fail-loud（`SANDBOX_MODE_INVALID`）。
+
+### 10.2 越界与一次性升级阶梯（E2）
+
+- 越界写（write_paths 外且无授权）→ `WRITE_PATH_DENIED` 结构化拒绝，错误码含生效 mode：
+  消息含 `[sandbox: file access denied under <mode> mode]` 标记与升级提示。
+- 升级参数成对：`repo_write` 增 `sandbox_permissions` + `justification`：
+  - 无理由升级（缺一/空白 justification）= `ESCALATION_MALFORMED`（malformed 拒绝）；
+  - 非法 mode 值 = `ESCALATION_MALFORMED`；
+  - 非严格更宽（`WIDER_MODES` 执行时校验：read-only→[workspace-write, danger-full-access]、
+    workspace-write→[danger-full-access]、danger-full-access→[]）= `SANDBOX_ESCALATION_INVALID`。
+- 审批策略 `PICODE_APPROVAL_POLICY`（默认 `ask`）：
+  - `ask` → 请求落 `runs/<id>/approvals/pending-<id>.json`（asked 记录：from_agent/task_id/path/mode/reason）；
+  - `never` → fail-closed 直接拒绝（`APPROVAL_DENIED`）且**不落请求文件**。
+- 决策：`picode approval list [--status …]` 观测；`picode approval decide --id <id> --approve|--reject`
+  （answerer=**run-lead** 代批；policy 层动作走 sponsor 人工）。决策写回**同一文件**成对审计
+  （asked+decided 同文件 status：decided.by/decision/at）。
+- **allowed-once**：重试 `repo_write` 带 `approval_id`（且 `sandbox_permissions`+`path` 与请求一致）
+  单次放行，消费后 status=`used`；重试再验拒绝（`APPROVAL_ALREADY_USED`）。pending / rejected /
+  未知 / 无 answerer 一律 fail-closed（`APPROVAL_PENDING`/`APPROVAL_REJECTED`/`APPROVAL_NOT_FOUND`）。
+- 落盘一律经 `withFileLock`（atomic.ts，与 goal/checkpoint CAS 同源）。
+- **D071**：审批观测走 run 目录文件（approvals/*.json），零 dashboard 端点新增。
+
+### 10.3 read-before-edit 守卫（E3）
+
+- `repo_read` 记录本会话（extension 进程内 observed 集）读过的文件；
+- `repo_write` 目标为**已存在**文件且本会话未读过 → `FS_NOT_OBSERVED`
+  （"edit requires reading first"）；
+- 新建文件（createIfAbsent 语义）无需预读；
+- 开关 `PICODE_READ_BEFORE_EDIT`（默认**开**；`0/false/off/no` 显式关闭，其余 fail-closed 保持开）。
+
+### 10.4 配置旋钮（D104）
+
+沙箱/审批/守卫三处开关全部走会话 env（`PICODE_SANDBOX_MODE` / `PICODE_APPROVAL_POLICY` /
+`PICODE_READ_BEFORE_EDIT`，默认 workspace-write / ask / 开）+ `core/src/sandbox.ts` 常量，
+本轮不新增 config 键。
