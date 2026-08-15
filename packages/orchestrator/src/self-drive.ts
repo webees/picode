@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { readYamlFile, withFileLock, SESSION_EVENTS, type PicodeConfig } from "@picode/core";
+import { RoomStore } from "@picode/bus";
 import { SessionStore } from "./session-store.js";
 import {
   applyEvent,
@@ -42,6 +43,20 @@ export * from "./continuation.js";
  * The guardian never writes business code; it only drives the session state
  * machine.
  */
+
+/**
+ * I6（chunk-settle-feed）：子代理结算机械通知负载（机械层观察 session.yaml 派生）。
+ * 来源标注纪律：结算通知由机械层（orchestrator）观察状态文件派生，不是子代理
+ * LLM 自报（蓝图 §2.4@114-125 / spec-17 §9）；复用既有 bus 词汇 `cell_done`
+ * （room-store.ts@40 已注册），不新增 SESSION_EVENTS（spec-10 无需注册）。
+ */
+export interface SubagentSettledNotice {
+  agent_id: string;
+  /** 父会话 agent_id（决定父房）；无父会话 → null（无可投递房间）。 */
+  parent_session: string | null;
+  /** 子代理嵌套深度（>=1）。 */
+  delegation_depth: number;
+}
 
 /** A rule-table event derived from run state, ready for `applyEvent`. */
 export interface DerivedEvent {
@@ -142,9 +157,108 @@ export function deriveEvents(dir: string, config: PicodeConfig): DerivedEvent[] 
   return events;
 }
 
+/**
+ * I6（D1 决策）：纯派生——子代理终态（delegation_depth>0 ∧ state=terminated ∧
+ * parent_session 非空）→ 结算通知负载列表。只读无副作用（对齐 deriveEvents
+ * 纯派生风格与 TASK_DISSOLVED 先例；`deriveEvents` 本身零改动——结算通知不是
+ * 规则表事件，不进 applyEvent/rules-engine 事件面）。
+ */
+export function deriveSettledSubagentNotices(dir: string): SubagentSettledNotice[] {
+  const notices: SubagentSettledNotice[] = [];
+  for (const s of new SessionStore(dir).list()) {
+    if ((s.delegation_depth ?? 0) > 0 && s.state === "terminated" && s.parent_session) {
+      notices.push({
+        agent_id: s.agent_id,
+        parent_session: s.parent_session,
+        delegation_depth: s.delegation_depth ?? 0,
+      });
+    }
+  }
+  return notices;
+}
+
 /** 服务恢复退避（秒级→下次尝试前的等待）；最多 3 次尝试（P1 自动恢复）。 */
 export const SERVE_RECOVERY_BACKOFF_MS = [1_000, 5_000, 15_000];
 export const MAX_SERVE_RECOVERY_ATTEMPTS = 3;
+
+/**
+ * I6: 父房解析——父会话 agent_id（如 engineer@task-x）→ 其 squad 房
+ * （squad-task-x，task.yaml work_room 约定）。平台席父会话（无 @task- 绑定）
+ * 无 squad 房 → null（无可投递房间，调用方保守跳过）。
+ */
+export function parentRoomOf(parentSession: string | null): string | null {
+  if (!parentSession) return null;
+  const taskId = taskIdOfAgent(parentSession);
+  return taskId ? `squad-${taskId}` : null;
+}
+
+/**
+ * I6（D2 决策）：幂等检查——父房 bus 文件是否已有该子代理的 cell_done
+ * （type=cell_done ∧ meta.subagent === agent_id）。bus 文件是通知真相
+ * （D002 文件真相），不建事件日志/通知台账。
+ */
+function alreadyNotified(dir: string, room: string, agentId: string): boolean {
+  const file = path.join(dir, "bus", `${room}.jsonl`);
+  if (!fs.existsSync(file)) return false;
+  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const m = JSON.parse(line) as { type?: string; meta?: { subagent?: string } };
+      if (m.type === "cell_done" && m.meta?.subagent === agentId) return true;
+    } catch {
+      /* 损坏行跳过（与 RoomStore.readBus 同款容错） */
+    }
+  }
+  return false;
+}
+
+/**
+ * I6（D1/D2/D4 决策）：投递所有子代理结算 cell_done 机械通知到父房。
+ *  - 复用 RoomStore.post 既有通道（cell_done 词汇已注册）；
+ *    投递身份 = 父会话 agent_id（父房 post 成员通道——"orchestrator" 非房间
+ *    成员，ACL 会拒绝；机械来源由消息体/meta 标注承载：meta.source =
+ *    "orchestrator" + meta.derived_from="session.yaml"，来源标注纪律不丢）。
+ *  - refs 指子代理转录（transcripts/<agent>.jsonl）与会话文件
+ *    （sessions/<agent>.yaml）——D2 定稿；另附父任务证据目录
+ *    （tasks/<taskId>/evidence）对齐验收口径「refs 指转录/证据」。
+ *  - 幂等：父房 bus 已有该子代理 cell_done → 跳过（bus 文件是通知真相）。
+ *  - 平台席父会话（无 squad 房）→ 保守跳过。
+ *  - 单条投递 best-effort（P1 容错）：post ACL 失败等不阻断其余、不炸 tick。
+ *  - 返回本轮已投递的子代理 agent_id 列表（GuardianTickResult.settled，观测用）。
+ */
+export async function postSettledSubagentNotices(dir: string): Promise<string[]> {
+  const delivered: string[] = [];
+  for (const notice of deriveSettledSubagentNotices(dir)) {
+    try {
+      const room = parentRoomOf(notice.parent_session);
+      if (!room) continue;
+      if (alreadyNotified(dir, room, notice.agent_id)) continue;
+      const parent = notice.parent_session!;
+      const taskId = taskIdOfAgent(parent)!;
+      const bus = new RoomStore(dir);
+      await bus.post(room, parent, {
+        type: "cell_done",
+        body: `子代理 ${notice.agent_id} 已结算（机械通知：guardian 观察会话终态派生，非子代理 LLM 自报）。`,
+        refs: [
+          path.join("transcripts", `${notice.agent_id}.jsonl`),
+          path.join("sessions", `${notice.agent_id}.yaml`),
+          path.join("tasks", taskId, "evidence"),
+        ],
+        meta: {
+          subagent: notice.agent_id,
+          parent_session: parent,
+          delegation_depth: notice.delegation_depth,
+          source: "orchestrator",
+          derived_from: "session.yaml",
+        },
+      });
+      delivered.push(notice.agent_id);
+    } catch {
+      /* best-effort：单条投递失败保持可重试，不阻断其余（P1 容错） */
+    }
+  }
+  return delivered;
+}
 
 export interface ServeHealthOpts {
   /** base_url 探测超时。 */
@@ -342,6 +456,11 @@ export interface GuardianTickResult {
     fed: string[];
     gate: Array<{ agent_id: string; reason: string; ran: boolean; passed: boolean }>;
   };
+  /**
+   * I6（D4）: 本轮已投递 cell_done 机械通知的子代理 agent_id 列表（观测用，
+   * additive 不破坏既有断言；来源 = orchestrator 观察会话终态派生）。
+   */
+  settled: string[];
   /** C1 checkpoint-auto: 本轮 guardian 周期捕获的 task（boundary=guardian）；默认关闭 → 空。 */
   checkpoints: GuardianCheckpointCaptureResult;
   /**
@@ -575,6 +694,11 @@ export async function guardianTick(
   // 「通过 → 停靠不投喂」「失败/快照未变 → 不投喂但保留候选（下轮可重试）」。
   const continuation = await sweepContinuationsGated(dir, config);
 
+  // I6（D4）: continuation sweep 之后投递子代理结算机械通知——cell_done 进父房
+  // （复用既有 bus 词汇；来源 = orchestrator 观察会话终态派生，非 LLM 自报；
+  // 幂等：父房 bus 已有则跳过；平台席父会话保守跳过；单条 best-effort）。
+  const settled = await postSettledSubagentNotices(dir);
+
   // C1-run-close: 终态 goal（completed/cancelled）后休眠所有 awake 平台席，
   // 不残留 awake 占 max_awake（product acceptance：run 收尾自动休眠平台席）。
   const goal = readGoal(dir);
@@ -600,6 +724,7 @@ export async function guardianTick(
     serve,
     budgets,
     continuation,
+    settled,
     checkpoints,
     code_updated,
     slept_platform,

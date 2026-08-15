@@ -11,9 +11,13 @@ import {
   CONTINUATION_PROMPT,
   CONTINUATION_SUMMARY_HEADER,
   composeContinuationPrompt,
+  composeInjectNotice,
+  composeSteerPrompt,
   deriveContinuationTargets,
   feedContinuation,
   sweepContinuations,
+  STEER_HEADER,
+  INJECT_HEADER,
 } from "./continuation.js";
 
 function setupRun() {
@@ -839,4 +843,246 @@ test("C1: feedContinuation 对非 awake / 非 oc- 会话幂等返回 null", asyn
   store.register("pm", { agentId: "ghost-agent", initialState: "sleeping" });
   const none = await feedContinuation(dir, config, "ghost-agent");
   assert.equal(none, null);
+});
+
+// ---------------------------------------------------------------------------
+// I1（chunk-settle-feed）：投喂语义分级 followup/steer/inject（S 变体，
+// 不碰 17 状态机）——steer 增量 next-step 引导（instruction 携带指令，不重灌
+// 固定模板）、inject 状态通知不唤醒（只过 in-flight 门闩、不计预算）、
+// followup 现状；wake 门闩沿用 idle/in-flight 判定
+// ---------------------------------------------------------------------------
+
+test("I1: composeSteerPrompt 复用摘要段 + 引导段，不重灌固定续跑模板", () => {
+  const out = composeSteerPrompt(null, "下一步是实现模块 C");
+  assert.ok(out.includes(STEER_HEADER), "必须含 steer 引导段标题");
+  assert.ok(out.includes("下一步是实现模块 C"), "guidance 必须进入引导段");
+  assert.ok(!out.includes("继续推进"), "steer 不得重灌固定续跑模板（增量投喂）");
+  assert.ok(!out.includes("检测到本会话已空闲"), "steer 不得携带续跑模板");
+  const withSummary = composeSteerPrompt("历史转录共 1 条…", "先回执上一步证据");
+  assert.ok(withSummary.includes(CONTINUATION_SUMMARY_HEADER), "有摘要时必须复用摘要段");
+  assert.ok(withSummary.includes(STEER_HEADER));
+});
+
+test("I1: composeInjectNotice 只含状态通知段（无续跑模板，不唤醒语义）", () => {
+  const out = composeInjectNotice("checkpoint 已更新至 v2");
+  assert.ok(out.includes(INJECT_HEADER), "必须含 inject 通知段标题");
+  assert.ok(out.includes("checkpoint 已更新至 v2"), "通知正文必须保留");
+  assert.ok(!out.includes("继续推进"), "inject 不得携带续跑模板");
+});
+
+test("I1: feedContinuation steer → instruction 携带下一步引导（增量投喂，计数 +1）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_steer1");
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    const res = await feedContinuation(dir, config, "engineer@task-x", {
+      kind: "steer",
+      instruction: "上一步证据已回执，下一步是实现模块 C",
+    });
+    assert.ok(res, "steer 必须投喂成功");
+    const posts = messagePosts(calls);
+    assert.equal(posts.length, 1);
+    const msg = posts[0].body as { parts: Array<{ type: string; text: string }> };
+    const text = msg.parts.map((p) => p.text).join("\n");
+    assert.ok(text.includes(STEER_HEADER), "必须含 steer 引导段标题");
+    assert.ok(text.includes("上一步证据已回执，下一步是实现模块 C"), "instruction 必须进入消息");
+    assert.ok(!text.includes("继续推进"), "steer 不得重灌固定续跑模板（增量投喂，不整体重投）");
+    assert.equal(
+      store.get("engineer@task-x")!.budget?.continuations,
+      1,
+      "steer 计续跑一次（预算收敛在 continuation.ts）",
+    );
+  } finally {
+    restore();
+  }
+});
+
+test("I1: feedContinuation inject → 只入队不唤醒（状态不变、不计数）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_inj1");
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    const res = await feedContinuation(dir, config, "engineer@task-x", {
+      kind: "inject",
+      notification: "checkpoint 已更新至 v2",
+    });
+    assert.ok(res, "awake 会话 inject 必须投递成功（只入队）");
+    const posts = messagePosts(calls);
+    assert.equal(posts.length, 1, "inject 恰好 POST 一次（入队）");
+    const msg = posts[0].body as { parts: Array<{ type: string; text: string }> };
+    const text = msg.parts.map((p) => p.text).join("\n");
+    assert.ok(text.includes(INJECT_HEADER), "必须含 inject 通知段标题");
+    assert.ok(text.includes("checkpoint 已更新至 v2"), "通知正文必须进入消息");
+
+    const rec = store.get("engineer@task-x")!;
+    assert.equal(rec.state, "awake", "inject 不触发状态迁移（不唤醒/不睡）");
+    assert.equal(rec.budget?.continuations ?? 0, 0, "inject 不计续跑预算（状态通知非续跑）");
+
+    const file = path.join(dir, "transcripts", "engineer@task-x.jsonl");
+    assert.ok(fs.existsSync(file), "inject 必须写转录归档（入队即审计）");
+    const entries = fs
+      .readFileSync(file, "utf8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as { type: string; text?: string });
+    assert.ok(
+      entries.some((e) => e.type === "outgoing" && String(e.text).includes(INJECT_HEADER)),
+      "转录必须记录 inject 入队文本",
+    );
+  } finally {
+    restore();
+  }
+});
+
+test("I1: feedContinuation inject 对 sleeping 会话返回 null（不唤醒路径，S 变体无唤醒）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  store.register("engineer", { agentId: "engineer@task-x", initialState: "sleeping" });
+  patchSession(dir, "engineer@task-x", {
+    pi_session_id: "oc-ses_inj_sleep",
+    last_wake_at: new Date(Date.now() - 600_000).toISOString(),
+  });
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    const res = await feedContinuation(dir, config, "engineer@task-x", {
+      kind: "inject",
+      notification: "checkpoint 已更新",
+    });
+    assert.equal(res, null, "sleeping 会话不得被 inject 唤醒（S 变体无唤醒路径）");
+    assert.equal(messagePosts(calls).length, 0, "不得 POST");
+    assert.equal(store.get("engineer@task-x")!.state, "sleeping");
+  } finally {
+    restore();
+  }
+});
+
+test("I1: feedContinuation 默认/显式 followup → 现状续跑投喂（回归）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_follow1");
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    const res = await feedContinuation(dir, config, "engineer@task-x", { kind: "followup" });
+    assert.ok(res);
+    const msg = messagePosts(calls)[0].body as { parts: Array<{ type: string; text: string }> };
+    const text = msg.parts.map((p) => p.text).join("\n");
+    assert.ok(text.includes("继续推进"), "followup 必须携带现状续跑模板");
+    assert.ok(!text.includes(STEER_HEADER), "followup 不得带 steer 段");
+    assert.equal(store.get("engineer@task-x")!.budget?.continuations, 1, "followup 计续跑一次");
+  } finally {
+    restore();
+  }
+});
+
+test("I1: deriveContinuationTargets steer 被 wake 门闩拦截（in-flight 不投喂）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_steer2");
+  appendTranscript(dir, "engineer@task-x", {
+    type: "outgoing",
+    ts: new Date(Date.now() - 10_000).toISOString(),
+    text: "长回合进行中（尚无响应）",
+  });
+
+  assert.deepEqual(
+    deriveContinuationTargets(dir, config, new Date(), { kind: "steer" }),
+    [],
+    "in-flight 会话 steer 不得通过门闩（busy 不插队）",
+  );
+});
+
+test("I1: deriveContinuationTargets steer 空闲未达 idle_sec 不候选，空闲后恢复", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 300;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_steer3", 60_000); // 空闲 60s < 300s
+
+  assert.deepEqual(
+    deriveContinuationTargets(dir, config, new Date(), { kind: "steer" }),
+    [],
+    "未空闲不得投喂（门闩）",
+  );
+
+  const later = new Date(Date.now() + 250_000);
+  assert.deepEqual(deriveContinuationTargets(dir, config, later, { kind: "steer" }), [
+    { agent_id: "engineer@task-x", session_id: "oc-ses_steer3" },
+  ], "空闲超 idle_sec 后 steer 恢复候选（门闩沿用 idle 判定）");
+});
+
+test("I1: deriveContinuationTargets inject → awake 会话入候选（只过 in-flight 门闩）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_inj2", 60_000);
+
+  // 空闲未达 idle_sec（60s < 300s）也入候选 —— inject 不过 idle 门闩（状态通知即时投递）
+  const now = new Date();
+  assert.deepEqual(
+    deriveContinuationTargets(dir, config, now, { kind: "inject" }),
+    [{ agent_id: "engineer@task-x", session_id: "oc-ses_inj2" }],
+    "awake 会话即使未达 idle_sec 也是 inject 候选",
+  );
+
+  // in-flight（busy）→ 拦截（inject 仍过 in-flight 门闩，busy 不插队）
+  appendTranscript(dir, "engineer@task-x", {
+    type: "outgoing",
+    ts: new Date(Date.now() - 5_000).toISOString(),
+    text: "长回合进行中",
+  });
+  assert.deepEqual(
+    deriveContinuationTargets(dir, config, new Date(), { kind: "inject" }),
+    [],
+    "in-flight 会话 inject 不得通过门闩",
+  );
+});
+
+test("I1: inject 边界——sleeping/error/预算无关（不计预算）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve.continuation.max_per_session = 1;
+  config.self_evolve.continuation.idle_sec = 60;
+
+  // sleeping 会话（保留 oc- 句柄）不是 inject 候选（S 变体无唤醒路径）
+  store.register("engineer", { agentId: "engineer@task-x", initialState: "sleeping" });
+  patchSession(dir, "engineer@task-x", { pi_session_id: "oc-ses_inj_sleep2" });
+  assert.deepEqual(
+    deriveContinuationTargets(dir, config, new Date(), { kind: "inject" }),
+    [],
+    "sleeping 会话不是 inject 候选",
+  );
+
+  // awake 会话即使续跑预算已耗尽（max_per_session=1 且已用 1 次）仍是 inject 候选
+  await store.wake("engineer@task-x", "test");
+  patchSession(dir, "engineer@task-x", { budget: { turns: 1, continuations: 1 } });
+  assert.deepEqual(
+    deriveContinuationTargets(dir, config, new Date(), { kind: "inject" }),
+    [{ agent_id: "engineer@task-x", session_id: "oc-ses_inj_sleep2" }],
+    "inject 不计续跑预算（D078 预算门不适用）",
+  );
+
+  // error 会话不是 inject 候选（serve 失联不投喂，P1 恢复路径接管）
+  await store.setError("engineer@task-x", "serve 健康探测失败（ERR-01 watchdog）");
+  assert.deepEqual(deriveContinuationTargets(dir, config, new Date(), { kind: "inject" }), []);
 });
