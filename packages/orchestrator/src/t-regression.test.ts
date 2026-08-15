@@ -1,5 +1,5 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -33,16 +33,8 @@ import { SessionStore } from "./session-store.js";
  * coverage: T01/T02/T10/T13/T14/T15/T17 (11 regression checklist MUST).
  */
 
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-reg-" });
-  fs.writeFileSync(path.join(dir, "README.md"), "# test\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
-
 test("T01: implement task cannot be created before goal is active", () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-reg-", readme: "# test\n" });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   assert.throws(
@@ -52,7 +44,7 @@ test("T01: implement task cannot be created before goal is active", () => {
 });
 
 test("T02: goal with open questions cannot be activated", () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-reg-", readme: "# test\n" });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir } = resolveRunDir(repo, runId);
   // simulate an intake with an open question recorded on the goal
@@ -126,7 +118,7 @@ test("T15: cells.templates pointing at an unknown role fails validation", () => 
 });
 
 test("T17: engineer spawn env never embeds unapproved research text", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-reg-", readme: "# test\n" });
   const { runId } = createRun(repo, { title: "g", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["works"]);

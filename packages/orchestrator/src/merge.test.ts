@@ -1,5 +1,5 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -18,16 +18,13 @@ import { progressPath, sweepProgress } from "./progress.js";
 import { SessionStore } from "./session-store.js";
 import { readYamlFile } from "@picode/core";
 
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-test-", email: "test@picode", name: "picode-test" });
-  fs.writeFileSync(path.join(dir, "README.md"), "# test\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
-
 async function setupPreparedTask(opts: { scale?: "S" | "M" | "L" } = {}) {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-001", scale: opts.scale ?? "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["feature works"]);
@@ -115,7 +112,12 @@ test("fresh progress report is not flagged", async () => {
 });
 
 test("merge queue honors chunk depends_on (11 stage 7 topological order)", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["works"]);
@@ -164,7 +166,12 @@ test("merge queue honors chunk depends_on (11 stage 7 topological order)", async
 });
 
 test("merge queue treats a failed dependency as non-blocking (no wedge)", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["works"]);
@@ -207,7 +214,12 @@ test("merge queue treats a failed dependency as non-blocking (no wedge)", async 
 });
 
 test("merge queue detects a dependency cycle among queued tasks", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["works"]);

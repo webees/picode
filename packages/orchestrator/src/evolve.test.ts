@@ -1,9 +1,8 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import YAML from "yaml";
 import {
   assertEvolveTargetRoot,
@@ -21,17 +20,6 @@ import {
 import { createRun, resolveRunDir, readGoal } from "./run-store.js";
 import { writeEvolveKnowledgeLog } from "./evolve-run.js";
 import { checkPersonas } from "./staffing.js";
-
-function tmpGitRepo(name = "picode"): string {
-  const dir = gitInit({ prefix: "picode-test-", email: "t@p" });
-  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name, version: "0.0.0" }));
-  fs.mkdirSync(path.join(dir, "packages", "core"), { recursive: true });
-  fs.writeFileSync(path.join(dir, "packages", "core", "package.json"), "{}");
-  fs.writeFileSync(path.join(dir, "README.md"), "# t\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
 
 const evolveSpec: EvolveGoalSpec = {
   layers: ["docs", "tests"],
@@ -103,14 +91,38 @@ test("E2 Bug B regression: layers=[knowledge,docs] — per-layer grouped judgmen
 });
 
 test("assertEvolveTargetRoot accepts picode monorepo, rejects others (19 §4 MUST)", async () => {
-  const ok = tmpGitRepo("picode");
+  const ok = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "t@p",
+    files: {
+      "package.json": JSON.stringify({ name: "picode", version: "0.0.0" }),
+      "packages/core/package.json": "{}",
+      "README.md": "# t\n",
+    },
+  });
   assertEvolveTargetRoot(ok, getDefaultConfig());
-  const bad = tmpGitRepo("not-picode");
+  const bad = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "t@p",
+    files: {
+      "package.json": JSON.stringify({ name: "not-picode", version: "0.0.0" }),
+      "packages/core/package.json": "{}",
+      "README.md": "# t\n",
+    },
+  });
   assert.throws(() => assertEvolveTargetRoot(bad, getDefaultConfig()), /self_evolve target_repo/);
 });
 
 test("init --kind self_evolve writes kind/target_repo/evolve; delivery default", async () => {
-  const repo = tmpGitRepo("picode");
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "t@p",
+    files: {
+      "package.json": JSON.stringify({ name: "picode", version: "0.0.0" }),
+      "packages/core/package.json": "{}",
+      "README.md": "# t\n",
+    },
+  });
   const { runId } = createRun(repo, {
     title: "upgrade picode",
     kind: "self_evolve",
@@ -127,13 +139,29 @@ test("init --kind self_evolve writes kind/target_repo/evolve; delivery default",
   assert.equal(goal.evolve.risk, "high");
   assert.equal(evolveRisk(goal.evolve), "high");
 
-  const repo2 = tmpGitRepo();
+  const repo2 = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "t@p",
+    files: {
+      "package.json": JSON.stringify({ name: "picode", version: "0.0.0" }),
+      "packages/core/package.json": "{}",
+      "README.md": "# t\n",
+    },
+  });
   const { runId: r2 } = createRun(repo2, { title: "business" });
   assert.equal(readGoal(path.join(repo2, ".picode", "runs", r2)).kind, "delivery");
 });
 
 test("init self_evolve on non-picode target is rejected", async () => {
-  const repo = tmpGitRepo("not-picode");
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "t@p",
+    files: {
+      "package.json": JSON.stringify({ name: "not-picode", version: "0.0.0" }),
+      "packages/core/package.json": "{}",
+      "README.md": "# t\n",
+    },
+  });
   assert.throws(
     () => createRun(repo, { title: "x", kind: "self_evolve", targetRepo: repo }),
     /self_evolve target_repo/,
@@ -141,7 +169,15 @@ test("init self_evolve on non-picode target is rejected", async () => {
 });
 
 test("old goal without kind reads as delivery (backward compat)", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "t@p",
+    files: {
+      "package.json": JSON.stringify({ name: "picode", version: "0.0.0" }),
+      "packages/core/package.json": "{}",
+      "README.md": "# t\n",
+    },
+  });
   const { runId } = createRun(repo, { title: "old" });
   const { dir } = resolveRunDir(repo, runId);
   const goalPath = path.join(dir, "goal.yaml");
@@ -159,7 +195,15 @@ test("old goal without kind reads as delivery (backward compat)", async () => {
 });
 
 test("E6: writeEvolveKnowledgeLog writes knowledge/evolve/<run_id>.md", async () => {
-  const repo = tmpGitRepo("picode");
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "t@p",
+    files: {
+      "package.json": JSON.stringify({ name: "picode", version: "0.0.0" }),
+      "packages/core/package.json": "{}",
+      "README.md": "# t\n",
+    },
+  });
   const { runId } = createRun(repo, { title: "evolve", kind: "self_evolve", evolveLayers: ["docs"] });
   const { dir, config } = resolveRunDir(repo, runId);
   const out = writeEvolveKnowledgeLog(repo, dir, config, { summary: "fixed docs", risks: "none" });
@@ -171,7 +215,15 @@ test("E6: writeEvolveKnowledgeLog writes knowledge/evolve/<run_id>.md", async ()
 });
 
 test("C2 write-guard: stale expectedBaseline → EVOLVE_WRITE_CONFLICT, original log intact", async () => {
-  const repo = tmpGitRepo("picode");
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "t@p",
+    files: {
+      "package.json": JSON.stringify({ name: "picode", version: "0.0.0" }),
+      "packages/core/package.json": "{}",
+      "README.md": "# t\n",
+    },
+  });
   const { runId } = createRun(repo, { title: "evolve", kind: "self_evolve", evolveLayers: ["docs"] });
   const { dir, config } = resolveRunDir(repo, runId);
   // writer A creates the log and remembers its content as the baseline
@@ -191,7 +243,15 @@ test("C2 write-guard: stale expectedBaseline → EVOLVE_WRITE_CONFLICT, original
 });
 
 test("E7: people-qa fails evolve persona missing forbidden[]", async () => {
-  const repo = tmpGitRepo("picode");
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "t@p",
+    files: {
+      "package.json": JSON.stringify({ name: "picode", version: "0.0.0" }),
+      "packages/core/package.json": "{}",
+      "README.md": "# t\n",
+    },
+  });
   const { runId } = createRun(repo, {
     title: "evolve",
     kind: "self_evolve",

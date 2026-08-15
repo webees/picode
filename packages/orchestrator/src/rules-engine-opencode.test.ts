@@ -1,22 +1,11 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { getDefaultConfig, type PicodeConfig } from "@picode/core";
 import { createRun, resolveRunDir } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
 import { sleepAgent, terminateAgent } from "./pi-adapter.js";
 import { applyEvent } from "./rules-engine.js";
-
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-ocrule-" });
-  fs.writeFileSync(path.join(dir, "README.md"), "# t\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
 
 function opencodeConfig(): PicodeConfig {
   return {
@@ -53,7 +42,7 @@ function mockServe(): { calls: Array<{ method: string; url: string }>; restore: 
 }
 
 test("D057: rules-engine wake with opencode.enabled provisions a real session (oc-<id>)", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-ocrule-", readme: "# t\n" });
   const { runId } = createRun(repo, { title: "g" });
   const { dir } = resolveRunDir(repo, runId);
   const config = opencodeConfig();
@@ -97,7 +86,7 @@ test("D057: rules-engine wake with opencode.enabled provisions a real session (o
 });
 
 test("D057: default config keeps rules-engine wake state-only (no network)", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-ocrule-", readme: "# t\n" });
   const { runId } = createRun(repo, { title: "g" });
   const { dir } = resolveRunDir(repo, runId);
   const config = getDefaultConfig(); // opencode.enabled = false, pi.enabled = false

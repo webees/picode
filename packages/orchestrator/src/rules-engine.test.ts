@@ -13,13 +13,8 @@ import {
   drainSessionCommands,
 } from "./rules-engine.js";
 
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-test-" });
-  return dir;
-}
-
 function setupRun(opts: { scale?: "S" | "M" | "L"; maxAwake?: number } = {}) {
-  const repo = tmpGitRepo();
+  const repo = gitInit({ prefix: "picode-test-" });
   const { runId } = createRun(repo, { title: "goal-001", scale: opts.scale ?? "S" });
   const { dir } = resolveRunDir(repo, runId);
   if (opts.maxAwake !== undefined) {

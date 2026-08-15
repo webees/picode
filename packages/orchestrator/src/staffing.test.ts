@@ -1,5 +1,5 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -17,17 +17,9 @@ import {
   readStaffing,
 } from "./staffing.js";
 
-function tmpGitRepo(): string {
-  const dir = gitInit({ email: "test@picode", name: "picode-test" });
-  // seed an initial commit so `git worktree add -b <branch> <path> main` works
-  fs.writeFileSync(path.join(dir, "README.md"), "# test\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
-
 function setup() {
-  const repo = tmpGitRepo();
+  // seed an initial commit so `git worktree add -b <branch> <path> main` works
+  const repo = tmpGitRepo({ email: "test@picode", name: "picode-test", readme: "# test\n" });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   // P01: product acceptance criteria before active (18 phase E).
@@ -298,7 +290,7 @@ function selfEvolveRun(evolveLayers: Array<"knowledge" | "prompts" | "docs" | "t
   dir: string;
   config: ReturnType<typeof resolveRunDir>["config"];
 } {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ email: "test@picode", name: "picode-test", readme: "# test\n" });
   fs.writeFileSync(
     path.join(repo, "package.json"),
     JSON.stringify({ name: "picode", version: "0.0.0" }),

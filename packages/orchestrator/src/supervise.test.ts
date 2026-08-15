@@ -1,21 +1,12 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
 import { addChunkAndTask } from "./task.js";
 import { SessionStore } from "./session-store.js";
 import { deriveSuperviseObservation, isIdleStopped } from "./supervise.js";
-
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "supervise-test-", email: "t@picode", name: "t" });
-  fs.writeFileSync(path.join(dir, "README.md"), "# test\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
 
 /** Mock serve: return per-agent token totals keyed by serve session id. */
 function fakeServe(totals: Record<string, number>): typeof fetch {
@@ -49,7 +40,12 @@ function addWorktreeFiles(repo: string, runId: string): string {
 }
 
 test("D093: deriveSuperviseObservation shape — agents/total/worktrees/tasks/merge_queue", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "supervise-test-",
+    email: "t@picode",
+    name: "t",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-supervise", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["a"]);
@@ -88,7 +84,12 @@ test("D093: deriveSuperviseObservation shape — agents/total/worktrees/tasks/me
 });
 
 test("D093: POLL_FAIL 会话 tokens=null、不计入 total", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "supervise-test-",
+    email: "t@picode",
+    name: "t",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-fail", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   await awakeEngineer(dir);

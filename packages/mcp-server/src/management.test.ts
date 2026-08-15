@@ -4,22 +4,13 @@
  * existing gates stay intact (P01 acceptance gate, double latch, worktree).
  */
 import { test } from "node:test";
-import { gitInit, toMcpError } from "./test-utils.js";
+import { tmpGitRepo, toMcpError } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { allTools } from "./registry.js";
 import type { ServerEnv } from "./context.js";
 import { resolveRunDir, SessionStore, TranscriptStore } from "@picode/orchestrator";
-
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-mcp-" });
-  fs.writeFileSync(path.join(dir, "README.md"), "# tmp\n");
-  execFileSync("git", ["add", "-A"], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
 
 /** Invoke a tool exactly like the server does (throw → structured error). */
 async function call(
@@ -38,7 +29,7 @@ async function call(
 }
 
 test("init_run → board_view → goal gates → chunk → brief → staffing → prepare", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-mcp-", readme: "# tmp\n", add: "-A" });
   const env: ServerEnv = { repo };
 
   // init
@@ -117,7 +108,7 @@ test("init_run → board_view → goal gates → chunk → brief → staffing �
 });
 
 test("USAGE: management tools require run_id (no server default)", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-mcp-", readme: "# tmp\n", add: "-A" });
   const res = await call("board_view", {}, { repo });
   assert.equal(res.isError, true);
   const body = JSON.parse((res.content as Array<{ text: string }>)[0].text) as {
@@ -127,7 +118,7 @@ test("USAGE: management tools require run_id (no server default)", async () => {
 });
 
 test("NO_RUN: unknown run_id surfaces as structured error, not crash", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-mcp-", readme: "# tmp\n", add: "-A" });
   const res = await call("board_view", { run_id: "run-nope" }, { repo });
   assert.equal(res.isError, true);
   const body = JSON.parse((res.content as Array<{ text: string }>)[0].text) as {
@@ -138,7 +129,7 @@ test("NO_RUN: unknown run_id surfaces as structured error, not crash", async () 
 });
 
 test("session_wake_direct/sleep_direct with pure state machine (no backend)", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-mcp-", readme: "# tmp\n", add: "-A" });
   const env: ServerEnv = { repo };
   const init = await call("init_run", { title: "sessions" }, env);
   const runId = String(init.runId);
@@ -162,7 +153,7 @@ test("session_wake_direct/sleep_direct with pure state machine (no backend)", as
 });
 
 test("R3-C3: continuation_status 返回全会话续跑遥测列（预算/上次投喂/in-flight/平台席）", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-mcp-", readme: "# tmp\n", add: "-A" });
   const env: ServerEnv = { repo };
   const init = await call("init_run", { title: "telemetry" }, env);
   const runId = String(init.runId);
@@ -204,7 +195,7 @@ test("R3-C3: continuation_status 返回全会话续跑遥测列（预算/上次�
 });
 
 test("C1: checkpoint_status 返回每 task 最新 checkpoint 概要段（同 statusSnapshot.checkpoint）", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-mcp-", readme: "# tmp\n", add: "-A" });
   const env: ServerEnv = { repo };
   const init = await call("init_run", { title: "cp-triad", scale: "S" }, env);
   const runId = String(init.runId);

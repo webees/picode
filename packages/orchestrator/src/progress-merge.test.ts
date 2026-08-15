@@ -1,5 +1,5 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -12,18 +12,14 @@ import { progressPath, sweepProgress } from "./progress.js";
 import { enqueueMerge, mergeNext, readMergeQueue } from "./merge.js";
 import { applyEvent } from "./rules-engine.js";
 
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-test-", email: "t@p" });
-  fs.writeFileSync(path.join(dir, "README.md"), "# t\n");
-  // keep runs/ state out of git so checkout during merge tests can't clobber it
-  fs.writeFileSync(path.join(dir, ".gitignore"), ".picode/\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
-
 async function setupTask(opts: { scale?: "S" | "M" | "L"; timeoutSec?: number } = {}) {
-  const repo = tmpGitRepo();
+  // keep runs/ state out of git so checkout during merge tests can't clobber it
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "t@p",
+    readme: "# t\n",
+    gitignore: ".picode/\n",
+  });
   const { runId } = createRun(repo, { title: "goal-001", scale: opts.scale ?? "S" });
   const { dir } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["compiles"]);

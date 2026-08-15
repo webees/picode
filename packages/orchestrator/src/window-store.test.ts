@@ -1,28 +1,23 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { createRun, resolveRunDir } from "./run-store.js";
 import { compressRunWindows, windowStatus, readWindowArchive } from "./window-store.js";
 import { writeYamlFile } from "@picode/core";
 import { RoomStore } from "@picode/bus";
-
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-winstore-", name: "picode-test" });
-  fs.writeFileSync(path.join(dir, "README.md"), "# t\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
 
 function at(hour: number, minute = 0): string {
   return new Date(2026, 7, 9, hour, minute, 0).toISOString();
 }
 
 test("compressRunWindows writes run-level archive and windowStatus is read-only", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-winstore-",
+    name: "picode-test",
+    readme: "# t\n",
+  });
   const { runId } = createRun(repo, { title: "win" });
   const { dir, config } = resolveRunDir(repo, runId);
   const store = new RoomStore(dir);
@@ -65,7 +60,11 @@ test("compressRunWindows writes run-level archive and windowStatus is read-only"
 });
 
 test("window archive: summary defaults to null, summary_due latch defaults false, both survive re-compress", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-winstore-",
+    name: "picode-test",
+    readme: "# t\n",
+  });
   const { runId } = createRun(repo, { title: "win-sem" });
   const { dir, config } = resolveRunDir(repo, runId);
   const store = new RoomStore(dir);

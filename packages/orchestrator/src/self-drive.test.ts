@@ -23,13 +23,8 @@ import { sweepContinuations } from "./continuation.js";
 import { selfDriveCommands } from "./commands/self-drive.js";
 import { listTaskCheckpoints } from "./checkpoint-store.js";
 
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-selfdrive-" });
-  return dir;
-}
-
 function setupRun() {
-  const repo = tmpGitRepo();
+  const repo = gitInit({ prefix: "picode-selfdrive-" });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   const store = new SessionStore(dir);
@@ -722,7 +717,7 @@ function commitAndHead(repo: string, file: string, content: string): string {
 }
 
 test("R2-C3: 初始 tick code_updated === null（base = 当前 HEAD，代码未变）", async () => {
-  const repo = tmpGitRepo();
+  const repo = gitInit({ prefix: "picode-selfdrive-" });
   const base = commitAndHead(repo, "a.txt", "v1");
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
@@ -732,7 +727,7 @@ test("R2-C3: 初始 tick code_updated === null（base = 当前 HEAD，代码未�
 });
 
 test("R2-C3: main HEAD 前移（新 commit）后 tick detected === true 且 base/head SHA 正确", async () => {
-  const repo = tmpGitRepo();
+  const repo = gitInit({ prefix: "picode-selfdrive-" });
   const base = commitAndHead(repo, "a.txt", "v1");
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
@@ -747,7 +742,7 @@ test("R2-C3: main HEAD 前移（新 commit）后 tick detected === true 且 base
 });
 
 test("R2-C3: 代码未变则保持 null（幂等，base=当前 HEAD）", async () => {
-  const repo = tmpGitRepo();
+  const repo = gitInit({ prefix: "picode-selfdrive-" });
   const head = commitAndHead(repo, "a.txt", "v1");
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
@@ -759,7 +754,7 @@ test("R2-C3: 代码未变则保持 null（幂等，base=当前 HEAD）", async (
 });
 
 test("R2-C3: runGuardian 启动记录 base HEAD，HEAD 前移后 warn 一次且不退出", async () => {
-  const repo = tmpGitRepo();
+  const repo = gitInit({ prefix: "picode-selfdrive-" });
   const base = commitAndHead(repo, "a.txt", "v1");
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
@@ -792,7 +787,7 @@ test("R2-C3: runGuardian 启动记录 base HEAD，HEAD 前移后 warn 一次且�
 });
 
 test("R2-C3: runGuardian 未提供 baseSha 时启动即记录当前 HEAD（初始 tick 为 null）", async () => {
-  const repo = tmpGitRepo();
+  const repo = gitInit({ prefix: "picode-selfdrive-" });
   commitAndHead(repo, "a.txt", "v1");
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);

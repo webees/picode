@@ -4,22 +4,12 @@
  * write-path globs, sess-mgr command queue.
  */
 import { test } from "node:test";
-import { gitInit, toMcpError } from "./test-utils.js";
+import { tmpGitRepo, toMcpError } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { allTools } from "./registry.js";
 import type { ServerEnv } from "./context.js";
-
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-mcp-exec-" });
-  fs.mkdirSync(path.join(dir, "src"), { recursive: true });
-  fs.writeFileSync(path.join(dir, "src", "a.ts"), "export const a = 1;\n");
-  execFileSync("git", ["add", "-A"], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
 
 async function call(
   name: string,
@@ -37,7 +27,11 @@ async function call(
 }
 
 async function makeRunEnv(title = "exec"): Promise<{ env: ServerEnv; runId: string }> {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-mcp-exec-",
+    files: { "src/a.ts": "export const a = 1;\n" },
+    add: "-A",
+  });
   const env: ServerEnv = { repo };
   const init = await call("init_run", { title }, env);
   return { env, runId: String(init.runId) };

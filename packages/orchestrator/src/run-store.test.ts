@@ -1,9 +1,8 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import {
   createRun,
   parkGoal,
@@ -15,16 +14,8 @@ import {
 } from "./run-store.js";
 import { getDefaultConfig } from "@picode/core";
 
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-runs-" });
-  fs.writeFileSync(path.join(dir, "README.md"), "# t\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
-
 function freshRun(): { repo: string; runId: string; dir: string } {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-runs-", readme: "# t\n" });
   const { runId } = createRun(repo, { title: "goal-001" });
   const { dir } = resolveRunDir(repo, runId);
   return { repo, runId, dir };
@@ -55,7 +46,7 @@ test("parkGoal rejects non-draft goals; unpark clears park state", () => {
 });
 
 test("resolveRunDir on a missing run fails", () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({ prefix: "picode-runs-", readme: "# t\n" });
   assert.throws(() => resolveRunDir(repo, "run-does-not-exist"), /run not found/);
 });
 

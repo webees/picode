@@ -1,5 +1,5 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -18,16 +18,13 @@ import {
   upsertLessonsSection,
 } from "./evolve-refine.js";
 
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-test-", email: "t@picode", name: "picode-test" });
-  fs.writeFileSync(path.join(dir, "README.md"), "# test\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
-
 async function setup() {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "t@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["x"]);
@@ -139,7 +136,12 @@ test("refine: appendLessonsToEvolveLog 保留既有 E6 纪要 + 追加草稿节"
 });
 
 test("refine: 无任务目录 → 空草稿；render 空节", async () => {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "t@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "empty", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   const lessons = extractLessons(repo, dir, config);

@@ -1,9 +1,8 @@
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import YAML from "yaml";
 import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
 import { addChunkAndTask, draftBrief, approveBrief } from "./task.js";
@@ -16,16 +15,13 @@ import {
 } from "./memory.js";
 import { RoomStore } from "@picode/bus";
 
-function tmpGitRepo(): string {
-  const dir = gitInit({ prefix: "picode-test-", email: "test@picode", name: "picode-test" });
-  fs.writeFileSync(path.join(dir, "README.md"), "# test\n");
-  execFileSync("git", ["add", "."], { cwd: dir });
-  execFileSync("git", ["commit", "-qm", "init"], { cwd: dir });
-  return dir;
-}
-
 async function setup() {
-  const repo = tmpGitRepo();
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
   const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
   const { dir, config } = resolveRunDir(repo, runId);
   setProductAcceptance(dir, ["x"]);
