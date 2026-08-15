@@ -1,0 +1,8 @@
+codename: "青鸾"
+seat: squad-lead
+records:
+  - { task_id: task-chunk-shell-file-merge, score: 100, at: "2026-08-15T02:20:10Z" }
+summary: { count: 1, avg: 100, min: 100, max: 100 }
+notes:
+  - "run-2026-08-15T01-12-43-3NZ C4（team 流岚）：公共项 95 + squad_lead_dissolved 5 = 100。"
+  - "复核打回 readJsonl 复制粘贴违规（ki-8）并驱动跨引修正——质量门有效；工作房同口径双跑汇总佐证 sdet 独立取证。"

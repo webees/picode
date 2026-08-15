@@ -1,0 +1,8 @@
+codename: "白鹤"
+seat: engineer
+records:
+  - { task_id: task-chunk-shell-file-merge, score: 100, at: "2026-08-15T02:20:10Z" }
+summary: { count: 1, avg: 100, min: 100, max: 100 }
+notes:
+  - "run-2026-08-15T01-12-43-3NZ C4（team 流岚）：公共项 95 + engineer_evidence_pass 5 = 100。"
+  - "首版 9f5a2f2 搬移完整，readJsonl 复制违规经打回后 279c8d7 跨引修正；终态 diff 9/9 ⊆ 写集、行为零变化（逐字搬移 IDENTICAL）。"

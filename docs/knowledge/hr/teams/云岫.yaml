@@ -1,0 +1,10 @@
+team_name: "云岫"
+records:
+  - { run_id: run-2026-08-15T01-12-43-3NZ, task_ids: [task-chunk-config-singleton], team_score: 95, at: "2026-08-15T02:20:55Z" }
+summary: { count: 1, avg: 95, min: 95, max: 95 }
+personas:
+  - { codename: "望舒", seat: squad-lead }
+  - { codename: "羲和", seat: engineer }
+  - { codename: "金乌", seat: sdet }
+notes:
+  - "C1（task-chunk-config-singleton，deepMerge/yagni/roomDisplay）：code-review PASS + 官方全量 496/496 全绿 + tpm 签收 + 合并 2df7486；retries 0（co-001 为变更单非 retry）。"

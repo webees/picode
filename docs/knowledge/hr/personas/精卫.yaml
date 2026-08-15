@@ -1,0 +1,8 @@
+codename: "精卫"
+seat: sdet
+records:
+  - { task_id: task-chunk-shell-file-merge, score: 100, at: "2026-08-15T02:20:10Z" }
+summary: { count: 1, avg: 100, min: 100, max: 100 }
+notes:
+  - "run-2026-08-15T01-12-43-3NZ C4（team 流岚）：公共项 95 + sdet_commands_all_green 5 = 100。"
+  - "独立临时 worktree 双跑 base/chunk：失败集 base=chunk={guardianTick}（C1 范围）零新增；负向证据/行为等价/build/diff 全过。exit_code=1 项均为基线归因或负向 grep 惯例，chunk 内命令全绿。"

@@ -1,0 +1,8 @@
+codename: "圭臬"
+seat: engineer
+records:
+  - { task_id: task-chunk-test-fixtures-unify, score: 95, at: "2026-08-15T03:03:14Z" }
+summary: { count: 1, avg: 95, min: 95, max: 95 }
+notes:
+  - "run-2026-08-15T01-12-43-3NZ C5（team 归一）：公共项 90 + engineer_evidence_pass 5 = 95。"
+  - "26 文件单源收敛（24 测试文件夹具定义归零 + 2 test-utils 扩写：gitInit 增 branch 选项/共享 tmpGitRepo），行为零变化；round 1 零交付（分支零提交）被 sdet 诚实打回 → 催办后 round 2 交付 adf7cda 全门 PASS；A/B/C/D 分类按源码修正。retries 1（-5）。"

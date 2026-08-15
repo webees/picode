@@ -1,0 +1,10 @@
+team_name: "流岚"
+records:
+  - { run_id: run-2026-08-15T01-12-43-3NZ, task_ids: [task-chunk-shell-file-merge], team_score: 95, at: "2026-08-15T02:20:10Z" }
+summary: { count: 1, avg: 95, min: 95, max: 95 }
+personas:
+  - { codename: "青鸾", seat: squad-lead }
+  - { codename: "白鹤", seat: engineer }
+  - { codename: "精卫", seat: sdet }
+notes:
+  - "C4（task-chunk-shell-file-merge，薄壳并入）：run-lead review PASS + sdet 独立双跑 base/chunk 零新增（guardianTick 归 C1）+ tpm 签收 + 合并 6fa14ab；retries 0——readJsonl 复制违规打回-修正属质量门内质检循环（ki-8），非重试失败。"

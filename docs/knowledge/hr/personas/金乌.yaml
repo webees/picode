@@ -1,0 +1,8 @@
+codename: "金乌"
+seat: sdet
+records:
+  - { task_id: task-chunk-config-singleton, score: 100, at: "2026-08-15T02:20:55Z" }
+summary: { count: 1, avg: 100, min: 100, max: 100 }
+notes:
+  - "run-2026-08-15T01-12-43-3NZ C1（team 云岫）：公共项 95 + sdet_commands_all_green 5 = 100。"
+  - "ev-1..ev-6 全 exit 0：官方全量 496/496 独立运行 + 构建 + grep 断言 + 脚本级 11/11；证据格式齐（command/exit_code/log_ref/signed_by）。"
