@@ -290,6 +290,11 @@ export class OpencodeSpawner {
  * Wake with a real opencode session. Keeps the same rollback contract as
  * wakeWithPi: spawn failure → session sleeps + error recorded.
  *
+ * I2（durable 会话 + resume）：resume 优先——会话已有 oc- 句柄时先 isAlive
+ * 探测（GET /session/{id}），存活则同会话 sendReady 续写（POST
+ * /session/{id}/message，上下文连续，零新增平台原语）；404/失联（探测失败或
+ * 探测后丢会话）→ 回退重 spawn + 转录摘要（下述 P4 逻辑）。
+ *
  * P4: 重 spawn 时读取 runs/<id>/transcripts/<agent>.jsonl，把历史要点摘要
  * 追加进 ready 消息（断点续跑）；每次成功投喂/响应都写回转录归档。
  *
@@ -318,7 +323,27 @@ export async function wakeWithOpencode(
     },
   });
   try {
-    await store.wake(agentId, reason, opts);
+    const session = await store.wake(agentId, reason, opts);
+    // I2 resume 优先分支：sleep 保留的 oc-<id> 作「平台持久会话引用」指针，
+    // 探测存活 → 同会话 sendReady 续写；探测失败/探测后丢会话 → 重 spawn 兜底。
+    const existingId = session.pi_session_id;
+    if (existingId && opencodeSessionIdOf(existingId)) {
+      const handle: OpencodeHandle = { pid: -1, pi_session_id: existingId };
+      let alive = false;
+      try {
+        alive = await spawner.isAlive(handle);
+      } catch {
+        alive = false;
+      }
+      if (alive) {
+        try {
+          await spawner.sendReady(existingId, agentId, env);
+          return { pi_session_id: existingId };
+        } catch {
+          /* 探测后 serve 丢会话（竞态）→ 落入重 spawn 兜底 */
+        }
+      }
+    }
     const summary = transcript.historySummary(agentId, { stripNoise: [...SUMMARY_STRIP_NOISE] });
     const extraText = summary ? `\n\n## 历史要点摘要（转录恢复）\n${summary}` : undefined;
     const handle = await spawner.spawn(agentId, env, extraText);

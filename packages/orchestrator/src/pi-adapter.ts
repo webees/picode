@@ -329,11 +329,22 @@ export async function sleepWithPi(
 }
 
 /**
+ * I3: 子代理嵌套深度上限（对齐 DSH maxDepth 默认 3）。
+ * orchestrator 侧常量（D057 统一 spawn 入口 wakeAgent 校验，opencode/pi 两路
+ * 全覆盖）；本轮不新增 config 键（衔接 D106 配置旋钮最小化），可配置化列
+ * known_issue。
+ */
+export const MAX_SUBAGENT_DEPTH = 3;
+
+/**
  * 统一会话唤醒入口（D057 缺口 2 修复）：CLI 与规则引擎共用同一条 spawn 路径，
  * 保证「规则引擎 wake 的会话」与「CLI wake 的会话」等价——
  *   - opencode.enabled  → 经 opencode serve 建真实会话（pi_session_id = oc-<id>）
  *   - pi.enabled        → 拉起真 Pi 进程（command_template）
  *   - 两者都关          → 纯状态机（默认配置，行为与 v1 一致）
+ *
+ * I3 深度围栏：会话 delegation_depth > MAX_SUBAGENT_DEPTH 时结构化拒绝
+ * （SUBAGENT_DEPTH_EXCEEDED，消息含当前深度与上限），不触碰任何后端。
  */
 export async function wakeAgent(
   dir: string,
@@ -342,11 +353,18 @@ export async function wakeAgent(
   reason: string,
   opts: { maxAwake?: number; force?: boolean } = {},
 ): Promise<{ pi_session_id: string | null } | { session: SessionRecord; pi: PiHandle | null }> {
+  const session = new SessionStore(dir).get(agentId);
+  if (!session) {
+    throw new PicodeError(ErrorCode.SESSION_NOT_FOUND, `session not found: ${agentId}`);
+  }
+  const depth = session.delegation_depth ?? 0;
+  if (depth > MAX_SUBAGENT_DEPTH) {
+    throw new PicodeError(
+      ErrorCode.SUBAGENT_DEPTH_EXCEEDED,
+      `subagent delegation depth ${depth} exceeds limit ${MAX_SUBAGENT_DEPTH} for "${agentId}"`,
+    );
+  }
   if (config.opencode.enabled) {
-    const session = new SessionStore(dir).get(agentId);
-    if (!session) {
-      throw new PicodeError(ErrorCode.SESSION_NOT_FOUND, `session not found: ${agentId}`);
-    }
     const env = buildPiEnv(dir, config, session);
     return wakeWithOpencode(dir, config, agentId, reason, env, opts);
   }
@@ -354,8 +372,9 @@ export async function wakeAgent(
 }
 
 /**
- * 统一会话休眠入口：opencode 会话先服务端 DELETE，再状态机 sleep；
- * pi 会话先停进程；默认纯状态机。与 wakeAgent 对称。
+ * 统一会话休眠入口：I2 起 sleep 保留 opencode 会话（不再服务端 DELETE）——
+ * durable 会话身份由 wake resume 复用；pi 会话仍先停进程；默认纯状态机。
+ * 终态销毁（DELETE）仅保留在 terminateAgent。与 wakeAgent 对称。
  */
 export async function sleepAgent(
   dir: string,
@@ -363,16 +382,13 @@ export async function sleepAgent(
   agentId: string,
   reason: string,
 ): Promise<SessionRecord> {
-  const cur = new SessionStore(dir).get(agentId);
-  if (config.opencode.enabled && cur?.pi_session_id?.startsWith("oc-")) {
-    await new OpencodeSpawner(config).stop({ pid: -1, pi_session_id: cur.pi_session_id });
-  }
   return sleepWithPi(dir, config, agentId, reason);
 }
 
 /**
- * 统一会话终止入口：先清理后端资源（opencode 会话 / pi 进程），再状态机
- * terminate。与 wakeAgent/sleepAgent 对称。
+ * 统一会话终止入口：先清理后端资源（opencode 会话 DELETE 终态销毁 / pi 进程
+ * stop），再状态机 terminate。I2：DELETE 语义仅保留在本入口（终态销毁）；
+ * sleep 已改为保留会话。与 wakeAgent/sleepAgent 对称。
  */
 export async function terminateAgent(
   dir: string,

@@ -36,6 +36,10 @@ test("C3: 沙箱/审批/读前编辑错误码已注册（E1-E3 域）", () => {
   assert.equal(ErrorCode.FS_NOT_OBSERVED, "FS_NOT_OBSERVED");
 });
 
+test("C4: 子代理深度围栏错误码已注册（I3 域，wakeAgent 结构化拒绝）", () => {
+  assert.equal(ErrorCode.SUBAGENT_DEPTH_EXCEEDED, "SUBAGENT_DEPTH_EXCEEDED");
+});
+
 test("PicodeError carries a stable code and message", () => {
   const e = new PicodeError(ErrorCode.BUS_TYPE_DENIED, "unknown bus message type: x");
   assert.ok(e instanceof Error);
