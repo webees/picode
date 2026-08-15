@@ -2170,3 +2170,53 @@ entries:
     task_id: task-chunk-durable-session
     seat: sdet
     first_used_at: 2026-08-15T04:00:00Z
+
+  # —— run-2026-08-15T03-00-00-SUBAGENT（波2：城垣/驿道）——
+  - kind: team_name
+    name: 城垣
+    run_id: run-2026-08-15T03-00-00-SUBAGENT
+    task_id: task-chunk-fence-owner
+    seat: null
+    first_used_at: 2026-08-15T05:00:00Z
+  - kind: codename
+    name: 司阍
+    run_id: run-2026-08-15T03-00-00-SUBAGENT
+    task_id: task-chunk-fence-owner
+    seat: squad-lead
+    first_used_at: 2026-08-15T05:00:00Z
+  - kind: codename
+    name: 谯楼
+    run_id: run-2026-08-15T03-00-00-SUBAGENT
+    task_id: task-chunk-fence-owner
+    seat: engineer
+    first_used_at: 2026-08-15T05:00:00Z
+  - kind: codename
+    name: 界碑
+    run_id: run-2026-08-15T03-00-00-SUBAGENT
+    task_id: task-chunk-fence-owner
+    seat: sdet
+    first_used_at: 2026-08-15T05:00:00Z
+  - kind: team_name
+    name: 驿道
+    run_id: run-2026-08-15T03-00-00-SUBAGENT
+    task_id: task-chunk-settle-feed
+    seat: null
+    first_used_at: 2026-08-15T05:00:00Z
+  - kind: codename
+    name: 传驿
+    run_id: run-2026-08-15T03-00-00-SUBAGENT
+    task_id: task-chunk-settle-feed
+    seat: squad-lead
+    first_used_at: 2026-08-15T05:00:00Z
+  - kind: codename
+    name: 衔辔
+    run_id: run-2026-08-15T03-00-00-SUBAGENT
+    task_id: task-chunk-settle-feed
+    seat: engineer
+    first_used_at: 2026-08-15T05:00:00Z
+  - kind: codename
+    name: 烽燧
+    run_id: run-2026-08-15T03-00-00-SUBAGENT
+    task_id: task-chunk-settle-feed
+    seat: sdet
+    first_used_at: 2026-08-15T05:00:00Z
