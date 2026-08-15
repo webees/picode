@@ -1,5 +1,9 @@
 import {
+  blockGoal,
+  disarmGoal,
   parkGoal,
+  readGoal,
+  resumeGoal,
   setGoalStatus,
   setProductAcceptance,
   unparkGoal,
@@ -76,6 +80,45 @@ export const goalCommands: Command[] = [
     usage: "picode goal unpark --repo <path> --run <id>",
     run: async (ctx: CommandContext) => {
       console.log(JSON.stringify(unparkGoal(ctx.dir!), null, 2));
+    },
+  },
+  {
+    domain: "goal",
+    path: ["goal", "resume"],
+    summary: "goal 级激活授权：清除 blocker 回 active 且置 armed（guardian 续跑恢复）",
+    usage: "picode goal resume --repo <path> --run <id>",
+    run: async (ctx: CommandContext) => {
+      console.log(JSON.stringify(resumeGoal(ctx.dir!), null, 2));
+    },
+  },
+  {
+    domain: "goal",
+    path: ["goal", "disarm"],
+    summary: "解除 goal 续跑授权（activation=disarmed；guardian 零投喂）",
+    usage: "picode goal disarm --repo <path> --run <id>",
+    run: async (ctx: CommandContext) => {
+      console.log(JSON.stringify(disarmGoal(ctx.dir!), null, 2));
+    },
+  },
+  {
+    domain: "goal",
+    path: ["goal", "block"],
+    summary: "blocked 带政策码 + 解释（GOAL_TRANSITIONS 围栏内；如 round-limit/provider-limit）",
+    usage: "picode goal block --repo <path> --run <id> --code <code> [--message msg]",
+    run: async (ctx: CommandContext) => {
+      const code = need(ctx, "--code");
+      console.log(
+        JSON.stringify(blockGoal(ctx.dir!, code, ctx.arg("--message") ?? ""), null, 2),
+      );
+    },
+  },
+  {
+    domain: "goal",
+    path: ["goal", "status"],
+    summary: "goal 状态（含 rounds/activation/blocked/revision）",
+    usage: "picode goal status --repo <path> --run <id>",
+    run: async (ctx: CommandContext) => {
+      console.log(JSON.stringify(readGoal(ctx.dir!), null, 2));
     },
   },
 ];

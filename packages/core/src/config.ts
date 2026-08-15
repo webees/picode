@@ -203,6 +203,20 @@ export interface CheckpointCaptureConfig {
 }
 
 /**
+ * C1 goal-crossrun（P0 A）：单 goal 回合预算旋钮。
+ * goal.yaml 显式字段 max_goal_rounds 覆盖（文件真相）；仅此一个 config 新键
+ * （chunks.yaml 单写者约定 config.ts → C1）。D104 决策依据由 C5 落档。
+ */
+export interface SelfEvolveGoalConfig {
+  /**
+   * 单 goal 回合预算上限（guardian 续跑轮数）；0 = 不限（默认）。
+   * 创建 run 时写入 goal.yaml max_goal_rounds；达上限 resume 拒绝且 guardian
+   * 自动 block(code:"round-limit") 不静默续。
+   */
+  max_rounds: number;
+}
+
+/**
  * C1 auto-refine review gate (Q2 / refinement.ts): rule-based review of the
  * evidence trajectory before a lesson is distilled/written. Default is the
  * "heuristic" mode — evidence must actually contain evidence (exit_code,
@@ -238,6 +252,8 @@ export interface SelfEvolveConfig {
   continuation: ContinuationConfig;
   /** C1 checkpoint-auto: checkpoint 自动捕获（guardian 周期捕获 + merge 前捕获）。 */
   checkpoints: CheckpointCaptureConfig;
+  /** C1 goal-crossrun: 单 goal 回合预算（goal.yaml 显式字段可覆盖）。 */
+  goal: SelfEvolveGoalConfig;
 }
 
 export interface PicodeConfig {
@@ -507,6 +523,11 @@ export const DEFAULTS: PicodeConfig = {
       enabled: true,
       guardian_interval_sec: 600,
       pre_merge: true,
+    },
+    // C1 goal-crossrun 保守默认：回合预算 0 = 不限（goal.yaml 显式 max_goal_rounds
+    // 可覆盖；达上限 resume 拒绝 + guardian 自动 block(code:"round-limit")）。
+    goal: {
+      max_rounds: 0,
     },
   },
 };
@@ -786,6 +807,12 @@ export function validateConfig(config: PicodeConfig): void {
   }
   if (typeof cp.pre_merge !== "boolean") {
     configError("self_evolve.checkpoints.pre_merge must be a boolean");
+  }
+  const goalCfg = config.self_evolve.goal;
+  if (!Number.isInteger(goalCfg.max_rounds) || goalCfg.max_rounds < 0) {
+    configError(
+      "self_evolve.goal.max_rounds must be a non-negative integer (0 = unlimited; C1 goal-crossrun)",
+    );
   }
 }
 

@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { withFileLock, type ContinuationConfig, type PicodeConfig } from "@picode/core";
 import { deriveContinuationTargets, feedContinuation } from "./continuation.js";
+import { blockGoal, readGoal, recordGoalRound } from "./run-store.js";
 
 /**
  * R3-C2 (chunk-continuation-gate): 续跑投喂前的可选验证 gate（防重复重跑）。
@@ -193,6 +194,14 @@ export async function runContinuationGate(
  * checkBudgets 之后、续跑 sweep 之前对每个候选跑 gate；gate 启用时
  * 「gate 通过 → 本轮不投喂（停靠）」，「gate 失败 / 快照未变 → 本轮不投喂但保留候选」。
  * gate 关闭（默认）→ 行为与 sweepContinuations 完全一致（回归 C1）。
+ *
+ * C1 goal-crossrun 门闩（A2/A4，guardian 投喂 = 会话级机械续跑）：
+ *  - goal blocked / completed / cancelled → 零投喂（block 为机械续跑停止出口）
+ *  - goal active ∧ activation=disarmed → 零投喂（无显式 resume 不自动续跑）
+ *  - 回合预算达上限（max_goal_rounds > 0 ∧ rounds_started ≥ 上限）→ 零投喂，
+ *    且 goal active 时 guardian 自动 block(code:"round-limit") 不静默续
+ *  - 其余状态（intake/draft/active∧armed）行为不变
+ * 成功投喂后 recordGoalRound（rounds_started +1，锁内 revision 递增）。
  */
 export async function sweepContinuationsGated(
   dir: string,
@@ -202,6 +211,27 @@ export async function sweepContinuationsGated(
   fed: string[];
   gate: Array<{ agent_id: string; reason: GateRunResult["reason"]; ran: boolean; passed: boolean }>;
 }> {
+  const goal = readGoal(dir);
+  if (goal.status === "blocked" || goal.status === "completed" || goal.status === "cancelled") {
+    return { fed: [], gate: [] };
+  }
+  if (goal.status === "active") {
+    if (goal.activation === "disarmed") {
+      return { fed: [], gate: [] };
+    }
+    if (goal.max_goal_rounds > 0 && goal.rounds_started >= goal.max_goal_rounds) {
+      try {
+        await blockGoal(
+          dir,
+          "round-limit",
+          `round budget exhausted: rounds_started ${goal.rounds_started} >= max_goal_rounds ${goal.max_goal_rounds}`,
+        );
+      } catch {
+        // 竞争写方可能已改态（如已被他人 block/resume）→ 零投喂即可，不阻断本轮 tick
+      }
+      return { fed: [], gate: [] };
+    }
+  }
   const targets = deriveContinuationTargets(dir, config, now);
   const fed: string[] = [];
   const gate: Array<{ agent_id: string; reason: GateRunResult["reason"]; ran: boolean; passed: boolean }> = [];
@@ -214,7 +244,10 @@ export async function sweepContinuationsGated(
     }
     try {
       const res = await feedContinuation(dir, config, t.agent_id);
-      if (res) fed.push(res.agent_id);
+      if (res) {
+        fed.push(res.agent_id);
+        await recordGoalRound(dir);
+      }
     } catch {
       /* 单次投喂失败保持可重试，不阻断 sweep（同 sweepContinuations） */
     }
