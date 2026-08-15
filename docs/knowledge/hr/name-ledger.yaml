@@ -2144,3 +2144,29 @@ entries:
     task_id: task-chunk-c2-skill-load
     seat: sdet
     first_used_at: 2026-08-15T11:20:00Z
+
+  # —— run-2026-08-15T03-00-00-SUBAGENT（波1：更漏）——
+  - kind: team_name
+    name: 更漏
+    run_id: run-2026-08-15T03-00-00-SUBAGENT
+    task_id: task-chunk-durable-session
+    seat: null
+    first_used_at: 2026-08-15T04:00:00Z
+  - kind: codename
+    name: 传灯
+    run_id: run-2026-08-15T03-00-00-SUBAGENT
+    task_id: task-chunk-durable-session
+    seat: squad-lead
+    first_used_at: 2026-08-15T04:00:00Z
+  - kind: codename
+    name: 秉烛
+    run_id: run-2026-08-15T03-00-00-SUBAGENT
+    task_id: task-chunk-durable-session
+    seat: engineer
+    first_used_at: 2026-08-15T04:00:00Z
+  - kind: codename
+    name: 验漏
+    run_id: run-2026-08-15T03-00-00-SUBAGENT
+    task_id: task-chunk-durable-session
+    seat: sdet
+    first_used_at: 2026-08-15T04:00:00Z
