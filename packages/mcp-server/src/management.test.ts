@@ -4,13 +4,12 @@
  * existing gates stay intact (P01 acceptance gate, double latch, worktree).
  */
 import { test } from "node:test";
-import { gitInit } from "./test-utils.js";
+import { gitInit, toMcpError } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { allTools } from "./registry.js";
-import { toMcpError } from "./errors.js";
 import type { ServerEnv } from "./context.js";
 import { resolveRunDir, SessionStore, TranscriptStore } from "@picode/orchestrator";
 
