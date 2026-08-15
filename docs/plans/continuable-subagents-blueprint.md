@@ -190,9 +190,9 @@
 - **cold resume：支持** — 恢复 = 同一 sessionID 重新 `POST /session/{id}/message`（无独立 resume 端点）；`GET /session`（列表）+ `GET /session/{id}`（存在性校验）+ `POST /session/{id}/message`（续写）三件套即可实现（brief §2.2，事实）。
 - **全量历史拉取：支持** — `GET /session/{id}/message` 返回全量消息（`{info, parts}`，limit 分页），可旁路校准本地 transcript.jsonl（brief §2.4）。
 - **checkpoint/快照：部分支持** — `revert/unrevert` + 服务端快照 + 长会话自动 compaction；无客户端显式 checkpoint 导出 API（brief §2.4）。
-- **关键限制（picode 侧使用方式问题，非平台缺失）**：`DELETE /session/{id}` 永久删除会话及全部数据；picode 当前 `sleepAgent` 正是走 DELETE 关会话 → 「睡眠即销毁 durable 身份」。cold resume 需**停止在 sleep 时 DELETE**（改用保留会话或 `PATCH archived`），wake 走 resume API（复用现成 `sendReady`）而非重 spawn（brief §0/§4.2）。
+- **关键限制（picode 侧使用方式问题，非平台缺失）**：`DELETE /session/{id}` 永久删除会话及全部数据；picode 当前 `sleepAgent`/`terminateAgent` 正是走 DELETE 关会话（`pi-adapter.ts:350/367` → `OpencodeSpawner.stop` → `DELETE /session/{id}`，`opencode-adapter.ts:269-276`）→ 「睡眠/终止即销毁 durable 身份」。cold resume 需**停止在 sleep 时 DELETE**（改用保留会话或 `PATCH archived`），wake 走 resume API（复用现成 `sendReady`）而非重 spawn（brief §0/§4.2）。
 - **范围澄清**：**Pi（pi.dev / Earendil）≠ opencode（opencode.ai / Anomaly）**，二者是不同产品；C4 蓝图所问「Pi 平台持久化能力」应指向 opencode（picode 的 `opencode.enabled` 配置与 `oc-<id>` 句柄）（brief §1，事实）。
-- **对 brief 一处表述的更正（squad-lead 源码复核 2026-08-15）**：brief §3.1 称 `sendReady`「已实现但全仓无调用方」——**不准确**：`self-drive.ts:256`（P1 serve 恢复路径 `attemptServeRecovery`）已调用 `spawner.sendReady(session.pi_session_id, agentId, env)` 对 error 会话同会话重投喂。准确表述：`sendReady` **已接线于 serve 恢复路径，但未接线于 wake/resume 路径**（`wakeWithOpencode`@301 仍重 spawn + 摘要）——分支① 的接线面实际比 brief 所述更小（仅补 wake 路径），serve 恢复路径本身即「同会话续写」的现成范例（衔接 §5.4）。
+- **sendReady 接线现状（brief §3.1 17:05 复核修订后 · 源码复核一致）**：`sendReady`（同会话重投喂）**已有调用方**——`self-drive.ts:256`（P1 serve 恢复路径 `attemptServeRecovery`，L238-263）对 error 会话退避重投喂 ready，即「同 id 续写」路径已存在并可复用（brief §3.1：修正早前版本误记「全仓无调用方」）；但 **wake/resume 路径**（`wakeWithOpencode`@301）仍走重 spawn + 摘要——分支① 的接线面实际仅需**补 wake 路径**（serve 恢复路径本身即「同会话续写」现成范例，衔接 §5.4）。
 
 ### 5.2 分支裁决（P3 写实 · 机械判定）
 
@@ -218,10 +218,10 @@
 
 | 勘察点 | brief 结论 | 对本蓝图含义 |
 |---|---|---|
-| `opencode-adapter.ts`：`sendReady`（同会话重投喂）已实现 | 事实（brief §3.1；**brief「全仓无调用方」表述不准确**——见 §5.1 更正） | 分支① 核心接线点：wake 走 resume（sendReady）替换重 spawn 分支；serve 恢复路径（`self-drive.ts:256`）已是「同会话续写」现成范例，**仅需补 wake 路径接线**（衔接 §2.3/§5.1） |
+| `opencode-adapter.ts`：`sendReady`（同会话重投喂）已实现且**已有调用方** | 事实（brief §3.1 17:05 复核修订：`self-drive.ts` `attemptServeRecovery` L238-263；源码复核 `self-drive.ts:256` 一致） | 分支① 核心接线点：wake 走 resume（sendReady）替换重 spawn 分支；serve 恢复路径（`self-drive.ts:256`）已是「同会话续写」现成范例，**仅需补 wake 路径接线**（衔接 §2.3/§5.1） |
 | `continuation.ts`：wake 恢复 = 重 spawn + 摘要（非 resume 旧会话） | 事实 | 下轮 I2 改造对象：恢复路径从「重 spawn + 摘要」改「resume 优先 + 摘要兜底」 |
 | `session-store.ts`：`pi_session_id`（oc-<id>）已在 session.yaml | 事实 | durable 句柄已存在，仅需 sleep 不再清空/DELETE |
-| `pi-adapter.ts sleepAgent`：opencode 会话先 `DELETE /session/{id}` 再 sleep | 事实（brief §3.1） | **改造关键**：sleep 保留（或 `PATCH archived`）替代 DELETE——这是 cold resume 的前提（brief §5 风险 1） |
+| `pi-adapter.ts sleepAgent`/`terminateAgent`：opencode 会话先 `DELETE /session/{id}` 再 sleep/terminate | 事实（brief §3.1 sleepAgent；**terminateAgent 同走 DELETE**——源码复核 `pi-adapter.ts:359-371` → `opencode-adapter.ts:269-276`） | **改造关键**：sleep 保留（或 `PATCH archived`）替代 DELETE——这是 cold resume 的前提（brief §5 风险 1）；terminate 语义本就终态销毁，不在改造面 |
 | 本机 opencode.db：10,836 会话 / 20,249 消息 / 51,044 parts；单会话最多 1,187 消息 | 事实（brief §3.1） | 长会话持久化能力实证；compaction part（5 条）→「全量历史以本地 transcript.jsonl 为准」纪律成立（brief §2.4/§5 风险 2） |
 
 ---
@@ -253,6 +253,7 @@
 5. **所有权围栏与既有房间 ACL 的叠加序**：ACL 先查还是 owner 围栏先查？影响拒绝错误码语义，下轮定。【推断：owner 围栏叠加在 ACL 之上（更严）】
 6. **子代理可问人禁令**（调研简报 §1 ⑩：`CALLER_NOT_LIVE`/`DELEGATED_CALLER`）：picode 无"子代理问人"路径，但需确认 bus 权限下子代理不会直连 sponsor——纳入 I5 验收面。
 7. **上游依赖**：C1（goal 跨轮）的 goal 激活/预算语义可能为子代理任务提供"任务级续跑"底座（survey §5 分块草案 C4 依赖 C1）——本蓝图与 C1 无代码交集，但 I1 与 C1 的 guardian 续跑需合并防双逻辑（survey #5@201 风险已点名）。
+8. **Pi RPC 备选路径（run-lead 提示，未在 brief 核实）**：`switch_session`/`get_entries(since)` 等 Pi RPC 会话原语作为 cold resume 备选——**不在 brief 覆盖范围**（brief §1 澄清 pi.dev ≠ opencode 且 picode 集成的是 opencode；pi.dev 仅有 stdin/stdout JSONL RPC 模式、无 HTTP resume API，且与现有 opencode serve 适配器不兼容）；如需评估该备选，须另立调研（ind-res）或工程侧核实，本蓝图不引为依据。
 
 ---
 
@@ -266,7 +267,8 @@
 - `packages/orchestrator/src/transcript-store.ts`：`historySummary`@106 / `recordOutgoing`@73 / `recordResponse`@78
 - `packages/orchestrator/src/summary-noise.ts`：`CONTINUATION_SUMMARY_HEADER`@19 / `SUMMARY_STRIP_NOISE`@23
 - `packages/orchestrator/src/session-store.ts`：`SAFE_AGENT_ID_RE`@32 / `wake`@112 / `sleep`@165 / `terminate`@177 / `recordContinuation`@145 / `attachPiSession`@215
-- `packages/orchestrator/src/self-drive.ts`：P1 serve 恢复@159-163,237-256 / guardian tick@525-547
+- `packages/orchestrator/src/pi-adapter.ts`：`sleepAgent`@342（DELETE 关会话）/ `terminateAgent`@359（同走 DELETE，源码复核）
+- `packages/orchestrator/src/self-drive.ts`：P1 serve 恢复@159-163,237-263（`attemptServeRecovery`@237，`sendReady` 调用@256）/ guardian tick@525-547
 - `packages/core/src/session.ts`：`SESSION_EVENTS`@69-81
 - `packages/bus/src/room-store.ts`：`BUS_MESSAGE_TYPES`
 - `docs/spec/17-agent-runtime.md`：§4 状态机@90 / §5@116 / §6 人设@154 / §9 房间@208
@@ -288,3 +290,4 @@
 |---|---|---|
 | v0 draft（2026-08-15） | 蓝图骨架成文：四要素 + brief 占位；输入 gate 未满足 | draft（待 sdet 核对 + brief 写实 + run-lead 签收） |
 | v1 写实（2026-08-15T17:1x+0700） | 输入 gate 满足（brief 落盘）：§5 引用写实（P1 结论/P2 URL+retrieved_at/P3 分支裁决/P4 本地对照）；§4 降级方案转兜底+增强；§2.1/§2.3 分支收敛为①（resume API 直连） | 待 sdet 复核（recheck_trigger）+ run-lead 签收 |
+| v1.1 复核补正（2026-08-15 · engineer） | ① sendReady 表述与 brief 最终版对齐（brief 17:05 复核修订已自记「已有调用方」；补 wake 路径接线面结论不变）；② terminateAgent 同走 DELETE 补入 §5.1/§5.4（源码复核 `pi-adapter.ts:359-371`）；③ §7 增 Pi RPC 备选观察项（run-lead 提示，未在 brief 核实，不引为依据） | 待 sdet 复核（recheck_trigger）+ run-lead 签收 |
