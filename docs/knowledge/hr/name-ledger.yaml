@@ -1,5 +1,5 @@
 schema_version: "1"
-updated_at: 2026-08-15T01:40:41Z
+updated_at: 2026-08-15T09:55:15Z
 entries:
   - kind: team_name
     name: 春山
@@ -2044,3 +2044,77 @@ entries:
     task_id: task-chunk-test-fixtures-unify
     seat: sdet
     first_used_at: 2026-08-15T02:30:00Z
+
+  # —— run-2026-08-15T02-30-00-DSH（波1：周晷/锁钥/经纬）——
+  - kind: team_name
+    name: 周晷
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: chunk-c1-goal-crossrun
+    seat: null
+    first_used_at: 2026-08-15T09:55:15Z
+  - kind: codename
+    name: 传薪
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: chunk-c1-goal-crossrun
+    seat: squad-lead
+    first_used_at: 2026-08-15T09:55:15Z
+  - kind: codename
+    name: 刻漏
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: chunk-c1-goal-crossrun
+    seat: engineer
+    first_used_at: 2026-08-15T09:55:15Z
+  - kind: codename
+    name: 持衡
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: chunk-c1-goal-crossrun
+    seat: sdet
+    first_used_at: 2026-08-15T09:55:15Z
+  - kind: team_name
+    name: 锁钥
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: chunk-c3-sandbox-approval
+    seat: null
+    first_used_at: 2026-08-15T09:55:15Z
+  - kind: codename
+    name: 折冲
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: chunk-c3-sandbox-approval
+    seat: squad-lead
+    first_used_at: 2026-08-15T09:55:15Z
+  - kind: codename
+    name: 垒壁
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: chunk-c3-sandbox-approval
+    seat: engineer
+    first_used_at: 2026-08-15T09:55:15Z
+  - kind: codename
+    name: 巡更
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: chunk-c3-sandbox-approval
+    seat: sdet
+    first_used_at: 2026-08-15T09:55:15Z
+  - kind: team_name
+    name: 经纬
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: chunk-c4-continuable-blueprint
+    seat: null
+    first_used_at: 2026-08-15T09:55:15Z
+  - kind: codename
+    name: 擘画
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: chunk-c4-continuable-blueprint
+    seat: squad-lead
+    first_used_at: 2026-08-15T09:55:15Z
+  - kind: codename
+    name: 覃思
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: chunk-c4-continuable-blueprint
+    seat: engineer
+    first_used_at: 2026-08-15T09:55:15Z
+  - kind: codename
+    name: 校雠
+    run_id: run-2026-08-15T02-30-00-DSH
+    task_id: chunk-c4-continuable-blueprint
+    seat: sdet
+    first_used_at: 2026-08-15T09:55:15Z
