@@ -49,7 +49,7 @@
 |D041|write_paths 生成器：`evolveWritePaths` = allowed_layers ∩ goal.layers 的层 glob（E2）；越层 repo_write 拒绝；`evolve write-paths` CLI 输出|
 |D042|E 系列门禁落地：E4 `verify_commands` 在 `mergeNext` 锁内执行（失败不 merge）；E5 code 层 merge_ready 强制 wake code-review+sec-eng；E6 `knowledge/evolve/<run_id>.md`；E7 people-qa 校验 self_evolve persona 须含 `forbidden[]` 且 write_paths ⊆ 层内|
 |D043|**上/下午窗口上下文压缩**：一天按 `windows.split_hour`（默认 12）分两窗；`picode window compress` 对每个房间 bus 把**旧窗口**最老 `1 - ratio`（默认 20%）折叠为 `window_rollup` 摘要（原文归档 `bus/archive/<room>.<window>.jsonl`），保留最近 `ratio`（默认 80%）原文；当前窗口不折叠；结果写 run 级 `windows/<window>.yaml` 供会话/记忆引用；`picode window status` 只读快照|
-|D044|**opencode 作为 LLM 后端**：配置 `opencode.enabled + base_url` 时，`session wake` 不再走 pi 命令模板，而是经 `opencode serve` 的 HTTP API（`POST /session` + `POST /session/{id}/message`）建真实会话（`pi_session_id` 记 `oc-<id>`）；`session sleep` 调 `DELETE /session/{id}` 关闭。provider/model 可空（用服务端默认模型，实测 opencode-go/big-pickle）。spawn 失败回滚 sleeping + 记 error（同 wakeWithPi 契约）|
+|D044|**opencode 作为 LLM 后端**：配置 `opencode.enabled + base_url` 时，`session wake` 不再走 pi 命令模板，而是经 `opencode serve` 的 HTTP API（`POST /session` + `POST /session/{id}/message`）建真实会话（`pi_session_id` 记 `oc-<id>`）；`session sleep` 调 `DELETE /session/{id}` 关闭。provider/model 可空（用服务端默认模型，实测 opencode-go/big-pickle）。spawn 失败回滚 sleeping + 记 error（同 wakeWithPi 契约）**（D109 修订标注：I2 起 sleep 改保留/归档替代 DELETE——会话保留、`pi_session_id` 不销毁，wake resume 优先；terminate 仍 DELETE，终态销毁语义不变）**|
 |D045|**merge 拓扑排序 + 失败 abort**（11 阶段 7）：`mergeNext` 按 `chunks.yaml` 的 `depends_on` 拓扑选队（依赖任务的 merge 未 landed 时跳过，`skipped_due_to_deps`）；merge 失败执行 `git merge --abort` 恢复工作区，不留冲突态|
 |D046|**init 注册全部静态默认 on 房 members**（terminology §3）：补 `architecture`（scout/sys-arch post）、`knowledge`（docs 三角 post，15 定义）、`release`/`quality`/`security`（门禁岗 post）；`announce`/`collab` 为动态房，按需注册（同 `squad-*`/`meeting-*`）|
 |D047|**bus 消息全局 type 注册表校验**（10 §1/§2）：`post` 拒绝未登记 type（`BUS_TYPE_DENIED`）；新 type 须先登记 spec 10 再使用|
@@ -306,6 +306,10 @@
 |D106|**沙箱三态 + 一次性升级审批 + read-before-edit（C3 sandbox-approval）**：repo_write 每调用 resolve sandbox mode（read-only/workspace-write/danger-full-access，会话 env 覆盖 > 默认，叠加于 write_paths 静态白名单之上不替代）；越界写 → 结构化拒绝（含生效 mode + `[sandbox: ...]` 标记）→ `sandbox_permissions`+`justification` 成对申请一次性升级（WIDER_MODES 严格更宽，无理由 ESCALATION_MALFORMED）→ 审批 ask/never（默认 ask，answerer=run-lead 代批，policy 层 sponsor 人工）→ allowed-once 单次放行 + asked/decided 同文件成对审计；read-before-edit 守卫（未读已存在文件 → FS_NOT_OBSERVED，`PICODE_READ_BEFORE_EDIT` 默认开 fail-closed）；三处开关全走会话 env、零 config 键（配置旋钮最小化）|
 |D107|**continuable 子代理蓝图存档（C4 blueprint，纯 docs，下轮实现输入）**：本轮只出蓝图 `docs/plans/continuable-subagents-blueprint.md`（守 D002：采用「转录+摘要+续跑投喂增强」，拒绝事件溯源恢复）；Pi 持久化可行性结论 = **支持（部分接口限制）**——opencode 原生 durable session（SQLite `ses_...`）+ cold resume（同 sessionID `POST /session/{id}/message`），关键限制在 picode 侧使用方式（sleep/terminate 现走 DELETE 销毁会话，需改保留/归档 + wake resume）；降级 = 增量 steer 而非整体重投；三道围栏（深度 ≤N / 父子写集只收窄 / 所有权围栏）只产修订点清单；下轮 I1-I7 实现时逐一过决策编号 + 双门闩|
 |D108|**co-002 变更单 + 工具计数断言教训（C2 流程教训 · 含环境教训复证）**：工具注册表「20 spec-09 tools」硬编码计数断言在合法新增工具（skill_load，D105）时失效，须 run-lead 经 co-002 变更单授权最小写集扩展（2 文件）才全绿——教训：注册表/清单测试应偏好**成员断言**（expected 数组）而非计数断言（`tools.size === N`）；变更单模式（co-002：决策依据 + scope_limit 行级语义 + new_acceptance）沉淀为越写集修复标准流程；node_modules 断链问题本轮 C3 再次复现，D103 治理流程复证有效（复证非新决策）|
+|D109|**durable 会话 + resume + 深度围栏（I2+I3 · chunk-durable-session）**：I2 **sleep 保留/归档替代 DELETE**——`sleepAgent` 对 oc- 会话不再 DELETE，`session-store.sleep` 保留 `pi_session_id`（`oc-<id>` 作平台持久会话引用、文件真相指针）；wake **resume 优先**（isAlive 探测 → 同会话 sendReady 续写，404/失联回退重 spawn + 转录摘要）；terminate 仍 DELETE。I3 子代理注册——SessionRecord 增可选 `delegation_depth`/`parent_session`（旧格式缺省 0/平台席，schema_version 保持 "1"）；`wakeAgent`（D057 统一 spawn 入口）深度围栏 ≤3，超限结构化拒绝 `SUBAGENT_DEPTH_EXCEEDED`（消息含当前深度与上限）|
+|D110|**写集只收窄 + 所有权围栏（I4+I5 · chunk-fence-owner）**：I4 子代理有效写集 = 父 task write_paths ∩ 子声明（只收窄不放宽；子宽于父 → 结构化拒绝；父缺失 fail-loud；无父链退化现状）；I5 bus post 在 ACL 之上加 **owner 围栏**——目标为子代理会话房（depth>0 ∧ parent_session 非空）且发送者非其 `parent_session` → `ROOM_POST_DENIED`（消息含 owner fence 标记，agent-busy 等价；嵌套仅直接父可路由）；发送侧问人禁令——子代理仅可向其父可发言的房间发言（sponsor/领导层房不可直达）；复用错误码不新增（errors.ts 零改动）；非子代理房间语义零变更|
+|D111|**settled 机械通知 + 投喂分级（I6+I1 · chunk-settle-feed）**：I6 guardian 纯派生检测子代理终态（depth>0 ∧ terminated ∧ parent_session）→ 复用 `cell_done` bus 词汇机械投递父房（refs 指转录/证据，meta.source=orchestrator 非 LLM 自报，父房 bus 幂等），**不新增 SESSION_EVENTS**（core session.ts 零改动）；I1 投喂三档 followup/steer/inject（S 变体不碰 17 状态机）——followup=现状续跑、steer=增量引导（摘要+引导段，不重灌固定模板）、inject=状态通知不唤醒不计数；投喂计数/预算/门闩收敛 continuation.ts 内防双逻辑（KI-6，不新建模块）|
+|D112|**docs 收尾 + 流程教训（chunk-docs · W3）**：D109-D111 落档（表行+详条，来源标注到 chunk/task）+ D044 行 I2 修订标注 + decision-catalog 同步（durable 会话语义 + 三道围栏条目）+ E18 纪要 + `--land` 闭环；流程简化候选记录——sponsor 反馈 + 流程复杂度审计（真实性评级高、修正项已落地）A 级试点排下一轮流程优化 run，本轮只记录候选不实施|
 ## D084 — Skill harness 落地（技能承载体系）
 - 2026-08-14 · 来源：run-lead 自治规划 run-2026-08-13T23-50-59-484Z（从 anthropics/skills + agentskills spec 学习，改 picode 自身技能承载体系）
 - 问题：`paths.skills_root` 是 D055 死键（声明零读取），两个种子 SKILL.md 无任何校验守卫，新 skill 可任意书写；`Persona.skills[]` 是必填维度但零消费；ready 消息若硬注入 skill 正文会爆 context
@@ -541,3 +545,48 @@
 - 遗留观察（C2 summary 提示，C5 记录）：mcp-server/src/registry.test.ts 测试标题仍为「carries the 20 spec-09 tools」（co-002 scope_limit 保持 20 语义：仅成员断言、无计数）——措辞性不影响正确性，后续可顺手更名（不在本 chunk 写集）
 - 验证：co-002 应用后 C2 全量官方 npm test（HOME 隔离）562/562 exit 0；npm run check 三 lint 0 error；diff 门禁 9 文件 = 7 write_paths + co-002 授权 2 文件
 - commit: d3bb0c2（C2 提交，含 co-002 授权 2 文件）→ merge **83df029**
+
+## D109 — durable 会话 + resume + 深度围栏（W1 chunk-durable-session · I2+I3）
+- 2026-08-15 · 来源：run-2026-08-15T03-00-00-SUBAGENT W1（更漏队：传灯/秉烛/验漏；commit 59a515d + co-003 修复 276f379 → merge **dd311f6**）+ 蓝图 §6 I2/I3 + research/briefs/pi-persistence.md 结论「支持（部分接口限制）」（ind-res，落盘 2026-08-15T17:05+0700，URL + retrieved_at 见蓝图 §5.3）
+- 问题：D044 起 sleep/terminate 均走 `DELETE /session/{id}` 销毁会话——「睡眠即销毁 durable 身份」，wake 只能重 spawn + 摘要（无 resume）；子代理嵌套深度无上限（无围栏，蓝图 §3.1）
+- 决定：
+  - **I2 sleep 保留/归档替代 DELETE**：`pi-adapter.sleepAgent` opencode 分支不再调 `OpencodeSpawner.stop`（保留会话）；`session-store.sleep` 保留 `pi_session_id`（`oc-<id>` 作「平台持久会话引用」文件真相指针，蓝图 §2.1 分层；仅清空失效 `pid-` 进程句柄）；**terminateAgent 零改动**（终态销毁 DELETE 语义不变——D044 对 terminate 保持成立，本行修订只涉 sleep）
+  - **I2 wake resume 优先**：`wakeWithOpencode` 增 resume 分支——`isAlive` 探测（GET /session/{id}，现成）→ 同会话 `sendReady` 续写（POST /session/{id}/message，**零新 POST /session**）；404/失联/竞态 → 回退重 spawn + 转录摘要（现状语义保留）；零新增平台原语（mock serve 断言三行为：sleep 零 DELETE / wake 同会话 POST 计数 / 404 回退重 spawn）
+  - **I3 注册**：core `SessionRecord` 增可选 `delegation_depth`/`parent_session`（旧格式缺省 0/平台席，schema_version 保持 "1"——budget? 可选字段先例）；`session-store.register` 支持 depth/parentSession 参数（显式传入才写字段）
+  - **I3 深度围栏 ≤3**：`wakeAgent`（D057 统一 spawn 入口，CLI 与规则引擎共用）在 opencode/pi 两路前统一校验 `delegation_depth > MAX_SUBAGENT_DEPTH(=3)` → `SUBAGENT_DEPTH_EXCEEDED`（消息含当前深度与上限，不触碰后端）；`core/errors.ts` 新增**唯一**错误码（I5 复用 ROOM_POST_DENIED 不新增——errors.ts 单写者纪律）
+  - **spec-17 owner 落地**（shared_files owner 声明）：§4 字段增量 + 深度围栏 MUST、§5.2 sleep/wake/terminate durable 语义、§6 子代理写集收窄一句（I4）、§9 owner 围栏 + 来源标注纪律（I5/I6）按蓝图 §3 建议条文一次性落地；`docs/reference/schemas/session.yaml` 同步
+- 验证：官方 npm test（HOME 隔离）591 测 0 fail（core 160 / bus 19 / orchestrator 342 / pi-extension 36 / mcp-server 18 / dashboard-server 14 pass + 2 skip 基线既有）；npm run check 三 lint 0 error；acceptance 7/7 满足
+- 越写集处置（co-003，衔接 D108 变更单模式）：`rules-engine-opencode.test.ts` D057 测试旧断言「sleep 后 DELETE」与 I2 新语义冲突（文件不在本 chunk 12 写集内）→ run-lead **co-003**（status=applied）授权最小写集扩展（仅 D057 sleep 断言行级更新）→ 276f379 修复（断言改零 DELETE + `oc-<id>` 保留，terminate 断言保留）→ orchestrator 342/342 全绿
+- 遗留观察（known_issues）：serve 侧会话累积（sleep 不再 DELETE 的代价，本机 opencode.db 已 10,836 会话）——归档/清理（PATCH archived 或定期 GC）列后续轮候选，非本轮验收；N=3 为 orchestrator 侧常量暂不可配（衔接 D106 配置旋钮最小化，可配置化列后续候选）
+- 边界：resume/注册/围栏均向后兼容（旧 session.yaml 直接可读）；D044「session sleep 调 DELETE」部分失效（本行修订标注，见上）
+
+## D110 — 写集只收窄 + 所有权围栏（W2a chunk-fence-owner · I4+I5）
+- 2026-08-15 · 来源：W2a（城垣队：司阍/谯楼/界碑；commit 9399a48 → merge **d28130a**，基线 dd311f6）+ 蓝图 §3.2/§3.3 + sysarch 落点裁决（I4 落 staffing.ts 非 evolve.ts；I5 落 room-store.ts，测试文件新建）
+- 问题：04 §2.1 write_paths 为每 task 静态白名单、无父子继承语义——子代理若获父全部写集即越权风险（蓝图 §3.2）；bus 房间 ACL 无「子会话仅父可路由」语义——任一有 post 权的成员可向子代理房间发消息、子代理可直达 sponsor 房（蓝图 §3.3 + 调研简报 §1 ⑩「子代理不可问人」）
+- 决定：
+  - **I4 写集只收窄（staffing.ts）**：`readTaskYaml` 增可选 `parent_task`（只读字段，写入方 = run-lead/未来 spawn 路径）；`draftPersonas` 子代理有效写集 = **父 task write_paths ∩ 子声明**（只收窄不放宽，父缺失 fail-loud）；`checkPersonas` 增子代理校验——子 persona `write_paths ⊆ 父 task write_paths`，子宽于父 → 结构化拒绝（沿用 persona⊆task 精确子集先例@268-271 → approveStaffing 抛 people-qa failed）；无父链退化为现状（既有 task 写集语义零变更）
+  - **I5 所有权围栏（room-store.ts）**：post 校验序 = type → members ACL → **owner 围栏**；房间元数据自持 `owner_session`（`rooms/<room>/meta.yaml`，`RoomStore.setRoomOwner` 声明房→会话绑定，非法 agent id 拒绝）；围栏读 owner 会话 roster 记录（`delegation_depth`/`parent_session`，文件真相 D002）判定「子代理会话房」= depth>0 ∧ parent_session 非空——**目标侧**：发送者 ≠ 其 `parent_session`（仅直接父可路由；会话本人/其它成员/误配成员均拒）→ `ROOM_POST_DENIED`（消息含 owner fence 标记，agent-busy 语义等价物）；嵌套链仅直接父可路由；**发送侧（问人禁令）**：发送者为子代理 → 仅可向其父会话可发言的房间发言（`canPost(room, parent)` 判定，须经父转达）；sponsor/领导层房因父（task 席）非成员而不可直达
+  - **错误码复用 `ROOM_POST_DENIED`**（errors.ts 零改动，**不新增错误码**——D109 errors.ts 单写者纪律）；spec-04 §1.2 post 校验序增量（token → members ACL → owner 围栏，目标侧+发送侧）+ §2.1 子代理只收窄条款（有效写集 = 父 ∩ 声明、子宽于父结构化拒绝、父缺失 fail-loud、无父链退化）
+- 验证：官方 npm test（HOME 隔离）600 pass + 2 skipped（基线 589 + 11 新增：staffing.test +5 / room-store.test 新建 +6）；npm run check 三 lint 0 error（decision-lint 114 OK）；diff 门禁 = 5 写集文件 ⊆ write_paths；errors.ts / spec-17 零 diff（owner 纪律）
+- 遗留观察（known_issues）：「仅直接父可路由」比 spec-17 §9 条文「须经父转达或显式授权」更严（本实现无「显式授权」通道，采 acceptance 权威口径「非 owner → 拒绝」，显式授权留作未来扩展）；写集包含判定为精确路径匹配（glob 前缀子集不隐式视为子集，子任务须声明完全一致或更小字面路径）；子任务声明与父无交集 → 有效写集空 → people-qa fail-closed（提示信息可后续优化）；`setRoomOwner` 尚无生产者（spawn 侧接线归后续 chunk/未来 spawn 改造）；orchestrator 不豁免 owner 围栏（未来向子代理房投机械通知须以 owner 身份或显式设计走变更单）
+- 边界：非子代理房间语义零变更（无 meta / 顶层 owner / 非子代理发送者 → 围栏不触发）；顶层任务写集语义零变更（无 parent_task 退化现状）
+
+## D111 — settled 机械通知 + 投喂分级（W2b chunk-settle-feed · I6+I1）
+- 2026-08-15 · 来源：W2b（驿道队：传驿/衔辔/烽燧；commit 1852340 → merge **284d858**，基线 dd311f6）+ 蓝图 §2.4/§4.2 + D104 KI-6（I1 与 guardian 续跑合并防双逻辑）
+- 问题：子代理结算无机械通知——父无法从状态文件感知子代理结束（蓝图 §2.4「不把运行时叙述冒充为子代理内容」尚无机械通道）；续跑投喂只有「整体重投」一种形态（无 next-turn/next-step 分级、无「状态通知不唤醒」语义，survey #5@197 点名）
+- 决定：
+  - **I6 机械结算（self-drive.ts）**：纯函数 `deriveSettledSubagentNotices` 检测子代理会话终态（`delegation_depth > 0` ∧ `state === "terminated"` ∧ `parent_session` 非空，session.yaml 文件真相）→ `postSettledSubagentNotices` 复用既有 `cell_done` bus 词汇投递父房（refs 指 `transcripts/<agent>.jsonl` + `sessions/<agent>.yaml` + `tasks/<taskId>/evidence`；from=父会话 agent_id，meta.source=orchestrator + body 机械标注——来源 = orchestrator 观察状态文件派生，**非子代理 LLM 自报**）；**幂等** = 父房 bus 已有该子代理 cell_done 则跳过；**不新增 SESSION_EVENTS**（core/session.ts 零改动，deriveEvents 零改动，spec-10 无需注册）
+  - **I1 投喂三档（continuation.ts，S 变体不碰 17 状态机）**：`ContinuationKind` + `FeedOptions`——followup = 现状续跑投喂（默认，零行为变化）；steer = 增量 next-step 引导（`composeSteerPrompt` = 摘要段 + 引导段，指令经 `buildReadyMessage` extraText 通道，**不重灌固定续跑模板**——蓝图 §4.2「不整体重投」）；inject = 状态通知**不唤醒**（只对 awake oc- 会话投递、状态不变、只过 in-flight 门闩 busy 不插队、不过 idle 门闩、不计续跑预算）；wake 门闩沿用既有 idle/in-flight 判定（followup/steer 全量门闩防 busy 插队，D067 idle 时钟语义不变）
+  - **KI-6 合并防双逻辑**：投喂计数/预算/门闩全部收敛在 continuation.ts 内，**不新建模块**（diff 无新文件）；continuation-gate.ts / rules-engine.ts 零改动
+- 验证：官方 npm test（HOME 隔离）604 pass + 2 skipped（606 测 = 基线 591 + 15 新增 I6×5 + I1×10 全绿；core 160 / bus 19 / orchestrator 357 / pi-extension 36 / mcp-server 18 / dashboard-server 14 pass + 2 skip）；npm run check 三 lint 0 error；diff 门禁 = 恰好 4 写集文件 ⊆ write_paths；acceptance 4/4 满足
+- 遗留观察（known_issues）：inject 转录副作用（写 outgoing 转录 → 该会话后续 followup/steer 派生因「末条 outgoing」判 in-flight 暂缓，属行为观察——inject 为新增 API 暂无生产调用方，缓解属下轮增强，本轮不动转录 schema D002）；I6 bus from=父会话 agent_id（task.ts 建房成员不含 orchestrator 且不在本轮写集，来源纪律经 meta.source 显式表达）；平台席父会话（无 @task- 绑定）无父房可投递 → 保守跳过不写文件（下轮 tick 可重试）；W2 与 fence-owner 并行——cell_done 目标是父房（squad-task-x，非子代理会话房）+ 发送者是父会话（父即子代理 owner）→ 预期不受 I5 围栏影响（合并门串行验证已过，284d858 全量回归绿）
+- 边界：不引入事件日志/台账（幂等读父房 bus 文件，守 D002/D082）；17 状态机零触碰（inject 对 awake 会话投递不触发状态迁移；sleeping 会话直接返回 null）
+
+## D112 — docs 收尾 + 流程教训（W3 chunk-docs）
+- 2026-08-15 · 来源：W3 收尾（本 chunk）+ sysarch §4@92-94 决策编号建议 + sponsor 反馈 + run-lead 流程复杂度审计（`docs/knowledge/feedback/sponsor-feedback-and-process-audit-2026-08-15.md`，commit e99f1fa）+ 独立验证报告（`.picode/plans/audit-verification-report.md`，commit 5278a73 修正落地）
+- 决定：
+  - **D109-D111 决策落档**：表行 + 详条（来源标注到 chunk/task：W1 durable-session / W2a fence-owner / W2b settle-feed）；**D044 行加 I2 修订标注**（session sleep 改保留/归档替代 DELETE；terminate 仍 DELETE）；decision-catalog §24 同步（opencode sleep 语义 durable 会话保留 vs DELETE 销毁 + 深度围栏/写集收窄/所有权围栏条目）；E18 纪要 `docs/knowledge/evolve/run-2026-08-15T03-00-00-SUBAGENT.md`（分块/合并序列/决策编号/波序/审计验证引用/剩余风险）；`--land` 闭环（watermark next_number 109 → 113）
+  - **流程简化候选（本轮不实施）**：sponsor 反馈 + 流程复杂度审计真实性评级**高**（9 项验证清单 7 成立 / 2 部分成立 / 0 不成立，数据事实与 run 历史档案逐条吻合）；修正项已落地（①代提交 ≥5 → **≥3**（commit message 实证口径）；②squad-lead 价值补充 C1 B1 根因分析；③交接包重复细化为「summary 重复高、artifact_index 重复低」；④重复汇报来源标注为会话实录、仓库不可复核）；**A 级简化试点**（三人组 → 双人组 / 人设程序化生成 / 交接包精简 2 件 / 重复汇报治理）排下一轮流程优化 run，本轮只记录候选（E18 后续候选 1），不实施不改变既有流程
+- 验证：decision-lint **0 error**（docs/** 全量扫描）；npm run check 三 lint 全过；diff 门禁 = 4 写集文件 ⊆ write_paths（纯 docs 层，零代码零配置）；决策编号闭环 `--reserve`（109-112，count 4）→ 落档 → `--land`（status=landed）
+- 剩余风险（E18 终态）：serve 侧会话累积 GC（D109 遗留，后续轮候选）；D2 偏差记录（D044 修订标注行，sleep 保留 / terminate DELETE 两义齐全）；流程简化试点排下轮（E18 后续候选 1，验收口径建议改可测基线）；push 由 run-lead 在合并门（approvals/merge.yaml，R9）批准后执行（本 chunk 按约束不 push）
+- commit: 本提交（chunk-docs / W3）

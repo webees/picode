@@ -975,3 +975,90 @@ staffing.ts **双处同病**）。
 |环境教训复证|node_modules 断链治理以 D103 为权威（本轮 C3 再次复现，治理流程复证有效）|
 
 遗留观察：mcp-server registry.test.ts 标题仍为「carries the 20 spec-09 tools」（co-002 scope_limit 保持 20 成员语义，措辞性）——后续可顺手更名。
+
+## 24. 可续子代理（D109 durable 会话 / D110 围栏 / D111 settled+投喂分级 / D112 docs 收尾）
+
+权威正文：蓝图 `docs/plans/continuable-subagents-blueprint.md`（D107）+ DECISIONS D109-D111 详条 +
+spec 17 §4/§5.2/§6/§9（durable-session 代写）+ spec 04 §1.2/§2.1（fence-owner 修订）。
+
+### 24.1 opencode 会话 sleep 语义（D109 · I2）
+
+**D109 已定：sleep 保留/归档替代 DELETE（durable 会话），terminate 仍 DELETE。**
+
+| 动作 | 语义（D109 起） | D044 前 |
+|------|------|------|
+| **sleep** | `oc-<id>` 会话**保留**：`sleepAgent` 零 DELETE；`session-store.sleep` 保留 `pi_session_id`（平台持久会话引用、文件真相指针）；仅清空失效 `pid-` 进程句柄 | `DELETE /session/{id}` 销毁（D044）|
+| **wake** | **resume 优先**：`isAlive` 探测（GET /session/{id}）→ 同会话 `sendReady` 续写（POST /session/{id}/message，零新 POST /session）；404/失联/竞态 → 回退重 spawn + 转录摘要 | 重 spawn + 摘要（无 resume）|
+| **terminate** | **DELETE 不变**（终态销毁，`pi_session_id` 清空）| DELETE（语义保持）|
+
+D044 行已加 I2 修订标注（sleep 改保留/归档替代 DELETE；terminate 仍 DELETE）。
+
+### 24.2 深度围栏 ≤3（D109 · I3）
+
+**D109 已定：子代理嵌套深度有界，超限结构化拒绝。**
+
+| 维度 | 语义 |
+|------|------|
+| 字段 | `SessionRecord` 增可选 `delegation_depth` / `parent_session`（旧格式缺省 0/平台席，schema_version 保持 "1"）|
+| 校验 | `wakeAgent`（D057 统一 spawn 入口）统一校验 `delegation_depth > MAX_SUBAGENT_DEPTH(=3)` → `SUBAGENT_DEPTH_EXCEEDED`（消息含当前深度与上限）|
+| 错误码 | `SUBAGENT_DEPTH_EXCEEDED`（errors.ts 本轮**唯一**新增；I5 复用 ROOM_POST_DENIED 不新增）|
+| 旋钮 | N=3 为 orchestrator 侧常量暂不可配（衔接 D106 配置旋钮最小化；可配置化列后续候选）|
+
+### 24.3 写集只收窄（D110 · I4）
+
+**D110 已定：子代理有效写集 = 父 task write_paths ∩ 子声明，只收窄不放宽。**
+
+| 规则 | 语义 |
+|------|------|
+| `draftPersonas` | 子代理有效写集 = 父 ∩ 子声明；父缺失 → fail-loud |
+| `checkPersonas` | 子 persona `write_paths ⊆ 父 task write_paths`；子宽于父 → 结构化拒绝（people-qa failed）|
+| 匹配口径 | 精确路径匹配（glob 前缀子集不隐式视为子集，须声明完全一致或更小字面路径）|
+| 退化 | 无 `parent_task` → 现状（顶层任务写集语义零变更）|
+
+### 24.4 所有权围栏（D110 · I5）
+
+**D110 已定：子代理会话房仅父可路由；子代理不可直接问人。** post 校验序 =
+type → members ACL → **owner 围栏**。
+
+| 规则 | 语义 |
+|------|------|
+| 判定 | 房间元数据 `owner_session`（meta.yaml）+ owner 会话 roster 记录（depth>0 ∧ parent_session 非空，文件真相）→ 子代理会话房 |
+| 目标侧 | 发送者 ≠ `parent_session` → `ROOM_POST_DENIED`（消息含 owner fence 标记，agent-busy 等价）；嵌套链仅直接父可路由 |
+| 发送侧 | 子代理仅可向其父可发言的房间发言（sponsor/领导层房不可直达，须经父转达）|
+| 错误码 | 复用 `ROOM_POST_DENIED`（errors.ts 零改动）|
+| 零变更 | 非子代理房间（无 meta / 顶层 owner / 非子代理发送者）围栏不触发 |
+
+### 24.5 settled 机械通知（D111 · I6）
+
+**D111 已定：子代理结算由 orchestrator 机械层补发 `cell_done`（复用词汇，不新增事件）。**
+
+| 规则 | 语义 |
+|------|------|
+| 检测 | guardian 纯派生 `deriveSettledSubagentNotices`：depth>0 ∧ state=terminated ∧ parent_session 非空（session.yaml 文件真相）|
+| 投递 | 复用 `cell_done` bus 词汇进父房；refs 指转录/会话/证据；meta.source=orchestrator（非 LLM 自报）|
+| 幂等 | 父房 bus 已有该子代理 cell_done 则跳过（读 bus 文件，不建事件日志）|
+| 事件面 | **不新增 SESSION_EVENTS**（core session.ts / deriveEvents 零改动，spec-10 无需注册）|
+
+### 24.6 投喂分级（D111 · I1）
+
+**D111 已定：投喂三档 followup/steer/inject（S 变体不碰 17 状态机）。**
+
+| 档 | 语义 | 门闩 |
+|------|------|------|
+| `followup` | 现状续跑投喂（默认，零行为变化）| idle + in-flight 全量 |
+| `steer` | 增量 next-step 引导（摘要段 + 引导段，extraText 通道，不重灌固定模板）| idle + in-flight 全量 |
+| `inject` | 状态通知不唤醒（只对 awake oc- 会话；不计数预算）| 仅 in-flight（busy 不插队）|
+
+**KI-6 防双逻辑**：投喂计数/预算/门闩全部收敛在 continuation.ts 内，不新建模块
+（continuation-gate.ts / rules-engine.ts 零改动）。
+
+### 24.7 docs 收尾 + 流程教训（D112）
+
+**D112 已定：docs 收尾（D109-D111 落档 + D044 修订标注 + catalog 同步 + E18 纪要 + --land）；
+流程简化候选记录不实施。**
+
+| 项 | 内容 |
+|------|------|
+| 决策落档 | D109-D111 表行+详条（来源标注到 chunk/task）；D044 行 I2 修订标注（sleep 保留 / terminate DELETE）|
+| 流程简化候选 | sponsor 反馈 + 流程复杂度审计（真实性评级**高**，修正项已落地：代提交 ≥3 / squad-lead 价值补充 / 交接包重复细化 / 重复汇报来源标注）；**A 级试点排下一轮流程优化 run**，本轮不实施 |
+| 纪律 | 决策内容与交接包/evidence 一致（事件溯源 D002 / 事实一致）；编号必须 reserve.mjs 领号（D089）|
