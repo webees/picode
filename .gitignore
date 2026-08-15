@@ -13,3 +13,4 @@ reasonix.toml
 .reasonix/
 
 .zcode/
+pi-docs.*
