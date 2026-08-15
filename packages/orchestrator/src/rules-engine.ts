@@ -17,8 +17,9 @@ import { hasEvolveLayer, isEvolveRun } from "./evolve-run.js";
  * partial appends): a bad line is skipped, never allowed to break the whole
  * read. Missing file → `[]`. Every orchestrator JSONL read should go through
  * this helper so one corrupt byte cannot take down a whole drain/merge sweep.
+ * Single source of truth（薄壳并入宿主）：merge.ts 跨引本函数，禁止复制。
  */
-function readJsonl<T>(filePath: string): T[] {
+export function readJsonl<T>(filePath: string): T[] {
   if (!fs.existsSync(filePath)) return [];
   const out: T[] = [];
   for (const line of fs.readFileSync(filePath, "utf8").trim().split("\n")) {
