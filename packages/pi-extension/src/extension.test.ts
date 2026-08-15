@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { baseEnv, call, loadExtension, makeRun, tmpRepo } from "./extension-harness.js";
 
-test("all 20 spec-09 tools are registered", () => {
+test("all 21 spec-09 tools are registered", () => {
   const { runsRoot, runId, token } = makeRun("engineer@task-a");
   const tools = loadExtension({
     ...baseEnv,
@@ -17,6 +17,7 @@ test("all 20 spec-09 tools are registered", () => {
     "git_status", "git_diff", "git_log", "git_commit", "run_allowlisted",
     "web_search", "web_fetch", "request_info", "request_cross_room",
     "progress_report", "state_read", "session_wake", "session_sleep", "session_list",
+    "skill_load",
   ];
   for (const name of expected) assert.ok(tools.has(name), `${name} registered`);
   assert.equal(tools.size, expected.length);

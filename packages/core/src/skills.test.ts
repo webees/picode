@@ -4,8 +4,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  DEFAULT_SKILL_MAX_BYTES,
+  SkillLoadError,
   discoverSkills,
   buildSkillIndex,
+  loadSkill,
   personaDeclaredSkills,
   resolveSkillsRoot,
 } from "./skills.js";
@@ -132,4 +135,108 @@ test("validateConfig 拒绝绝对/逃逸 skills_root，默认合法（C1-e）", 
   const okDeep = getDefaultConfig();
   okDeep.paths.skills_root = "vendor/skills";
   assert.doesNotThrow(() => validateConfig(okDeep));
+});
+
+// ---- B 按需 skill 加载：loadSkill（C2）----
+
+test("loadSkill 按 discoverSkills 索引解析完整 body，未截断（B1）", () => {
+  const root = tmpDir("skills-load-body");
+  writeSkill(root, "engineering/ponytail", "ponytail", "Lazy senior dev");
+  const md = path.join(root, "engineering/ponytail", "SKILL.md");
+  fs.writeFileSync(
+    md,
+    "---\nname: ponytail\ndescription: Lazy senior dev\n---\n\n# Ponytail\n\nfull body line\n",
+  );
+  const metas = discoverSkills(root);
+  const loaded = loadSkill("ponytail", metas, { cwd: root, maxBytes: 0 });
+  assert.equal(loaded.name, "ponytail");
+  assert.equal(loaded.truncated, false);
+  assert.equal(loaded.body, fs.readFileSync(md, "utf8"), "full body incl. frontmatter");
+  assert.ok(loaded.body.includes("# Ponytail"));
+  assert.ok(loaded.path.endsWith("SKILL.md"));
+  assert.ok(loaded.relPath.endsWith("SKILL.md"));
+});
+
+test("loadSkill maxBytes 超限截断并标注 truncated（B2）", () => {
+  const root = tmpDir("skills-load-cap");
+  writeSkill(root, "ponytail", "ponytail", "Lazy senior dev");
+  const md = path.join(root, "ponytail", "SKILL.md");
+  const longBody = `---\nname: ponytail\ndescription: Lazy senior dev\n---\n\n${"x".repeat(500)}\n`;
+  fs.writeFileSync(md, longBody);
+  const metas = discoverSkills(root);
+  const loaded = loadSkill("ponytail", metas, { cwd: root, maxBytes: 100 });
+  assert.equal(loaded.truncated, true);
+  assert.equal(loaded.bytes, Buffer.byteLength(longBody, "utf8"));
+  assert.ok(Buffer.byteLength(loaded.body, "utf8") <= 100, "body must not exceed the cap");
+  assert.ok(loaded.body.startsWith("---"), "truncation keeps the head");
+});
+
+test("loadSkill 默认 maxBytes 常量生效（DEFAULT_SKILL_MAX_BYTES，B2）", () => {
+  assert.ok(DEFAULT_SKILL_MAX_BYTES > 0);
+  const root = tmpDir("skills-load-default");
+  writeSkill(root, "ponytail", "ponytail", "Lazy senior dev");
+  const metas = discoverSkills(root);
+  // 小 body 走默认上限不截断
+  const small = loadSkill("ponytail", metas, { cwd: root });
+  assert.equal(small.maxBytes, DEFAULT_SKILL_MAX_BYTES);
+  assert.equal(small.truncated, false);
+});
+
+test("loadSkill 未知名技能 → SKILL_NOT_FOUND 结构化错误（B1，不进 ErrorCode 枚举）", () => {
+  const root = tmpDir("skills-load-unknown");
+  writeSkill(root, "ponytail", "ponytail", "Lazy senior dev");
+  const metas = discoverSkills(root);
+  assert.throws(
+    () => loadSkill("ghost-skill", metas, { cwd: root }),
+    (e: unknown) =>
+      e instanceof SkillLoadError &&
+      e.code === "SKILL_NOT_FOUND" &&
+      e.skillName === "ghost-skill",
+  );
+});
+
+test("loadSkill SKILL.md 缺失 → SKILL_MD_MISSING（健康校验）", () => {
+  const root = tmpDir("skills-load-missing");
+  writeSkill(root, "ponytail", "ponytail", "Lazy senior dev");
+  const metas = discoverSkills(root);
+  const stale: typeof metas = [{ ...metas[0], path: path.join(root, "nope", "SKILL.md") }];
+  assert.throws(
+    () => loadSkill("ponytail", stale, { cwd: root }),
+    (e: unknown) => e instanceof SkillLoadError && e.code === "SKILL_MD_MISSING",
+  );
+});
+
+test("loadSkill 坏 frontmatter → SKILL_BAD_FRONTMATTER（健康校验）", () => {
+  const root = tmpDir("skills-load-badfm");
+  const skillDir = path.join(root, "broken");
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(path.join(skillDir, "SKILL.md"), "# no frontmatter at all\n");
+  const metas = discoverSkills(root);
+  assert.equal(metas.length, 1);
+  assert.throws(
+    () => loadSkill("broken", metas, { cwd: root }),
+    (e: unknown) => e instanceof SkillLoadError && e.code === "SKILL_BAD_FRONTMATTER",
+  );
+});
+
+test("loadSkill 越界路径（meta.path 逃逸 cwd）→ SKILL_PATH_DENIED；无 cwd 不限制", () => {
+  const root = tmpDir("skills-load-escape");
+  writeSkill(root, "ponytail", "ponytail", "Lazy senior dev");
+  const metas = discoverSkills(root);
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "picode-outside-"));
+  fs.writeFileSync(
+    path.join(outside, "SKILL.md"),
+    "---\nname: ponytail\ndescription: Lazy senior dev\n---\n\noutside body\n",
+  );
+  const escaped: typeof metas = [
+    { ...metas[0], path: path.join(outside, "SKILL.md"), relPath: "escape/SKILL.md" },
+  ];
+  assert.throws(
+    () => loadSkill("ponytail", escaped, { cwd: root }),
+    (e: unknown) => e instanceof SkillLoadError && e.code === "SKILL_PATH_DENIED",
+  );
+  // 未给 cwd → 不做路径围栏（信任调用方）
+  const noCwd = loadSkill("ponytail", escaped, { maxBytes: 0 });
+  assert.equal(noCwd.truncated, false);
+  assert.ok(noCwd.body.includes("outside body"));
 });

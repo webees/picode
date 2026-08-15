@@ -13,12 +13,16 @@ import YAML from "yaml";
 import {
   APPROVAL_POLICY_ENV,
   ApprovalStore,
+  DEFAULT_SKILL_MAX_BYTES,
   ErrorCode,
   READ_BEFORE_EDIT_ENV,
   SANDBOX_MODE_ENV,
+  SkillLoadError,
   WIDER_MODES,
+  discoverSkills,
   errorCodeOf,
   isSandboxMode,
+  loadSkill,
   matchGlob,
   modeAllowsWrite,
   PicodeError,
@@ -979,8 +983,59 @@ export default function picodeExtension(pi: PiApi): void {
       return jsonResult({ ok: true, rel, content: fs.readFileSync(abs, "utf8") });
     },
   });
+
+  /**
+   * B 按需 skill 加载（C2）：skill_load <name> —— 运行时按需取 SKILL.md 完整 body。
+   * 双轨明界：与 persona skills[] 声明（系统提示常驻元数据目录）并存、不重复注入；
+   * 加载结果仅回工具结果，绝不写 persona 系统提示路径。单次单技能 + maxBytes
+   * 上限截断（truncated 标注）。未授权画像 → TOOL_DENIED；未知名 → SKILL_NOT_FOUND
+   * （工具内联 code，不进 ErrorCode 枚举——errors.ts 归 C3）。
+   */
+  pi.registerTool({
+    name: "skill_load",
+    label: "Picode Skill Load",
+    description:
+      "Load a skill's SKILL.md full body at runtime (B on-demand loading, dual-track). " +
+      "Skills are discovered under <cwd>/skills (paths.skills_root default). One skill per " +
+      "call; the body is capped at maxBytes (default 64 KiB, env PICODE_SKILL_MAX_BYTES) and " +
+      "truncated results carry truncated: true. The loaded body is returned as the tool " +
+      "result only — it is never injected into the persona system prompt (persona skills[] " +
+      "declarations stay the sole startup-track source).",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Skill name from the skills directory index" },
+      },
+      required: ["name"],
+    },
+    async execute(_id, params) {
+      if (!allow("skill_load")) return err(ErrorCode.TOOL_DENIED, "skill_load not in profile");
+      const a = auth();
+      if (a) return err(ErrorCode.TOKEN_INVALID, a);
+      const name = String(params.name ?? "");
+      try {
+        const skillsRoot = path.join(path.resolve(cwd), "skills");
+        const loaded = loadSkill(name, discoverSkills(skillsRoot), {
+          cwd,
+          maxBytes: skillMaxBytes(),
+        });
+        return jsonResult({ ok: true, skill: loaded });
+      } catch (e) {
+        if (e instanceof SkillLoadError) {
+          return jsonResult({ ok: false, code: e.code, message: e.message, name: e.skillName });
+        }
+        return err(ErrorCode.BAD_ARGS, e instanceof Error ? e.message : String(e));
+      }
+    },
+  });
 }
 
 function env(name: string, fallback = ""): string {
   return process.env[name] ?? fallback;
+}
+
+/** B/C2：skill_load body 上限（env 覆盖，无 config 键——D104 由 C5 记录）。 */
+function skillMaxBytes(): number {
+  const v = Number(env("PICODE_SKILL_MAX_BYTES", String(DEFAULT_SKILL_MAX_BYTES)));
+  return Number.isFinite(v) && v >= 0 ? Math.floor(v) : DEFAULT_SKILL_MAX_BYTES;
 }

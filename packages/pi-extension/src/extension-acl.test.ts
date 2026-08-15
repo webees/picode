@@ -3,8 +3,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { issueToken } from "@picode/bus";
 import { baseEnv, call, loadExtension, makeRun } from "./extension-harness.js";
+
+/** 本仓工作树根（dist 测试文件上溯三级），内含 skills/engineering/ponytail/SKILL.md。 */
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 test("bus_post outside the member ACL is rejected (T04)", async () => {
   const { runsRoot, runId, token } = makeRun("engineer@task-a");
@@ -81,4 +85,55 @@ test("repo_write traversal via .. is denied and creates nothing (I7)", async () 
   assert.equal(r.ok, false);
   assert.equal(r.code, "WRITE_PATH_DENIED");
   assert.ok(!fs.existsSync(path.join(path.dirname(repo), "outside.txt")));
+});
+
+// ---- B 按需 skill 加载：skill_load 工具（C2）----
+
+test("skill_load ponytail 返回完整 body（implement.engineer 授权，B1/B3）", async () => {
+  const { runsRoot, runId, token } = makeRun("engineer@task-a");
+  const tools = loadExtension({
+    ...baseEnv,
+    PICODE_CWD: repoRoot,
+    PICODE_RUNS_ROOT: runsRoot,
+    PICODE_RUN_ID: runId,
+    PICODE_AGENT_TOKEN: token,
+    PICODE_TOOL_PROFILE: "implement.engineer",
+  });
+  const r = await call(tools, "skill_load", { name: "ponytail" });
+  assert.equal(r.ok, true);
+  const skill = r.skill as { name: string; truncated: boolean; body: string };
+  assert.equal(skill.name, "ponytail");
+  assert.equal(skill.truncated, false);
+  assert.ok(skill.body.includes("# Ponytail"), "full body returned");
+  assert.ok(skill.body.includes("The shortest path to done is the right path."));
+});
+
+test("skill_load 未授权画像 → TOOL_DENIED（implement.sdet 无 skill_load，B1）", async () => {
+  const { runsRoot, runId, token } = makeRun("engineer@task-a");
+  const tools = loadExtension({
+    ...baseEnv,
+    PICODE_CWD: repoRoot,
+    PICODE_RUNS_ROOT: runsRoot,
+    PICODE_RUN_ID: runId,
+    PICODE_AGENT_TOKEN: token,
+    PICODE_TOOL_PROFILE: "implement.sdet",
+  });
+  const r = await call(tools, "skill_load", { name: "ponytail" });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "TOOL_DENIED");
+});
+
+test("skill_load 未知名技能 → SKILL_NOT_FOUND 工具内联 code（不进 ErrorCode 枚举，B1）", async () => {
+  const { runsRoot, runId, token } = makeRun("engineer@task-a");
+  const tools = loadExtension({
+    ...baseEnv,
+    PICODE_CWD: repoRoot,
+    PICODE_RUNS_ROOT: runsRoot,
+    PICODE_RUN_ID: runId,
+    PICODE_AGENT_TOKEN: token,
+    PICODE_TOOL_PROFILE: "implement.engineer",
+  });
+  const r = await call(tools, "skill_load", { name: "ghost-skill" });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, "SKILL_NOT_FOUND");
 });

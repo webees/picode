@@ -114,13 +114,13 @@ function executionToolDef(tool: CapturedTool): ToolDef {
 
 let cached: ToolDef[] | null = null;
 
-/** The 20 pi-extension tools (captured once; per-call env re-injection). */
+/** The 21 pi-extension tools (captured once; per-call env re-injection). */
 export function executionTools(): ToolDef[] {
   if (cached) return cached;
   const tools = captureTools({});
   const defs = [...tools.values()].map(executionToolDef);
-  if (defs.length !== 20) {
-    throw new Error(`pi-extension registered ${defs.length} tools; expected 20 (09 matrix)`);
+  if (defs.length !== 21) {
+    throw new Error(`pi-extension registered ${defs.length} tools; expected 21 (09 matrix, +skill_load C2)`);
   }
   cached = defs;
   return defs;
