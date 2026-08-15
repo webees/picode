@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { loadConfig } from "@picode/core";
+import { loadConfig, ErrorCode, PicodeError, type SessionRecord } from "@picode/core";
 import { createRun, resolveRunDir } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
 import {
@@ -13,7 +13,10 @@ import {
   makeSpawner,
   personaDeclaredSkills,
   piPidOf,
+  sleepAgent,
   sleepWithPi,
+  terminateAgent,
+  wakeAgent,
   wakeWithPi,
   type PiHandle,
 } from "./pi-adapter.js";
@@ -246,4 +249,105 @@ test("C2: buildPiEnv injects skills index + persona-declared skills (role fallba
   assert.equal(index.length, 1);
   assert.equal(index[0].name, "ponytail");
   assert.deepEqual(JSON.parse(env.PICODE_PERSONA_SKILLS!), ["skills/engineering/ponytail/SKILL.md"]);
+});
+
+test("I2: sleepAgent 对 oc- 会话不再 DELETE（mock serve 断言零 DELETE 调用）", async () => {
+  const repo = gitInit({ prefix: "picode-sleep-oc-" });
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir } = resolveRunDir(repo, runId);
+  fs.writeFileSync(
+    path.join(dir, "config.override.yaml"),
+    `opencode:\n  enabled: true\n  base_url: "http://127.0.0.1:7788"\n`,
+  );
+  const config = loadConfig(repo, runId);
+  const store = new SessionStore(dir);
+  // 造一个 awake + oc- 会话（sleep 前已挂 durable 句柄）
+  await store.wake("pm", "pre");
+  await store.attachPiSession("pm", "oc-ses_keep");
+
+  const calls: Array<{ method: string; url: string }> = [];
+  const orig = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ method: String(init?.method ?? "GET"), url: String(input) });
+    return new Response("true", { status: 200 });
+  }) as typeof fetch;
+  try {
+    const rec = await sleepAgent(dir, config, "pm", "idle");
+    assert.equal(rec.state, "sleeping");
+    assert.equal(rec.pi_session_id, "oc-ses_keep", "sleep 保留 oc-<id> 持久会话引用");
+    assert.equal(calls.length, 0, "sleep 不得调任何 serve API（零 DELETE）");
+    assert.equal(
+      calls.filter((c) => c.method === "DELETE").length,
+      0,
+      "I2: sleep 不再 DELETE opencode 会话",
+    );
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
+
+test("I3: wakeAgent 深度围栏 — delegation_depth > 3 结构化拒绝 SUBAGENT_DEPTH_EXCEEDED", async () => {
+  const { dir, config, store } = setup({ piEnabled: false });
+  // 工作房 .picode/config.yaml 默认启用 opencode——本测试走纯状态机路（两路都关）
+  config.opencode.enabled = false;
+  store.register("engineer", {
+    agentId: "engineer@task-x",
+    initialState: "sleeping",
+    depth: 4,
+    parentSession: "squad-lead@task-x",
+  });
+  await assert.rejects(
+    () => wakeAgent(dir, config, "engineer@task-x", "event:task_ready"),
+    (e: unknown) => {
+      assert.ok(e instanceof PicodeError, "must be a coded PicodeError");
+      assert.equal(e.code, ErrorCode.SUBAGENT_DEPTH_EXCEEDED);
+      assert.match(e.message, /4/, "消息须含当前深度");
+      assert.match(e.message, /3/, "消息须含上限");
+      return true;
+    },
+  );
+  // 拒绝不改变会话状态（仍在 sleeping，未触碰后端）
+  assert.equal(store.get("engineer@task-x")!.state, "sleeping");
+  // 深度 3（== 上限）放行
+  store.register("engineer", { agentId: "engineer@task-y", initialState: "sleeping", depth: 3 });
+  const r3 = (await wakeAgent(dir, config, "engineer@task-y", "wake")) as {
+    session: SessionRecord;
+    pi: null;
+  };
+  assert.equal(r3.session.state, "awake");
+  // 缺省（顶层会话 depth 缺省 = 0）放行
+  const r0 = (await wakeAgent(dir, config, "pm", "intake")) as { session: SessionRecord; pi: null };
+  assert.equal(r0.session.state, "awake");
+});
+
+test("I2: terminateAgent 保持终态销毁 — DELETE 语义不变 + pi_session_id 清空", async () => {
+  const repo = gitInit({ prefix: "picode-term-oc-" });
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir } = resolveRunDir(repo, runId);
+  fs.writeFileSync(
+    path.join(dir, "config.override.yaml"),
+    `opencode:\n  enabled: true\n  base_url: "http://127.0.0.1:7788"\n`,
+  );
+  const config = loadConfig(repo, runId);
+  const store = new SessionStore(dir);
+  await store.wake("pm", "pre");
+  await store.attachPiSession("pm", "oc-ses_term");
+
+  const calls: Array<{ method: string; url: string }> = [];
+  const orig = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ method: String(init?.method ?? "GET"), url: String(input) });
+    return new Response("true", { status: 200 });
+  }) as typeof fetch;
+  try {
+    const rec = await terminateAgent(dir, config, "pm", "dissolved");
+    assert.equal(rec.state, "terminated");
+    assert.equal(rec.pi_session_id, null, "terminate 清空平台会话引用（终态销毁）");
+    const deletes = calls.filter(
+      (c) => c.method === "DELETE" && c.url.includes("/session/ses_term"),
+    );
+    assert.equal(deletes.length, 1, "terminate 必须 DELETE 服务端会话（终态销毁语义不变）");
+  } finally {
+    globalThis.fetch = orig;
+  }
 });

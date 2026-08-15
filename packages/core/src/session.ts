@@ -34,6 +34,14 @@ export interface SessionRecord {
   error: string | null;
   /** Optional (C1): present on sessions registered after the budget rollout. */
   budget?: SessionBudgetUsed;
+  /**
+   * I3: 子代理嵌套深度（可选）。旧 session.yaml 缺省 = 0（平台席/任务席顶层会话）。
+   * 统一 spawn 入口 wakeAgent 校验 depth ≤ 3（17 §4），超限结构化拒绝
+   * （SUBAGENT_DEPTH_EXCEEDED）。
+   */
+  delegation_depth?: number;
+  /** I3: 子代理的父会话 agent_id（可选）。顶层会话缺省/空；围栏与结算按此归属。 */
+  parent_session?: string | null;
 }
 
 /** Legal transitions per 17 §4. Any other pair is rejected. */

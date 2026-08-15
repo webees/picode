@@ -89,3 +89,32 @@ test("SessionBudgetUsed carries both meters: turns (C1) and continuations (C1 co
   const stale: SessionRecord = { ...fresh, budget: undefined };
   assert.equal(stale.budget, undefined);
 });
+
+test("I3: SessionRecord 增可选 delegation_depth/parent_session（旧格式兼容，schema_version 保持 1）", () => {
+  // 旧格式（无新字段）构造合法：缺省 = depth 0 / 平台席顶层会话
+  const legacy: SessionRecord = {
+    schema_version: "1",
+    agent_id: "pm",
+    role_id: "pm",
+    state: "sleeping",
+    pi_session_id: null,
+    last_wake_at: null,
+    last_sleep_at: null,
+    wake_reason: null,
+    persona_path: null,
+    error: null,
+  };
+  assert.equal(legacy.delegation_depth, undefined, "旧格式无 delegation_depth 字段");
+  assert.equal(legacy.parent_session, undefined, "旧格式无 parent_session 字段");
+  assert.equal(legacy.delegation_depth ?? 0, 0, "缺省读 = 0（平台席/任务席）");
+  // 新字段可选携带（子代理 spawn 注册时由调用方写入）
+  const sub: SessionRecord = {
+    ...legacy,
+    agent_id: "engineer@task-sub",
+    delegation_depth: 1,
+    parent_session: "engineer@task-parent",
+  };
+  assert.equal(sub.delegation_depth, 1);
+  assert.equal(sub.parent_session, "engineer@task-parent");
+  assert.equal(sub.schema_version, "1", "新增可选字段不 bump schema_version");
+});

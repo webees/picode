@@ -106,6 +106,45 @@ test("attachPiSession requires awake state (coded ILLEGAL_STATE)", async () => {
   assert.equal(store.get("pm")!.pi_session_id, "pid-99");
 });
 
+test("I2: sleep 保留 oc- pi_session_id（durable 会话引用，文件真相指针）", async () => {
+  const store = freshStore();
+  store.register("pm", { initialState: "sleeping" });
+  await store.wake("pm", "a");
+  await store.attachPiSession("pm", "oc-ses_abc");
+  const rec = await store.sleep("pm", "done");
+  assert.equal(rec.state, "sleeping");
+  assert.equal(rec.pi_session_id, "oc-ses_abc", "sleep 不得清空 oc-<id> 指针");
+  assert.equal(store.get("pm")!.pi_session_id, "oc-ses_abc");
+});
+
+test("I2: sleep 清空非 durable pid 句柄（pi 进程已停，句柄失效）", async () => {
+  const store = freshStore();
+  store.register("pm", { initialState: "sleeping" });
+  await store.wake("pm", "a");
+  await store.attachPiSession("pm", "pid-42");
+  const rec = await store.sleep("pm", "done");
+  assert.equal(rec.pi_session_id, null, "pid- 进程句柄随进程停止而失效");
+});
+
+test("I3: register 支持 depth/parent 参数（落 session.yaml 可选字段）", async () => {
+  const store = freshStore();
+  const sub = store.register("engineer", {
+    agentId: "engineer@task-sub",
+    initialState: "sleeping",
+    depth: 2,
+    parentSession: "squad-lead@task-parent",
+  });
+  assert.equal(sub.delegation_depth, 2);
+  assert.equal(sub.parent_session, "squad-lead@task-parent");
+  const onDisk = store.get("engineer@task-sub")!;
+  assert.equal(onDisk.delegation_depth, 2);
+  assert.equal(onDisk.parent_session, "squad-lead@task-parent");
+  // 不传 depth/parent → 字段缺省（旧格式兼容；wakeAgent 缺省读 0）
+  const top = store.register("pm");
+  assert.equal(top.delegation_depth, undefined);
+  assert.equal(top.parent_session, undefined);
+});
+
 test("transition on a missing session throws coded SESSION_NOT_FOUND", async () => {
   const store = freshStore();
   await assert.rejects(() => store.wake("ghost", "x"), (e: unknown) => {

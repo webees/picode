@@ -1,9 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { getDefaultConfig, type PicodeConfig } from "@picode/core";
+import { ErrorCode, PicodeError, getDefaultConfig, type PicodeConfig } from "@picode/core";
 import { gitInit } from "./test-utils.js";
 import { createRun, resolveRunDir } from "./run-store.js";
+import { SessionStore } from "./session-store.js";
 import { TranscriptStore } from "./transcript-store.js";
+import { wakeAgent } from "./pi-adapter.js";
 import {
   OpencodeSpawner,
   READY_MESSAGE_TEXT,
@@ -16,7 +18,14 @@ import { CONTINUATION_PROMPT } from "./summary-noise.js";
 /** Capture every fetch() call for assertion. */
 function mockFetch(
   calls: Array<{ url: string; body: unknown }>,
-  opts: { messageTimeoutFailures?: number; messageStatus?: number } = {},
+  opts: {
+    messageTimeoutFailures?: number;
+    messageStatus?: number;
+    /** GET /session/{id}（isAlive 探测）返回的 HTTP 状态（>=400 → 失联）。 */
+    sessionProbeStatus?: number;
+    /** GET /session/{id}（isAlive 探测）抛网络错误（serve 不可达）。 */
+    sessionProbeError?: boolean;
+  } = {},
 ) {
   const orig = globalThis.fetch;
   let messageAttempts = 0;
@@ -36,6 +45,16 @@ function mockFetch(
         return new Response("model error", { status: opts.messageStatus });
       }
       return new Response(JSON.stringify({ info: {}, parts: [] }), { status: 200 });
+    }
+    // GET /session/{id} — I2 resume 的 isAlive 探测
+    if (init?.method === "GET" && /\/session\/[^/]+$/.test(url)) {
+      if (opts.sessionProbeError) {
+        throw new TypeError("fetch failed: serve unreachable");
+      }
+      if (opts.sessionProbeStatus !== undefined && opts.sessionProbeStatus >= 400) {
+        return new Response("not found", { status: opts.sessionProbeStatus });
+      }
+      return new Response(JSON.stringify({ id: "ses_mock123" }), { status: 200 });
     }
     if (init?.method === "DELETE") {
       return new Response("true", { status: 200 });
@@ -293,6 +312,122 @@ test("D092: wakeWithOpencode 重 spawn 摘要剔除 ready + 续跑模板句（SU
       "重 spawn 注入的摘要不得包含续跑模板句（D092：同剔 CONTINUATION_PROMPT）",
     );
     assert.ok(!summarySection.includes("检测到本会话已空闲"), "续跑模板句不应残留在摘要任何位置");
+  } finally {
+    restore();
+  }
+});
+
+/** 造一个 sleeping + oc- 句柄的会话（I2 durable 会话形态：sleep 保留指针）。 */
+async function sleepingWithOcSession(dir: string, agentId: string, piSessionId: string): Promise<void> {
+  const store = new SessionStore(dir);
+  await store.wake(agentId, "pre");
+  await store.attachPiSession(agentId, piSessionId);
+  await store.sleep(agentId, "pre");
+}
+
+test("I2: wake 走 resume — 同会话 sendReady 续写（POST /session/{id}/message 且无新 POST /session）", async () => {
+  const repo = gitInit({ prefix: "picode-wake-oc-" });
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir } = resolveRunDir(repo, runId);
+  await sleepingWithOcSession(dir, "pm", "oc-ses_mock123");
+
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const restore = mockFetch(calls);
+  try {
+    const r = await wakeWithOpencode(dir, cfg(), "pm", "re-wake", {});
+    assert.equal(r.pi_session_id, "oc-ses_mock123", "resume 必须复用同一会话句柄");
+    // 先 isAlive 探测 GET /session/{id}
+    assert.ok(
+      calls.some((c) => /\/session\/ses_mock123$/.test(c.url)),
+      "resume 前须 isAlive 探测既有会话",
+    );
+    // 同会话续写：POST /session/{id}/message 恰好一次
+    const posts = calls.filter((c) => c.url.includes("/session/ses_mock123/message"));
+    assert.equal(posts.length, 1, "resume = 同会话 sendReady 一次");
+    assert.equal((posts[0].body as { noReply: boolean }).noReply, true);
+    // 无新 POST /session
+    assert.equal(
+      calls.filter((c) => c.url.endsWith("/session")).length,
+      0,
+      "resume 不得创建新会话",
+    );
+  } finally {
+    restore();
+  }
+});
+
+test("I2: wake resume 404 — isAlive 探测 404 → 回退重 spawn + 转录摘要", async () => {
+  const repo = gitInit({ prefix: "picode-wake-oc-" });
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir } = resolveRunDir(repo, runId);
+  const transcript = new TranscriptStore(dir);
+  await transcript.recordOutgoing("pm", "第一轮任务：实现模块 A");
+  await sleepingWithOcSession(dir, "pm", "oc-ses_gone");
+
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const restore = mockFetch(calls, { sessionProbeStatus: 404 });
+  try {
+    const r = await wakeWithOpencode(dir, cfg(), "pm", "re-wake", {});
+    assert.ok(r.pi_session_id?.startsWith("oc-"), "回退重 spawn 得到新会话");
+    assert.ok(
+      calls.some((c) => c.url.endsWith("/session")),
+      "404 回退必须重 spawn（新 POST /session）",
+    );
+    const msg = calls.find((c) => c.url.includes("/message"))?.body as {
+      parts: Array<{ type: string; text: string }>;
+    };
+    const texts = msg.parts.map((p) => p.text).join("\n");
+    assert.match(texts, /历史要点摘要/, "重 spawn 须注入转录摘要");
+    assert.match(texts, /第一轮任务：实现模块 A/);
+  } finally {
+    restore();
+  }
+});
+
+test("I2: wake resume 失联 — isAlive 探测网络错误 → 回退重 spawn", async () => {
+  const repo = gitInit({ prefix: "picode-wake-oc-" });
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir } = resolveRunDir(repo, runId);
+  await sleepingWithOcSession(dir, "pm", "oc-ses_gone");
+
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const restore = mockFetch(calls, { sessionProbeError: true });
+  try {
+    const r = await wakeWithOpencode(dir, cfg(), "pm", "re-wake", {});
+    assert.ok(r.pi_session_id?.startsWith("oc-"));
+    assert.ok(calls.some((c) => c.url.endsWith("/session")), "失联回退重 spawn");
+  } finally {
+    restore();
+  }
+});
+
+test("I3: wakeAgent（opencode 路）深度围栏 — depth > 3 拒绝且不触碰 serve", async () => {
+  const repo = gitInit({ prefix: "picode-wake-oc-" });
+  const { runId } = createRun(repo, { title: "goal-001", scale: "S" });
+  const { dir } = resolveRunDir(repo, runId);
+  const store = new SessionStore(dir);
+  store.register("engineer", {
+    agentId: "engineer@task-x",
+    initialState: "sleeping",
+    depth: 4,
+    parentSession: "squad-lead@task-x",
+  });
+
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const restore = mockFetch(calls);
+  try {
+    await assert.rejects(
+      () => wakeAgent(dir, cfg(), "engineer@task-x", "event:task_ready"),
+      (e: unknown) => {
+        assert.ok(e instanceof PicodeError);
+        assert.equal(e.code, ErrorCode.SUBAGENT_DEPTH_EXCEEDED);
+        assert.match(e.message, /4/);
+        assert.match(e.message, /3/);
+        return true;
+      },
+    );
+    assert.equal(calls.length, 0, "围栏拒绝必须发生在任何 serve 调用之前");
+    assert.equal(store.get("engineer@task-x")!.state, "sleeping", "拒绝不改变会话状态");
   } finally {
     restore();
   }

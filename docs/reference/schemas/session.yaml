@@ -9,3 +9,5 @@ last_sleep_at: null
 wake_reason: null
 persona_path: null   # 任务岗必填；平台岗可空
 error: null
+delegation_depth: 0    # I3 可选：子代理嵌套深度；缺省 0（平台席/任务席顶层会话）
+parent_session: null   # I3 可选：父会话 agent_id；缺省 null（顶层会话）

@@ -111,6 +111,18 @@ registered → sleeping ⇄ awake → terminated
 
 状态落盘：`runs/<id>/sessions/<agent_id>.yaml`（样例 [session.yaml](../reference/schemas/session.yaml)）。
 
+**会话记录字段增量（I3，schema_version 保持 "1"）：**
+
+|字段|类型|缺省|说明|
+|----|----|----|----|
+|`delegation_depth`|number（可选）|0|子代理嵌套深度：registered 时默认 0（平台席/任务席顶层会话）；子代理 spawn 时 = 父深度 + 1|
+|`parent_session`|string \| null（可选）|null|子代理的父会话 `agent_id`；顶层会话缺省/空（衔接 §2.1 持久身份：`agent_id` 是持久主键）|
+
+**MUST（深度围栏 ≤ N）：**
+
+- 子代理 spawn 时校验 `delegation_depth ≤ N`（N = 3，对齐 DSH `maxDepth`；orchestrator 侧常量，统一 spawn 入口 `wakeAgent` 校验，opencode/pi 两路全覆盖）——超限**结构化拒绝**（`SUBAGENT_DEPTH_EXCEEDED`，消息含当前深度与上限）。
+- 旧 session.yaml 无上述字段视为 depth=0 / 平台席（向后兼容，schema_version 不 bump，比照 `budget?` 先例）。
+
 ---
 
 ## 5. 会话调度 `sess-mgr` 策略
@@ -127,9 +139,9 @@ registered → sleeping ⇄ awake → terminated
 
 |动作|含义|
 |------|------|
-|`wake(agent_id, reason)`|确保 awake；注入 system+persona+brief 切片|
-|`sleep(agent_id, reason)`|结束 Pi 会话；保留 token 与记忆指针|
-|`terminate(agent_id, reason)`|任务结束/解散后不再唤醒|
+|`wake(agent_id, reason)`|确保 awake；注入 system+persona+brief 切片；已有 `pi_session_id` 时 resume 优先（同会话续写），失联/404 回退重 spawn + 转录摘要|
+|`sleep(agent_id, reason)`|结束 Pi 进程（如有）；**保留 opencode 平台会话引用（`pi_session_id`）与 token/记忆指针**——恢复走 resume（同会话续写），不销毁会话（I2）|
+|`terminate(agent_id, reason)`|任务结束/解散后不再唤醒；opencode 会话**终态销毁**（DELETE，I2 语义仅保留于此）|
 
 ### 5.3 默认策略（可配置覆盖）
 
@@ -195,6 +207,8 @@ registered → sleeping ⇄ awake → terminated
 
 `recruiter` 起草 → `people-qa` 校验维度齐全 → `people-lead` 呈报 → **`run-lead` 批准** → 落盘 `tasks/<id>/staffing.yaml` + `personas/*.md` → 方可 spawn。
 
+**子代理收窄（I4）：** 子代理人设的 `tool_profile`/`write_paths` 维度实例化沿用「子代理 write_paths ⊆ 父 write_paths（只收窄、不放宽）」规则——子代理 spawn 时写集 = 父写集 ∩ 子任务声明写集；父写集收窄子代理写集属合法，反向（子宽于父）结构化拒绝（校验执行见 04 §2 + staffing）。
+
 ---
 
 ## 7. Agent 模板与实例
@@ -231,6 +245,10 @@ registered → sleeping ⇄ awake → terminated
 |----|------|
 |`product`|产品共创：需求口径、优先级、验收；主 post：`pm`；`sponsor`/`run-lead` 按成员表|
 |其余|见 terminology|
+
+**子代理所有权围栏（I5）：** 子代理会话归属父会话（`owner_session` 字段）；普通房间消息**不得唤醒/路由子代理**（bus 校验在 ACL 之上加 owner 围栏：目标会话是子代理且发送者非 owner → 结构化拒绝 `agent-busy` 语义等价物）；父→子走父→子消息通道（opencode `POST /session/{id}/message`），其它成员须经父转达或显式授权；**子代理不可问人**——子代理不得直接向 sponsor 提问，须经父转达。
+
+**结算通知来源标注纪律（I6）：** 子代理结算通知由**机械层生成**（orchestrator 观察状态文件派生），**不是子代理 LLM 自报**——不把运行时叙述冒充为子代理内容。
 
 ---
 

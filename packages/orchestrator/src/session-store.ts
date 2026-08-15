@@ -73,8 +73,20 @@ export class SessionStore {
    * Register a session in the roster.
    * Human-only roles (sponsor) are rejected; initialState may be
    * "registered" (default) or "sleeping" (init fast-path per 18 phase A).
+   * I3: 子代理注册可带 delegation_depth（嵌套深度）与 parent_session（父会话
+   * agent_id）——落 session.yaml 可选字段；不传则字段缺省（旧格式兼容，读作 0/平台席）。
    */
-  register(roleId: string, opts: { agentId?: string; initialState?: "registered" | "sleeping" } = {}): SessionRecord {
+  register(
+    roleId: string,
+    opts: {
+      agentId?: string;
+      initialState?: "registered" | "sleeping";
+      /** I3: 子代理嵌套深度（父深度 + 1）；顶层会话不传。 */
+      depth?: number;
+      /** I3: 子代理的父会话 agent_id；顶层会话不传。 */
+      parentSession?: string | null;
+    } = {},
+  ): SessionRecord {
     if (HUMAN_ONLY_ROLES.includes(roleId)) {
       throw new PicodeError(
         ErrorCode.SESSION_HUMAN_ONLY,
@@ -102,6 +114,9 @@ export class SessionStore {
       // C1-run-budgets: per-session wake-turn meter starts at 0.
       // C1 continuation: per-session auto-refeed counter starts at 0.
       budget: { turns: 0, continuations: 0 },
+      // I3 可选字段：仅显式传入时写入（缺省 → 旧格式兼容，读作 0/平台席）
+      ...(opts.depth !== undefined ? { delegation_depth: opts.depth } : {}),
+      ...(opts.parentSession !== undefined ? { parent_session: opts.parentSession } : {}),
     };
     ensureDir(this.sessionsDir());
     writeYamlFile(this.sessionPath(agentId), record);
@@ -161,12 +176,17 @@ export class SessionStore {
     });
   }
 
-  /** Transition awake -> sleeping. */
+  /**
+   * Transition awake -> sleeping.
+   * I2: sleep 保留平台持久会话引用（oc-<id> 作文件真相指针，wake 走 resume 复用）；
+   * 仅清空非 durable 句柄（pid- 进程已停，句柄失效）。
+   */
   async sleep(agentId: string, _reason: string): Promise<SessionRecord> {
     return this.transition(agentId, "sleeping", (cur) => {
+      const durable = cur.pi_session_id?.startsWith("oc-") ? cur.pi_session_id : null;
       return {
         ...cur,
-        pi_session_id: null,
+        pi_session_id: durable,
         wake_reason: null,
         last_sleep_at: new Date().toISOString(),
       };
