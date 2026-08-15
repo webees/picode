@@ -61,3 +61,6 @@
 - 公式加质量维度（handoff 完整性/打回）拉开区分度 + 每条评分产出一句话画像
 - 招聘强制消费：people 先读 knowledge/hr/ → 人设写画像对标段 + 低分教训入 forbidden → docs-qa 核验
 - 与原 A 级简化同轮试点；验收：同 run 分数标准差 > 0、画像引用 100% 核验通过
+
+**设计缺陷 8 项改进清单（P0-P2）**：来源 docs/knowledge/feedback/design-deficiencies-analysis-2026-08-15.md（worktree-setup/test-iso 脚本、E 纪要增量、基线三元组、接管预案、变更单自动识别、sponsor 反馈环节、流程元审计）。
+**文档生命周期授权（已试点验证）**：DOC-LIFECYCLE.md 全保留判定已批；feedback 目录常驻 README 索引 + 引用链检查前置化为工程补丁。
