@@ -289,3 +289,99 @@ test("D058: no wake errors when max_awake allows the triad", async () => {
   assert.equal(r.wokeSquad, true);
   assert.deepEqual(r.wokeErrors, []);
 });
+
+// --- E7 排除语义（Bug B: 按层分组判定）回归 ---
+
+/** self_evolve run on a picode-marked tmp repo (19 §4 marker: package.json name=picode). */
+function selfEvolveRun(evolveLayers: Array<"knowledge" | "prompts" | "docs" | "tests" | "code" | "policy">): {
+  repo: string;
+  dir: string;
+  config: ReturnType<typeof resolveRunDir>["config"];
+} {
+  const repo = tmpGitRepo();
+  fs.writeFileSync(
+    path.join(repo, "package.json"),
+    JSON.stringify({ name: "picode", version: "0.0.0" }),
+  );
+  execFileSync("git", ["add", "."], { cwd: repo });
+  execFileSync("git", ["commit", "-qm", "add picode marker"], { cwd: repo });
+  const { runId } = createRun(repo, {
+    title: "evolve",
+    kind: "self_evolve",
+    evolveLayers,
+  });
+  const { dir, config } = resolveRunDir(repo, runId);
+  return { repo, dir, config };
+}
+
+/** Scaffold a self_evolve task tree with fully valid triad personas (all 17 §6 required dims). */
+function writeEvolvePersonas(
+  dir: string,
+  taskId: string,
+  opts: { writePaths: string[]; forbidden: string[] },
+): void {
+  const taskDir = path.join(dir, "tasks", taskId, "staffing", "personas");
+  fs.mkdirSync(taskDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, "tasks", taskId, "task.yaml"),
+    `id: ${taskId}\nchunk_id: chunk-b\ngoal_id: goal-1\nkind: implement\nstatus: queued\nwrite_paths: ${JSON.stringify(opts.writePaths)}\nacceptance: []\n`,
+  );
+  for (const seat of ["squad-lead", "engineer", "sdet"]) {
+    fs.writeFileSync(
+      path.join(taskDir, `${seat}.md`),
+      `---\n${JSON.stringify({
+        schema_version: "1",
+        instance_id: `${seat}@${taskId}`,
+        seat,
+        codename: `c-${seat}`,
+        display_name: seat,
+        mission: "evolve docs",
+        scope_in: ["docs"],
+        scope_out: ["code"],
+        skills: ["typescript"],
+        stack: [],
+        communication: "concise",
+        risk_posture: "careful",
+        tool_profile: "implement." + seat,
+        write_paths: opts.writePaths,
+        read_paths: [],
+        reports_to: "run-lead",
+        handoff_to: "docs-lead",
+        rooms_post: [],
+        acceptance_focus: [],
+        definition_of_done: "docs green",
+        forbidden: opts.forbidden,
+        must_read_refs: ["WORK_BRIEF.md"],
+        check_rubric: null,
+      })}\n---\n# ${seat}\n`,
+    );
+  }
+}
+
+test("E7 Bug B regression: layers=[knowledge,docs] — persona writing docs/knowledge/** passes people-qa", async () => {
+  const { dir, config } = selfEvolveRun(["knowledge", "docs"]);
+  const taskId = "task-chunk-b";
+  writeEvolvePersonas(dir, taskId, { writePaths: ["docs/knowledge/**"], forbidden: ["net"] });
+  // knowledge layer includes docs/knowledge/** with no carve-out → the docs
+  // layer's `!docs/knowledge/**` carve-out must NOT veto this persona's writes.
+  const issues = checkPersonas(dir, config, taskId);
+  assert.deepEqual(
+    issues,
+    [],
+    `expected people-qa to pass, got: ${JSON.stringify(issues)}`,
+  );
+});
+
+test("E7 regression: docs-only persona writing docs/knowledge/** still flagged (carve-out vetoes its own layer)", async () => {
+  const { dir, config } = selfEvolveRun(["docs"]);
+  const taskId = "task-chunk-c";
+  writeEvolvePersonas(dir, taskId, { writePaths: ["docs/knowledge/**"], forbidden: ["net"] });
+  const issues = checkPersonas(dir, config, taskId);
+  assert.equal(issues.length, 3, `expected all three seats flagged, got: ${JSON.stringify(issues)}`);
+  assert.ok(
+    issues.every(
+      (i) => i.problems.length === 1 && i.problems[0] === "E7: write_paths outside evolve layers: docs/knowledge/**",
+    ),
+    `expected exactly one E7-outside problem per seat, got: ${JSON.stringify(issues)}`,
+  );
+});

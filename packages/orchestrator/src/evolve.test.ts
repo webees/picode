@@ -80,6 +80,28 @@ test("assertEvolveWritePathAllowed rejects out-of-layer writes (E2)", async () =
   );
 });
 
+test("E2 Bug B regression: layers=[knowledge,docs] — per-layer grouped judgment (carve-out only vetoes its own layer)", async () => {
+  const config = getDefaultConfig();
+  const spec: EvolveGoalSpec = {
+    ...evolveSpec,
+    layers: ["knowledge", "docs"],
+    forbidden_paths: [],
+  };
+  // knowledge layer includes docs/knowledge/** with no carve-out → allowed,
+  // even though the docs layer's `!docs/knowledge/**` carve-out is in the union.
+  assertEvolveWritePathAllowed(config, spec, "docs/knowledge/evolve/run.md");
+  // docs layer alone: carve-out still vetoes its own layer
+  assert.throws(
+    () =>
+      assertEvolveWritePathAllowed(
+        config,
+        { ...spec, layers: ["docs"] },
+        "docs/knowledge/evolve/run.md",
+      ),
+    /excluded/,
+  );
+});
+
 test("assertEvolveTargetRoot accepts picode monorepo, rejects others (19 §4 MUST)", async () => {
   const ok = tmpGitRepo("picode");
   assertEvolveTargetRoot(ok, getDefaultConfig());

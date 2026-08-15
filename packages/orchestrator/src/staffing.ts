@@ -4,13 +4,11 @@ import YAML from "yaml";
 import {
   assertSafeName,
   ensureDir,
-  evolveWritePaths,
   generateCodename,
   generateTeamName,
+  isEvolveWritePathAllowed,
   missingPersonaDimensions,
   readYamlFile,
-  simpleGlobMatch,
-  splitEvolveGlobs,
   writeAtomic,
   type Persona,
   type PicodeConfig,
@@ -236,9 +234,6 @@ export function checkPersonas(dir: string, config: PicodeConfig, taskId: string)
   const task = readTaskYaml(dir, taskId);
   const goal = readGoal(dir);
   const evolve = goal.kind === "self_evolve" ? goal.evolve : null;
-  const evolveAllowed = evolve
-    ? evolveWritePaths(config, evolve)
-    : null;
   const expectedProfiles = new Map(
     config.roles.filter((r) => r.enabled !== false).map((r) => [r.id, r.tool_profile]),
   );
@@ -275,8 +270,10 @@ export function checkPersonas(dir: string, config: PicodeConfig, taskId: string)
     );
     if (outOfWrite.length) problems.push(`write_paths outside task: ${outOfWrite.join(", ")}`);
     // E7 (19 §5): self_evolve personas must declare forbidden paths and stay
-    // inside the allowed-layer write paths (排除 glob 同样生效，P1 语义统一）。
-    if (evolve && evolveAllowed) {
+    // inside the allowed-layer write paths. The allow decision is per-layer
+    // (Bug B: 按层分组判定 — carve-outs only veto their own layer), shared
+    // with core E2 via isEvolveWritePathAllowed so both sites stay in sync.
+    if (evolve) {
       const forbidden = Array.isArray(frontmatter.forbidden)
         ? (frontmatter.forbidden as string[])
         : [];
@@ -286,14 +283,7 @@ export function checkPersonas(dir: string, config: PicodeConfig, taskId: string)
       const wp = Array.isArray(frontmatter.write_paths)
         ? (frontmatter.write_paths as string[])
         : [];
-      const { includes, excludes } = splitEvolveGlobs(evolveAllowed);
-      const outsideLayer = wp.filter(
-        (w) => {
-          const n = w.replace(/\\/g, "/");
-          const excluded = excludes.some((ex) => simpleGlobMatch(ex.replace(/\/$/, ""), n));
-          return excluded || !includes.some((glob) => simpleGlobMatch(glob, n));
-        },
-      );
+      const outsideLayer = wp.filter((w) => !isEvolveWritePathAllowed(config, evolve, w));
       if (outsideLayer.length) {
         problems.push(`E7: write_paths outside evolve layers: ${outsideLayer.join(", ")}`);
       }
