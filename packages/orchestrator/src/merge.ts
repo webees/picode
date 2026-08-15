@@ -12,7 +12,7 @@ import {
 } from "@picode/core";
 import { isEvolveRun, runVerifyCommands } from "./evolve-run.js";
 import { SessionStore } from "./session-store.js";
-import { readJsonl } from "./jsonl.js";
+import { readJsonl } from "./rules-engine.js";
 import {
   captureTaskCheckpoint,
   PRE_MERGE_CHECKPOINT_BOUNDARY,
