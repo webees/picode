@@ -13,6 +13,7 @@ import {
   checkBudgets,
   closeRun,
   deriveEvents,
+  deriveSettledSubagentNotices,
   guardianTick,
   probeServeHealth,
   runGuardian,
@@ -851,4 +852,155 @@ test("C1 checkpoint-auto: enabled + interval=0 → guardianTick 捕获已登记�
     !res.events.some((e) => e.event === "task_ready"),
     "捕获不得驱动 task_ready 事件（checkpoint 不参与状态决策）",
   );
+});
+
+// ---------------------------------------------------------------------------
+// I6（chunk-settle-feed）：子代理终态机械通知 —— deriveSettledSubagentNotices
+// 纯派生（delegation_depth>0 ∧ terminated ∧ parent_session）+ guardianTick 接线
+// postSettledSubagentNotices：cell_done 进父房（来源 = orchestrator 观察状态文件
+// 派生，非子代理 LLM 自报；幂等 = 父房 bus 已有该子代理 cell_done 则跳过）
+// ---------------------------------------------------------------------------
+
+/** 注册一个子代理会话（depth>0 + parent_session）并以其终态收场。 */
+async function terminatedSubagent(
+  store: SessionStore,
+  agentId: string,
+  parentSession: string,
+  depth = 1,
+): Promise<void> {
+  store.register("engineer", { agentId, initialState: "sleeping", depth, parentSession });
+  await store.terminate(agentId, "settled");
+}
+
+/** 读父房 bus 文件并过滤 cell_done 消息。 */
+function cellDoneMessages(dir: string, room: string): Array<Record<string, unknown>> {
+  const busFile = path.join(dir, "bus", `${room}.jsonl`);
+  if (!fs.existsSync(busFile)) return [];
+  return fs
+    .readFileSync(busFile, "utf8")
+    .trim()
+    .split("\n")
+    .filter((l) => l.trim())
+    .map((l) => JSON.parse(l) as Record<string, unknown>)
+    .filter((m) => m.type === "cell_done");
+}
+
+test("I6: deriveSettledSubagentNotices 纯派生——子代理终态（depth>0 ∧ terminated）→ 通知负载", async () => {
+  const { repo, dir, config, store } = setupRun();
+  activateGoal(dir);
+  const { taskId } = await await addChunkAndTask(repo, dir, config, {
+    chunkId: "chunk-a",
+    writePaths: ["src/module-a/**"],
+  });
+  registerTriad(store, taskId);
+  await terminatedSubagent(store, "sub-a", `engineer@${taskId}`);
+
+  const notices = deriveSettledSubagentNotices(dir);
+  assert.deepEqual(notices, [
+    {
+      agent_id: "sub-a",
+      parent_session: `engineer@${taskId}`,
+      delegation_depth: 1,
+    },
+  ]);
+});
+
+test("I6: 非子代理终态 / 未终态子代理 不派生通知（纯派生边界）", async () => {
+  const { repo, dir, config, store } = setupRun();
+  activateGoal(dir);
+  const { taskId } = await await addChunkAndTask(repo, dir, config, {
+    chunkId: "chunk-a",
+    writePaths: ["src/module-a/**"],
+  });
+  registerTriad(store, taskId);
+  // 顶层会话终态（depth=0）→ 不派生
+  store.register("engineer", { agentId: "engineer@task-x", initialState: "sleeping" });
+  await store.terminate("engineer@task-x", "settled");
+  // 子代理未终态（awake）→ 不派生
+  store.register("engineer", {
+    agentId: "sub-a",
+    initialState: "sleeping",
+    depth: 1,
+    parentSession: `engineer@${taskId}`,
+  });
+  await store.wake("sub-a", "test");
+
+  assert.deepEqual(deriveSettledSubagentNotices(dir), [], "仅终态子代理派生通知");
+});
+
+test("I6: guardianTick 接线 → cell_done 机械通知进父房（refs 指转录/证据，source=orchestrator）", async () => {
+  const { repo, dir, config, store } = setupRun();
+  activateGoal(dir);
+  const { taskId } = await await addChunkAndTask(repo, dir, config, {
+    chunkId: "chunk-a",
+    writePaths: ["src/module-a/**"],
+  });
+  registerTriad(store, taskId);
+  await terminatedSubagent(store, "sub-a", `engineer@${taskId}`);
+  // 预置子代理转录（refs 指转录文件路径；证据目录由 task.yaml 布局保证）
+  const txDir = path.join(dir, "transcripts");
+  fs.mkdirSync(txDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(txDir, "sub-a.jsonl"),
+    JSON.stringify({
+      schema_version: "1",
+      type: "incoming",
+      ts: new Date().toISOString(),
+      agent_id: "sub-a",
+      parts: [{ type: "text", text: "完成" }],
+    }) + "\n",
+    "utf8",
+  );
+
+  const res = await guardianTick(dir, config);
+  assert.deepEqual(res.settled, ["sub-a"], "GuardianTickResult.settled 必须回报本轮已投递子代理");
+
+  // cell_done 进父房 bus（squad-<taskId>）
+  const done = cellDoneMessages(dir, `squad-${taskId}`);
+  assert.equal(done.length, 1, "恰好一条 cell_done");
+  assert.equal(done[0].from, `engineer@${taskId}`, "投递身份 = 父会话（父房 post 成员通道）");
+  const meta = done[0].meta as Record<string, unknown>;
+  assert.equal(meta.source, "orchestrator", "来源标注纪律：机械层派生");
+  assert.equal(meta.subagent, "sub-a");
+  assert.equal(meta.parent_session, `engineer@${taskId}`);
+  assert.ok(
+    (done[0].refs as string[]).includes(`transcripts/sub-a.jsonl`),
+    "refs 必须指子代理转录",
+  );
+  assert.ok(
+    (done[0].refs as string[]).includes(`sessions/sub-a.yaml`),
+    "refs 必须指子代理会话文件",
+  );
+  assert.ok(
+    (done[0].refs as string[]).includes(`tasks/${taskId}/evidence`),
+    "refs 必须指父任务证据目录",
+  );
+  assert.match(String(done[0].body), /机械通知/, "消息体必须标注机械通知来源");
+});
+
+test("I6: 重复 tick 不重复投递 cell_done（父房 bus 幂等检查）", async () => {
+  const { repo, dir, config, store } = setupRun();
+  activateGoal(dir);
+  const { taskId } = await await addChunkAndTask(repo, dir, config, {
+    chunkId: "chunk-a",
+    writePaths: ["src/module-a/**"],
+  });
+  registerTriad(store, taskId);
+  await terminatedSubagent(store, "sub-a", `engineer@${taskId}`);
+
+  const first = await guardianTick(dir, config);
+  assert.deepEqual(first.settled, ["sub-a"]);
+  const second = await guardianTick(dir, config);
+  assert.deepEqual(second.settled, [], "重复 tick 不得重发");
+
+  assert.equal(cellDoneMessages(dir, `squad-${taskId}`).length, 1, "bus 恰好一条 cell_done");
+});
+
+test("I6: 平台席父会话（无 task 绑定）→ 无房可投递，保守跳过不抛错", async () => {
+  const { dir, config, store } = setupRun();
+  await terminatedSubagent(store, "sub-p", "run-lead");
+
+  const res = await guardianTick(dir, config);
+  assert.deepEqual(res.settled, [], "平台席父会话无 squad 房 → 本轮零投递");
+  assert.ok(!fs.existsSync(path.join(dir, "bus", "squad-run-lead.jsonl")), "不得创建房间文件");
 });

@@ -31,6 +31,13 @@ import { buildPiEnv } from "./pi-adapter.js";
  * D092：CONTINUATION_PROMPT / CONTINUATION_SUMMARY_HEADER / READY_MESSAGE_TEXT
  * 及剔噪口径 SUMMARY_STRIP_NOISE 统一收敛到 summary-noise.ts（零依赖模块），
  * 本模块仅 re-export 保持既有引用路径，feed/checkpoint 同消费 SUMMARY_STRIP_NOISE。
+ *
+ * I1（chunk-settle-feed）：投喂语义分级 followup/steer/inject（S 变体，不碰
+ * 17 §4 状态机）——derive/feed 增 FeedOptions.kind（默认 followup 零行为变化）；
+ * steer 增量 next-step 引导（instruction 通道，不重灌固定模板），inject 状态
+ * 通知不唤醒（只过 in-flight 门闩、不计预算）；wake 门闩沿用既有 idle/in-flight
+ * 判定；投喂计数/预算/门闩全部收敛在本模块（KI-6：continuation-gate.ts 只读，
+ * 不新建模块）。
  */
 
 /**
@@ -41,6 +48,70 @@ import { buildPiEnv } from "./pi-adapter.js";
 export function composeContinuationPrompt(summary: string | null): string {
   if (summary === null) return CONTINUATION_PROMPT;
   return `${CONTINUATION_PROMPT}\n\n${CONTINUATION_SUMMARY_HEADER}\n${summary}`;
+}
+
+/**
+ * I1（chunk-settle-feed）：投喂语义分级（S 变体，不碰 17 §4 状态机）——
+ *  - followup（默认）：现状续跑投喂（新轮次，唤醒），行为与 C1 完全一致
+ *  - steer：增量 next-step 引导（instruction 携带「上一步证据已回执，下一步是 X」
+ *    式指令）；消息 = 摘要段 + 引导段，**不重灌固定续跑模板**（蓝图 §4.2 降级
+ *    要点 1「不整体重投」）；与 followup 同门闩；计续跑预算
+ *  - inject：状态通知不唤醒（策略变更/上下文快照只入队）——只对 awake oc- 会话
+ *    投递（不触发状态迁移）；只过 in-flight 门闩（busy 不插队）、不过 idle 门闩
+ *    （状态通知即时投递）；不计预算/不耗续跑配额（状态通知非续跑，避免噪声
+ *    耗尽 D078 预算）
+ */
+export type ContinuationKind = "followup" | "steer" | "inject";
+
+/** I1（D3）: 投喂选项——kind 默认 "followup"；steer 用 instruction、inject 用 notification。 */
+export interface FeedOptions {
+  kind?: ContinuationKind;
+  /** steer 档：增量 next-step 引导指令（「上一步证据已回执，下一步是 X」式）。 */
+  instruction?: string;
+  /** inject 档：状态通知正文（如 checkpoint 更新 / budget 变更）。 */
+  notification?: string;
+}
+
+/** I1: steer 引导段固定标题（composeSteerPrompt 输出，供测试/引用）。 */
+export const STEER_HEADER = "## 下一步引导（steer：增量投喂）";
+
+/** I1: inject 通知段固定标题（composeInjectNotice 输出，供测试/引用）。 */
+export const INJECT_HEADER = "## 状态通知（inject：不唤醒）";
+
+/**
+ * I1: steer 组合——摘要段（复用 CONTINUATION_SUMMARY_HEADER）之上追加
+ * 「下一步引导」段；**不含固定续跑模板**（增量投喂，不整体重投）。
+ * guidance 为调用方给出的增量指令（buildReadyMessage extraText 通道）。
+ * 纯函数：同输入同输出，无副作用。
+ */
+export function composeSteerPrompt(summary: string | null, guidance: string): string {
+  const summaryPart =
+    summary === null ? "" : `${CONTINUATION_SUMMARY_HEADER}\n${summary}\n\n`;
+  return `${summaryPart}${STEER_HEADER}\n${guidance}`;
+}
+
+/**
+ * I1: inject 组合——纯状态通知正文（不携带续跑模板，语义 = 只入队不唤醒）。
+ * 纯函数：同输入同输出，无副作用。
+ */
+export function composeInjectNotice(text: string): string {
+  return `${INJECT_HEADER}\n${text}`;
+}
+
+/** I1: 按 FeedOptions 组合投喂正文（feedContinuation 内部使用；默认档 = followup）。 */
+function composeFeedPrompt(
+  opts: FeedOptions,
+  summary: string | null,
+): string {
+  const kind = opts.kind ?? "followup";
+  switch (kind) {
+    case "steer":
+      return composeSteerPrompt(summary, opts.instruction ?? "");
+    case "inject":
+      return composeInjectNotice(opts.notification ?? "");
+    default:
+      return composeContinuationPrompt(summary);
+  }
 }
 
 /** POST /message 有界重试（C2：断连退避复用 requestWithRetry；成功才计数）。 */
@@ -127,7 +198,7 @@ function isRoundInFlight(dir: string, agentId: string): boolean {
  * 纯函数：派生当前可续跑候选（C1-b/c/d 验收主体）。
  * 读 session/transcript/task，无网络、无写入——同输入同输出。
  *
- * 候选条件（全部满足）：
+ * 候选条件（全部满足，followup/steer 档）：
  *   1. awake 且 pi_session_id 为 oc-（opencode 会话）
  *   2. 无 error（出错会话由 serve 恢复路径处理，不叠投）
  *   3. 任务未终态（有 task 文件且 status ∈ TERMINAL_TASK_STATUSES 的跳过）
@@ -136,17 +207,36 @@ function isRoundInFlight(dir: string, agentId: string): boolean {
  *   5. 平台席（无 task 绑定会话）默认 skip（platform_seats="allow" 才进候选）
  *   6. 无 in-flight 长回合（末条 outgoing 无响应 → 不投喂）
  *   7. 空闲超过 idle_sec（最近回合完成在 now - idle_sec 之前，idle 时钟=响应时间）
+ *
+ * I1（chunk-settle-feed）kind 档（S 变体，D3 决策）：
+ *   - "followup"（默认）：上述 1-7 全量门闩（现状续跑投喂）。
+ *   - "steer"：增量 next-step 引导，wake 门闩沿用 idle/in-flight 判定
+ *     （isRoundInFlight / lastRoundCompletedMs），busy 不插队——与 followup
+ *     同一门闩。
+ *   - "inject"：状态通知不唤醒——仍从 awake oc- 会话起步（不触发状态迁移）；
+ *     只过 in-flight 门闩（busy 不插队）、不过 idle 门闩（状态通知即时投递）；
+ *     不计续跑预算（非续跑，预算门不适用）。
  */
 export function deriveContinuationTargets(
   dir: string,
   config: PicodeConfig,
   now: Date = new Date(),
+  opts: FeedOptions = {},
 ): ContinuationTarget[] {
   const cont = config.self_evolve.continuation;
+  const kind = opts.kind ?? "followup";
   const targets: ContinuationTarget[] = [];
   for (const s of new SessionStore(dir).awake()) {
     if (!s.pi_session_id?.startsWith("oc-")) continue;
     if (s.error) continue;
+    if (kind === "inject") {
+      // D3: inject 只过 in-flight 门闩（busy 不插队），不过 idle 门闩、不计预算。
+      if (isRoundInFlight(dir, s.agent_id)) continue;
+      const sessionId = opencodeSessionIdOf(s.pi_session_id);
+      if (!sessionId) continue;
+      targets.push({ agent_id: s.agent_id, session_id: s.pi_session_id });
+      continue;
+    }
     // D078: 预算门按 taskId 分流——task 绑定会话用 max_per_session，
     // 平台席（无 task 绑定）用 max_per_session_platform（0 = 不限保留）。
     const taskId = taskIdOfAgent(s.agent_id);
@@ -174,12 +264,21 @@ export function deriveContinuationTargets(
  * 向单个会话投喂一次续跑 prompt：D061 noReply POST + 转录落盘 +
  * budget.continuations 计数（持久化）。POST 失败（重试耗尽）抛错且不计数。
  * 会话非 awake / 非 oc- → 返回 null（幂等）。
+ *
+ * I1（chunk-settle-feed）FeedOptions 档（S 变体，D3 决策）：
+ *   - "followup"（默认）：现状续跑投喂（行为与 C1 完全一致）。
+ *   - "steer"：增量 next-step 引导——instruction 携带「上一步证据已回执，
+ *     下一步是 X」式指令，消息 = 摘要段 + 引导段（不重灌固定模板）；仍计续跑一次。
+ *   - "inject"：状态通知不唤醒——仍要求 awake（不触发状态迁移）；
+ *     不计续跑预算（状态通知非续跑）。
  */
 export async function feedContinuation(
   dir: string,
   config: PicodeConfig,
   agentId: string,
+  opts: FeedOptions = {},
 ): Promise<FeedResult | null> {
+  const kind = opts.kind ?? "followup";
   const store = new SessionStore(dir);
   const session = store.get(agentId);
   if (!session?.pi_session_id || session.state !== "awake") return null;
@@ -194,13 +293,15 @@ export async function feedContinuation(
     maxEntries: cont.summary_entries,
     stripNoise: [...SUMMARY_STRIP_NOISE],
   });
-  const message = spawner.buildReadyMessage(env, composeContinuationPrompt(summary));
+  const message = spawner.buildReadyMessage(env, composeFeedPrompt(opts, summary));
   const res = await spawner.postMessage(sessionId, message, CONTINUATION_RETRY);
   await transcript.recordOutgoing(agentId, message.parts.map((p) => p.text).join("\n"));
   if (res.parts.length > 0) {
     await transcript.recordResponse(agentId, res.parts);
   }
-  const updated = await store.recordContinuation(agentId);
+  // D3: inject 不计续跑预算（状态通知非续跑，避免噪声耗尽 D078 预算）；
+  // followup/steer 维持 budget.continuations +1（N3 持久化）。
+  const updated = kind === "inject" ? session : await store.recordContinuation(agentId);
   return {
     agent_id: agentId,
     session_id: session.pi_session_id,
