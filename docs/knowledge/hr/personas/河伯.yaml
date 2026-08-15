@@ -1,0 +1,7 @@
+codename: "河伯"
+seat: sdet
+records:
+  - { task_id: task-chunk-dead-export-cleanup, score: 100, at: "2026-08-15T02:08:34Z" }
+summary: { count: 1, avg: 100, min: 100, max: 100 }
+notes:
+  - "run-2026-08-15T01-12-43-3NZ C3（team 松风）：公共项 95 + sdet_commands_all_green 5 = 100。官方全量 exit=1 经 base 对照证明零新增失败，判命令全绿（详见 scores.yaml note）。"

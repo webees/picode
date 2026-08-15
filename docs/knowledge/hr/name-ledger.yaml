@@ -1,5 +1,5 @@
 schema_version: "1"
-updated_at: 2026-08-14T00:06:40.405Z
+updated_at: 2026-08-15T01:40:41Z
 entries:
   - kind: team_name
     name: 春山
@@ -1921,3 +1921,101 @@ entries:
     task_id: task-skill-docs
     seat: sdet
     first_used_at: 2026-08-14T00:06:40.405Z
+  # —— run-2026-08-15T01-12-43-3NZ（G1：云岫/星汉/松风）——
+  - kind: team_name
+    name: 云岫
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-config-singleton
+    seat: null
+    first_used_at: 2026-08-15T01:40:41Z
+  - kind: codename
+    name: 望舒
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-config-singleton
+    seat: squad-lead
+    first_used_at: 2026-08-15T01:40:41Z
+  - kind: codename
+    name: 羲和
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-config-singleton
+    seat: engineer
+    first_used_at: 2026-08-15T01:40:41Z
+  - kind: codename
+    name: 金乌
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-config-singleton
+    seat: sdet
+    first_used_at: 2026-08-15T01:40:41Z
+  - kind: team_name
+    name: 星汉
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-evolve-glob-fix
+    seat: null
+    first_used_at: 2026-08-15T01:40:41Z
+  - kind: codename
+    name: 玄冥
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-evolve-glob-fix
+    seat: squad-lead
+    first_used_at: 2026-08-15T01:40:41Z
+  - kind: codename
+    name: 句芒
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-evolve-glob-fix
+    seat: engineer
+    first_used_at: 2026-08-15T01:40:41Z
+  - kind: codename
+    name: 蓐收
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-evolve-glob-fix
+    seat: sdet
+    first_used_at: 2026-08-15T01:40:41Z
+  - kind: team_name
+    name: 松风
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-dead-export-cleanup
+    seat: null
+    first_used_at: 2026-08-15T01:40:41Z
+  - kind: codename
+    name: 山鬼
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-dead-export-cleanup
+    seat: squad-lead
+    first_used_at: 2026-08-15T01:40:41Z
+  - kind: codename
+    name: 湘君
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-dead-export-cleanup
+    seat: engineer
+    first_used_at: 2026-08-15T01:40:41Z
+  - kind: codename
+    name: 河伯
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-dead-export-cleanup
+    seat: sdet
+    first_used_at: 2026-08-15T01:40:41Z
+  # —— run-2026-08-15T01-12-43-3NZ（G2：流岚）——
+  - kind: team_name
+    name: 流岚
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-shell-file-merge
+    seat: null
+    first_used_at: 2026-08-15T02:00:00Z
+  - kind: codename
+    name: 青鸾
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-shell-file-merge
+    seat: squad-lead
+    first_used_at: 2026-08-15T02:00:00Z
+  - kind: codename
+    name: 白鹤
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-shell-file-merge
+    seat: engineer
+    first_used_at: 2026-08-15T02:00:00Z
+  - kind: codename
+    name: 精卫
+    run_id: run-2026-08-15T01-12-43-3NZ
+    task_id: task-chunk-shell-file-merge
+    seat: sdet
+    first_used_at: 2026-08-15T02:00:00Z

@@ -1,0 +1,7 @@
+codename: "句芒"
+seat: engineer
+records:
+  - { task_id: task-chunk-evolve-glob-fix, score: 100, at: "2026-08-15T02:08:34Z" }
+summary: { count: 1, avg: 100, min: 100, max: 100 }
+notes:
+  - "run-2026-08-15T01-12-43-3NZ C2（team 星汉）：公共项 95 + engineer_evidence_pass 5 = 100。"
