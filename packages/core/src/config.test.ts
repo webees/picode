@@ -340,3 +340,33 @@ test("C1: validateConfig rejects invalid checkpoints values", () => {
     assert.throws(() => validateConfig(cfg as typeof base), Error, `expected rejection for ${JSON.stringify(patch)}`);
   }
 });
+
+test("C1 goal-crossrun: self_evolve.goal.max_rounds 默认 0（不限）", () => {
+  const g = getDefaultConfig().self_evolve.goal;
+  assert.equal(g.max_rounds, 0, "默认 0 = 回合预算不限（goal.yaml 可显式覆盖）");
+});
+
+test("C1 goal-crossrun: max_rounds 可经 project yaml 覆盖", () => {
+  const dir = tmpRepoWithConfig(
+    "self_evolve:\n  goal:\n    max_rounds: 5\n",
+  );
+  const g = loadConfig(dir).self_evolve.goal;
+  assert.equal(g.max_rounds, 5);
+  // untouched defaults survive the merge
+  assert.equal(getDefaultConfig().self_evolve.goal.max_rounds, 0);
+});
+
+test("C1 goal-crossrun: validateConfig 拒绝非法 max_rounds", () => {
+  const base = getDefaultConfig();
+  for (const v of [-1, 1.5, "many", null]) {
+    const cfg = {
+      ...base,
+      self_evolve: { ...base.self_evolve, goal: { max_rounds: v } },
+    };
+    assert.throws(
+      () => validateConfig(cfg as typeof base),
+      Error,
+      `expected rejection for max_rounds=${String(v)}`,
+    );
+  }
+});

@@ -6,7 +6,16 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { readYamlFile, writeYamlFile } from "@picode/core";
-import { createRun, resolveRunDir } from "./run-store.js";
+import {
+  blockGoal,
+  createRun,
+  resolveRunDir,
+  resumeGoal,
+  setGoalStatus,
+  setProductAcceptance,
+  readGoal,
+  updateGoal,
+} from "./run-store.js";
 import { SessionStore } from "./session-store.js";
 import {
   captureGitWorktreeSnapshot,
@@ -296,6 +305,126 @@ test("R3-C2-d: 工作树变化后 gate 重跑且仍失败 → 持续保留候选
     assert.equal(after.gate[0].reason, "gate_failed", "快照变化 → 重跑 gate");
     assert.equal(after.gate[0].ran, true);
     assert.equal(messagePosts(calls).length, 0);
+  } finally {
+    restore();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// C1 goal-crossrun（A2/A4）：activation 门闩——goal active ∧ disarmed →
+// sweepContinuationsGated 零投喂（跨进程：goal.yaml 落盘后新 sweep 调用）；
+// 显式 resume（armed）后 guardian 续跑恢复；回合预算达上限自动 block。
+// ---------------------------------------------------------------------------
+
+test("A2: goal active + disarmed → sweepContinuationsGated 零投喂；resume 后恢复", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve = structuredClone(config.self_evolve);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  // goal active（set-status 不自动 arm → 保持 disarmed）
+  setProductAcceptance(dir, ["x"]);
+  setGoalStatus(dir, "active");
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_disarmed");
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    const res = await sweepContinuationsGated(dir, config);
+    assert.deepEqual(res.fed, [], "goal active ∧ disarmed → 零投喂（无自动续跑动作）");
+    assert.equal(messagePosts(calls).length, 0);
+  } finally {
+    restore();
+  }
+
+  // 显式 resume（armed）→ guardian 续跑恢复（同一 run 目录，新 sweep 调用）
+  resumeGoal(dir);
+  const calls2: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore2 = mockServe(calls2);
+  try {
+    const res2 = await sweepContinuationsGated(dir, config);
+    assert.deepEqual(res2.fed, ["engineer@task-x"], "resume 后恢复投喂");
+    assert.equal(messagePosts(calls2).length, 1);
+    assert.equal(readGoal(dir).rounds_started, 1, "投喂计入回合");
+  } finally {
+    restore2();
+  }
+});
+
+test("A2: goal 非 active（intake）→ 门闩不生效（既有行为不变）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve = structuredClone(config.self_evolve);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_not_active");
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    const res = await sweepContinuationsGated(dir, config);
+    assert.deepEqual(res.fed, ["engineer@task-x"], "intake goal 照常投喂（门闩仅限 active∧disarmed）");
+  } finally {
+    restore();
+  }
+});
+
+test("A2: goal blocked → 零投喂（block 为机械续跑停止出口）", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve = structuredClone(config.self_evolve);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  setProductAcceptance(dir, ["x"]);
+  setGoalStatus(dir, "active");
+  resumeGoal(dir);
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_blocked");
+  blockGoal(dir, "provider-limit", "provider down");
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    const res = await sweepContinuationsGated(dir, config);
+    assert.deepEqual(res.fed, [], "blocked goal → 零投喂");
+    assert.equal(messagePosts(calls).length, 0);
+  } finally {
+    restore();
+  }
+});
+
+test("A4: 回合预算达上限 → guardian 自动 block(code:round-limit) 且不静默续", async () => {
+  const { dir, config, store } = setupRun();
+  enableOpencode(config);
+  config.self_evolve = structuredClone(config.self_evolve);
+  config.self_evolve.continuation.max_per_session = 5;
+  config.self_evolve.continuation.idle_sec = 60;
+  setProductAcceptance(dir, ["x"]);
+  setGoalStatus(dir, "active");
+  resumeGoal(dir);
+  // goal.yaml 显式字段覆盖：预算上限 1
+  updateGoal(dir, undefined, (g) => {
+    g.max_goal_rounds = 1;
+  });
+  await idleAwakeOcSession(dir, store, "engineer@task-x", "ses_round_cap");
+
+  const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+  const restore = mockServe(calls);
+  try {
+    const first = await sweepContinuationsGated(dir, config);
+    assert.deepEqual(first.fed, ["engineer@task-x"], "预算内正常投喂");
+    assert.equal(readGoal(dir).rounds_started, 1);
+
+    // 达上限：下轮零投喂 + 自动 block(code:round-limit)
+    const second = await sweepContinuationsGated(dir, config);
+    assert.deepEqual(second.fed, [], "达上限不静默续");
+    const goal = readGoal(dir);
+    assert.equal(goal.status, "blocked", "guardian 自动 block");
+    assert.equal(goal.blocked_reason?.code, "round-limit");
+    assert.equal(messagePosts(calls).length, 1, "达上限后无新投喂");
+
+    // 下下轮：blocked → 持续零投喂
+    const third = await sweepContinuationsGated(dir, config);
+    assert.deepEqual(third.fed, []);
   } finally {
     restore();
   }

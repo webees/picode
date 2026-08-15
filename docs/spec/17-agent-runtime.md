@@ -117,7 +117,7 @@ registered → sleeping ⇄ awake → terminated
 
 ### 5.1 输入（只读）
 
-- `goal` / `chunks` / `tasks` 状态  
+- `goal` / `chunks` / `tasks` 状态（goal 含 C1 goal-crossrun 增量字段：`revision` CAS、`rounds_started` / `max_goal_rounds` 回合预算、`activation`（`armed|disarmed`）、`blocked_reason` 政策码——见 §5.4）  
 - bus 未读与 type  
 - staffing / brief 门闩  
 - 超时与 progress  
@@ -148,6 +148,26 @@ registered → sleeping ⇄ awake → terminated
 |task dissolved|terminate 该 task 三实例|
 
 **sess-mgr MUST NOT：** 改 goal.status 为 active、批 merge、改 write_paths、写业务代码。
+
+### 5.4 guardian 续跑 vs goal resume（明界）
+
+两个层面，互不替代（C1 goal-crossrun，P0 A）：
+
+| 维度 | guardian 续跑（会话级机械续跑） | goal resume（goal 级激活授权） |
+|---|---|---|
+| 层面 | 会话 | goal |
+| 机制 | `sweepContinuationsGated`（continuation-gate.ts）对空闲 awake oc- 会话投喂固定续跑 prompt | `picode goal resume` 写 goal.yaml：blocked→active、清 `blocked_reason`、置 `activation: armed` |
+| 门闩 | 受 goal `activation` 门闩：goal active ∧ disarmed → 零投喂 | 回合预算达上限（`rounds_started ≥ max_goal_rounds`）→ 拒绝 |
+| 默认 | 新 run 创建即 `disarmed` → 不自动续跑（防僵尸续跑） | 显式命令才生效 |
+| 恢复 | resume（armed）后下个 guardian tick 恢复投喂 | armed 是 resume 的持久结果 |
+
+**MUST：**
+
+- **guardian 投喂 = 会话级机械续跑**：只受 `activation` 门闩，不改变会话状态机（§4）；goal `blocked` / `completed` / `cancelled` 状态零投喂（block 为机械续跑停止出口）。
+- **goal resume = goal 级激活授权**：持久化在 goal.yaml（`activation: armed`），显式命令才可触发；`set-status`（→active）**不**自动 arm。
+- **`activation=disarmed` 只门闩续跑投喂**：不阻断 run 文件事件推进（`task_ready` / `merge_ready` / `progress_due` 等照常按 §5.3 触发）。
+- **回合预算**：`rounds_started` 每次成功投喂 +1（goal.yaml 落盘）；`rounds_started ≤ max_goal_rounds`（config `self_evolve.goal.max_rounds` 默认 0=不限；goal.yaml 显式 `max_goal_rounds` 字段覆盖）；达上限 resume 拒绝、guardian 自动 `block(code:"round-limit")` 不静默续。
+- **blocked 政策码**（`blocked_reason.code`，lower-kebab）：如 `draft-idle` / `round-limit` / `provider-limit` / `queue-failed`；resume 清除 blocker 回 active 且置 armed。非法状态转换（GOAL_TRANSITIONS 围栏）与陈旧 revision（expected 不符，CAS 围栏）均拒绝（`ILLEGAL_TRANSITION`）。
 
 ---
 
