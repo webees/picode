@@ -377,3 +377,130 @@ test("E7 regression: docs-only persona writing docs/knowledge/** still flagged (
     `expected exactly one E7-outside problem per seat, got: ${JSON.stringify(issues)}`,
   );
 });
+
+// --- I4 子代理写集只收窄（子 ⊆ 父 write_paths；task.yaml `parent_task` 可选字段） ---
+
+/**
+ * I4 fixture: a child (subagent) task under an existing parent task.
+ * `parent_task` is an optional task.yaml field (缺省 = 顶层任务，规则退化为现状).
+ */
+function setupSubagentTask(
+  dir: string,
+  parentTaskId: string,
+  opts: { childTaskId?: string; writePaths: string[]; parentTask?: string },
+): { childTaskId: string } {
+  const childTaskId = opts.childTaskId ?? "task-child-1";
+  const taskDir = path.join(dir, "tasks", childTaskId);
+  fs.mkdirSync(taskDir, { recursive: true });
+  fs.mkdirSync(path.join(taskDir, "brief"), { recursive: true });
+  fs.mkdirSync(path.join(taskDir, "evidence"), { recursive: true });
+  fs.mkdirSync(path.join(taskDir, "handoff"), { recursive: true });
+  fs.mkdirSync(path.join(taskDir, "inbox"), { recursive: true });
+  fs.writeFileSync(
+    path.join(taskDir, "task.yaml"),
+    [
+      `id: ${childTaskId}`,
+      "chunk_id: chunk-child",
+      "goal_id: goal-1",
+      "kind: implement",
+      "status: queued",
+      `write_paths: ${JSON.stringify(opts.writePaths)}`,
+      "read_paths: []",
+      "acceptance: []",
+      `parent_task: ${opts.parentTask ?? parentTaskId}`,
+      "",
+    ].join("\n"),
+  );
+  return { childTaskId };
+}
+
+test("I4: draftPersonas narrows a subagent task's write set to parent ∩ declared (只收窄不放宽)", async () => {
+  const { repo, dir, config, taskId: parentTaskId } = setup();
+  // child declares a write set wider than the parent → effective = parent ∩ declared
+  const { childTaskId } = setupSubagentTask(dir, parentTaskId, {
+    writePaths: ["src/module-a/**", "src/module-b/**"],
+  });
+  await createStaffingRequest(dir, config, childTaskId, { skills: ["typescript"] });
+  draftPersonas(repo, dir, config, childTaskId);
+  for (const seat of ["squad-lead", "engineer", "sdet"]) {
+    const { frontmatter } = parsePersonaFile(
+      path.join(dir, "tasks", childTaskId, "staffing", "personas", `${seat}.md`),
+    );
+    assert.deepEqual(
+      frontmatter.write_paths,
+      ["src/module-a/**"],
+      `${seat}: write_paths should be parent ∩ declared`,
+    );
+    assert.deepEqual(
+      frontmatter.scope_in,
+      ["src/module-a/**"],
+      `${seat}: scope_in should follow the effective write set`,
+    );
+  }
+});
+
+test("I4: checkPersonas passes when subagent persona write_paths ⊆ parent (只收窄合法)", async () => {
+  const { repo, dir, config, taskId: parentTaskId } = setup();
+  const { childTaskId } = setupSubagentTask(dir, parentTaskId, {
+    writePaths: ["src/module-a/**"],
+  });
+  await createStaffingRequest(dir, config, childTaskId, { skills: ["typescript"] });
+  draftPersonas(repo, dir, config, childTaskId);
+  assert.deepEqual(checkPersonas(dir, config, childTaskId), []);
+});
+
+test("I4: checkPersonas structurally rejects a subagent persona wider than its parent (子宽于父)", async () => {
+  const { repo, dir, config, taskId: parentTaskId } = setup();
+  const { childTaskId } = setupSubagentTask(dir, parentTaskId, {
+    writePaths: ["src/module-a/**", "src/module-b/**"], // declared inside the task…
+  });
+  await createStaffingRequest(dir, config, childTaskId, { skills: ["typescript"] });
+  draftPersonas(repo, dir, config, childTaskId); // …but drafted narrowed to parent ∩ declared
+  // manually widen the engineer persona back to the task-level set: inside the
+  // task, outside the parent → only the I4 narrowing check may flag it.
+  const p = path.join(dir, "tasks", childTaskId, "staffing", "personas", "engineer.md");
+  const { frontmatter, body } = parsePersonaFile(p);
+  const mutable = frontmatter as unknown as Record<string, unknown>;
+  mutable.write_paths = ["src/module-a/**", "src/module-b/**"];
+  fs.writeFileSync(p, `---\n${YAML.stringify(mutable).trimEnd()}\n---\n${body}\n`);
+  const issues = checkPersonas(dir, config, childTaskId);
+  const eng = issues.find((i) => i.seat === "engineer");
+  assert.ok(eng, "engineer should have an I4 issue");
+  assert.deepEqual(eng!.problems, [
+    `write_paths outside parent task ${parentTaskId}: src/module-b/**`,
+  ]);
+  await assert.rejects(
+    () => approveStaffing(repo, dir, config, childTaskId),
+    /people-qa failed/,
+  );
+});
+
+test("I4: draftPersonas fails loudly when the parent task is missing (misconfig)", async () => {
+  const { repo, dir, config, taskId: parentTaskId } = setup();
+  const { childTaskId } = setupSubagentTask(dir, parentTaskId, {
+    writePaths: ["src/module-a/**"],
+    parentTask: "task-missing",
+  });
+  await createStaffingRequest(dir, config, childTaskId, { skills: ["typescript"] });
+  assert.throws(() => draftPersonas(repo, dir, config, childTaskId), /parent task not found/);
+});
+
+test("I4: checkPersonas flags a parent_task that disappeared (fails loudly)", async () => {
+  const { repo, dir, config, taskId: parentTaskId } = setup();
+  const { childTaskId } = setupSubagentTask(dir, parentTaskId, {
+    writePaths: ["src/module-a/**"],
+  });
+  await createStaffingRequest(dir, config, childTaskId, { skills: ["typescript"] });
+  draftPersonas(repo, dir, config, childTaskId);
+  // simulate misconfig after drafting: parent gone / parent_task typo
+  const taskYaml = path.join(dir, "tasks", childTaskId, "task.yaml");
+  const raw = fs.readFileSync(taskYaml, "utf8");
+  fs.writeFileSync(
+    taskYaml,
+    raw.replace(`parent_task: ${parentTaskId}`, "parent_task: task-missing"),
+  );
+  const issues = checkPersonas(dir, config, childTaskId);
+  const eng = issues.find((i) => i.seat === "engineer");
+  assert.ok(eng, "engineer should be flagged");
+  assert.match(eng!.problems.join("; "), /parent task not found/);
+});
