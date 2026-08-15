@@ -2,7 +2,20 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { ErrorCode, PicodeError, readRunSecret, worktreePath, type PicodeConfig, type SessionRecord } from "@picode/core";
+import {
+  APPROVAL_POLICY_DEFAULT,
+  APPROVAL_POLICY_ENV,
+  ErrorCode,
+  PicodeError,
+  READ_BEFORE_EDIT_DEFAULT,
+  READ_BEFORE_EDIT_ENV,
+  readRunSecret,
+  SANDBOX_DEFAULT_MODE,
+  SANDBOX_MODE_ENV,
+  worktreePath,
+  type PicodeConfig,
+  type SessionRecord,
+} from "@picode/core";
 import { issueToken } from "@picode/bus";
 import { SessionStore } from "./session-store.js";
 import { OpencodeSpawner, wakeWithOpencode } from "./opencode-adapter.js";
@@ -152,6 +165,11 @@ export function buildPiEnv(
     PICODE_CWD: taskWorktreeCwd(dir, config, session.agent_id),
     PICODE_TRANSCRIPT_DIR: path.join(dir, "transcripts"),
     PICODE_RUN_ALLOWLIST: JSON.stringify(config.run_allowlist),
+    // E 沙箱/审批/守卫会话 env（chunk-c3）：operator env 覆盖 > 会话默认
+    // （本轮不新增 config 键，守 D104；沙箱/审批/守卫配置走 env + core 常量）
+    [SANDBOX_MODE_ENV]: process.env[SANDBOX_MODE_ENV] ?? SANDBOX_DEFAULT_MODE,
+    [APPROVAL_POLICY_ENV]: process.env[APPROVAL_POLICY_ENV] ?? APPROVAL_POLICY_DEFAULT,
+    [READ_BEFORE_EDIT_ENV]: process.env[READ_BEFORE_EDIT_ENV] ?? READ_BEFORE_EDIT_DEFAULT,
   };
 }
 

@@ -18,6 +18,24 @@ test("ErrorCode registry values are stable strings", () => {
   }
 });
 
+test("C3: 沙箱/审批/读前编辑错误码已注册（E1-E3 域）", () => {
+  // 沙箱三态与越界拒绝（E1）
+  assert.equal(ErrorCode.SANDBOX_MODE_INVALID, "SANDBOX_MODE_INVALID");
+  assert.equal(ErrorCode.SANDBOX_DENIED, "SANDBOX_DENIED");
+  // 一次性升级审批（E2）
+  assert.equal(ErrorCode.ESCALATION_MALFORMED, "ESCALATION_MALFORMED");
+  assert.equal(ErrorCode.SANDBOX_ESCALATION_INVALID, "SANDBOX_ESCALATION_INVALID");
+  assert.equal(ErrorCode.APPROVAL_POLICY_INVALID, "APPROVAL_POLICY_INVALID");
+  assert.equal(ErrorCode.APPROVAL_PENDING, "APPROVAL_PENDING");
+  assert.equal(ErrorCode.APPROVAL_DENIED, "APPROVAL_DENIED");
+  assert.equal(ErrorCode.APPROVAL_REJECTED, "APPROVAL_REJECTED");
+  assert.equal(ErrorCode.APPROVAL_NOT_FOUND, "APPROVAL_NOT_FOUND");
+  assert.equal(ErrorCode.APPROVAL_ALREADY_DECIDED, "APPROVAL_ALREADY_DECIDED");
+  assert.equal(ErrorCode.APPROVAL_ALREADY_USED, "APPROVAL_ALREADY_USED");
+  // read-before-edit 守卫（E3）
+  assert.equal(ErrorCode.FS_NOT_OBSERVED, "FS_NOT_OBSERVED");
+});
+
 test("PicodeError carries a stable code and message", () => {
   const e = new PicodeError(ErrorCode.BUS_TYPE_DENIED, "unknown bus message type: x");
   assert.ok(e instanceof Error);

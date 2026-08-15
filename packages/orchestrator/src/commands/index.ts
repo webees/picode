@@ -16,6 +16,7 @@ import { evolveCommands } from "./evolve.js";
 import { windowCommands } from "./window.js";
 import { statusCommands } from "./status.js";
 import { intakeCommands } from "./intake.js";
+import { approvalCommands } from "./approval.js";
 import { selfDriveCommands, selfDriveFallback } from "./self-drive.js";
 import { checkpointCommands } from "./checkpoint.js";
 import { superviseCommands } from "./supervise.js";
@@ -36,6 +37,7 @@ export const COMMANDS: Command[] = [
   ...windowCommands,
   ...statusCommands,
   ...intakeCommands,
+  ...approvalCommands,
   ...selfDriveCommands,
   ...superviseCommands,
 ];
@@ -55,6 +57,7 @@ export const DOMAIN_ORDER = [
   "evolve",
   "window",
   "intake",
+  "approval",
   "self-drive",
   "supervise",
 ];
