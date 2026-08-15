@@ -784,3 +784,84 @@ supervise 共用同一实现（D093-1）。
 **已定（D093）：命令正式化。** STOPPED 仅是退出信号，不驱动任何状态变更；
 `--interval` 循环在操作者前台进程中运行，中断即停止观测。tokens 数据源 = serve 契约
 （D058，消息级 `info.tokens.total`）。
+
+## 18. 配置合并深拷贝语义（deepMerge，D099）
+
+权威正文：`packages/core/src/config.ts`（`deepMerge` + `cloneValue`）。
+
+**D099 已定：配置合并返回与 DEFAULTS/overlay 完全独立的深拷贝。** 修复前
+`deepMerge(DEFAULTS, {})` 对未覆盖嵌套子树保留共享引用（`out={...a}` 浅拷贝），导致
+「改加载后 config」污染 DEFAULTS 全局单例、同进程后续 `loadConfig` 读到被篡改值
+（Bug A，guardianTick 顺序依赖失败）。修复后 `cloneValue` 递归深拷贝全分支：
+对象分支（未覆盖键深拷贝 / 覆盖键递归 / b-only 键深拷贝）、数组分支（byId/rest 项
+深拷贝）、fallback 深拷贝。
+
+|语义|说明|
+|------|------|
+|**合并结果独立性** ★|返回对象与 DEFAULTS / overlay 任意一侧无共享引用；改返回对象不再污染任何后续加载|
+|**数组按 id 合并** ★|同 id 项合并、`enabled:false`/`_delete` 删除、无 id 项追加（13 §2 语义，用例守护）|
+|**回归保障** ★|「同进程两次 loadConfig 互不影响」（第二次 opencode.enabled 保持默认 false）+ 官方 npm test 全绿|
+
+## 19. E2/E7 排除语义按层分组判定（D100）
+
+权威正文：`packages/core/src/evolve.ts`（`isEvolveWritePathAllowed` 共享判定）+ 
+`packages/orchestrator/src/staffing.ts`（`checkPersonas` 委托调用）。
+
+**D100 已定：多层并集下按层分组判定，carve-out 只否决所属层。** 修复前
+`layers=[knowledge,docs]` 时 docs 层 carve-out `!docs/knowledge/**` 被扁平化进并集，
+「任一 exclude 命中即 throw」误拒 knowledge 层自身 include（E2 evolve.ts 与 E7
+staffing.ts **双处同病**）。
+
+|语义|说明|
+|------|------|
+|**按层分组判定** ★|路径 ∈ 某层 includes ∧ ∉ 该层 excludes → 放行；carve-out 只否决其所属层，不否决其他层 include|
+|**goal forbidden_paths 全局否决** ★|`forbidden_paths` 优先于一切层判定，命中即拒|
+|**单层语义不变** ★|docs 单层（无 knowledge 层）对 `docs/knowledge/**` 仍拒（orchestrator evolve.test.ts:66-81 原样保留，防放水回归）|
+|**单一事实源** ★|E2 `assertEvolveWritePathAllowed` 与 E7 `checkPersonas` 均委托 core 共享判定，删除本地同病逻辑|
+
+## 20. yagni 死配置处置（D101 · D055 局部解除）
+
+权威正文：`packages/core/src/config.ts` DEFAULTS（键集）+ `docs/spec/17-agent-runtime.md` /
+`19-self-evolution.md`（关联规范面）。
+
+**D101 已定：D055 死配置 5 删 1 留。** 逐键全仓 grep 零读取者删除（接口+DEFAULTS
+同步删），有真实读取点者保留并刷新注释标记。
+
+|键|处置|说明|
+|------|------|------|
+|`sess_mgr.enabled`|**删**|零读取（D055 reserved）|
+|`sess_mgr.allow_orch_force_wake`|**删**|零读取（D055 reserved）|
+|`self_evolve.enabled`|**删**|零读取（goal.kind 驱动，D055 reserved）|
+|`self_evolve.require_sponsor_merge`|**删**|零读取（D055 reserved）|
+|`self_evolve.knowledge_log_glob`|**删**|零读取（路径固定，D055 reserved）|
+|`sess_mgr.idle_sleep_sec`|**留**|真实读取点 `self-drive.ts:373,380`（`sleepIdleSessions` opt-in）；注释刷新为 reserved 标记|
+
+**兼容不变量**：既有用户配置含已删键仍可加载——分层 merge 不拒未知键、
+`validateConfig` 不查已删键（loader.test.ts 新用例守护）。
+
+## 21. ponytail 清理（死导出 / 薄壳 / 夹具单源，D102）
+
+权威正文：各 chunk 交接包（C1/C3/C4/C5）+ DECISIONS D102 详条。
+
+**D102 已定：监督者 ponytail-audit 三类清理全量落地，行为零变化。**
+
+|项|处置|验证|
+|------|------|------|
+|死导出 ×3（`roomDisplay`/`isPicodeError`/`canConsumeModel`）|定义删除 + 测试引用同步（C1/C3）|grep 三面（prod+test+dist）零残留|
+|单导出薄壳 ×3（mcp-server `errors.ts`/`schema.ts`、orchestrator `jsonl.ts`）|并入调用方（C4）：toMcpError/toZodShape → index.ts；readJsonl → rules-engine 单宿主导出 + merge.ts 跨引；测试改走 test-utils 共享 helper（**禁止 import ./index.js**，触发 serve 启动）|build+test 全绿；跨引防复制粘贴（C4 复核打回修正）|
+|测试夹具 ×24（本地 tmpGitRepo/mkdtemp）|收敛 test-utils 共享单源（C5）：`gitInit` branch 选项 + `tmpGitRepo` 包装；A/B/C/D 四类逐字等价（branch:null 保留 `git init -q` 形态）|官方 npm test 502/502 全绿（core 125/bus 19/orch 307/pi 17/mcp 18/dash 16）；行为等价抽查|
+
+## 22. 环境教训：工作房 node_modules 断链治理（D103）
+
+权威正文：各 chunk handoff/evidence.yaml（C1/C2/C4 同型问题 + C4 取证流程）+ DECISIONS D103 详条。
+
+**D103 已定：工作房环境治理流程沉淀为 run 标准操作。** git worktree 内
+`node_modules/@picode/*` 指向不存在的 `.picode/node_modules`（断链）时，`@picode/core`
+解析会落主仓**陈旧 dist**，测试/构建读到旧产物（TS2688 / 串扰）——C1/C2/C4 三次复现。
+
+|步骤|说明|
+|------|------|
+|重建 `node_modules/@picode/*` 自链|指向本 worktree 的 packages dist；gitignored 零 repo diff|
+|清理 `*.tsbuildinfo`|`find packages -name "*.tsbuildinfo" -delete`，避免瞬时 TS2688|
+|官方 `npm test`（HOME 隔离）|`npm test` 自带 mktemp；补充包级跑另设 `TH=$(mktemp -d)`|
+|sdet/审查复建环境重复上述步骤|C4 evidence 按此流程双跑取证（/private/tmp/picode-base-c4-*、picode-chunk-c4-*）|

@@ -296,6 +296,11 @@
 |D094|**缓项留档：feed 映射文档化 / checkpoint 进 status 三面等**：① summary-noise 消费方（feed/re-spawn/checkpoint）剔噪口径映射图鉴文档化（现仅散见 DECISIONS/catalog）；② checkpoint 进 statusSnapshot 三面（MVP 仅 CLI 消费面，三面同源需动 status 契约 + mcp-server，E13 候选 1）；③ 自动捕获默认开启评估（观测价值验证后考虑翻转 `checkpoints.enabled` 默认值）；④ 摘要语义化/关键动作提取（D080 延续）。均留档待评估，未立项不实现，实施须重新立项并走 D089 领号|
 |D095|**checkpoint 观测三面同源（status/CLI/MCP）**：StatusSnapshot 增 checkpoint 段（每任务 latest checkpoint：task_id/latest_at/boundary/sha256）；`picode checkpoint status` 与 MCP checkpoint_status 同源输出|
 |D096|**checkpoint 自动捕获默认开启（评估后）**：`self_evolve.checkpoints.enabled` 默认翻转 true（guardian_tick/pre_merge 自动捕获生效）；显式 false 关闭|
+|D099|**deepMerge 深拷贝修复（Bug A · C1 task-config-singleton）**：`deepMerge(DEFAULTS,{})` 未覆盖嵌套子树与 `DEFAULTS` 共享引用（`out={...a}` 浅拷贝）→ `enableOpencode()` 改加载后 config 污染全局单例 → 同进程后续 `loadConfig` 读到被篡改值 → guardianTick 用例顺序依赖失败（官方测试 303/304 失败 1；不隔离 HOME 15+ 失败）。`cloneValue` 递归深拷贝根治共享状态——对象/数组/fallback 全分支深拷贝，合并结果与 DEFAULTS/overlay 完全独立；merge 语义不变（数组按 id、`enabled:false`/`_delete` 删除、无 id 追加）|
+|D100|**E2/E7 排除语义按层分组判定（Bug B · C2 task-evolve-glob-fix）**：`layers=[knowledge,docs]` 多层并集下 docs 层 carve-out `!docs/knowledge/**` 被扁平化，「任一 exclude 命中即 throw」误拒 knowledge 层 include（E2 evolve.ts + E7 staffing.ts **双处同病**）。core 新增共享判定 `isEvolveWritePathAllowed`——**按层分组**：路径 ∈ 某层 includes ∧ ∉ 该层 excludes → 放行；goal `forbidden_paths` 全局否决；carve-out 只否决所属层。单层语义不变（docs 单层仍拒 `docs/knowledge/**`）|
+|D101|**yagni 死配置清理（D055 局部解除 · C1 task-config-singleton）**：5 删 1 留——删 `sess_mgr.enabled`/`sess_mgr.allow_orch_force_wake`/`self_evolve.enabled`/`self_evolve.require_sponsor_merge`/`self_evolve.knowledge_log_glob`（接口+DEFAULTS 同步删，grep 零读取）；留 `sess_mgr.idle_sleep_sec`（`sleepIdleSessions` opt-in 真实读取点，仅刷新注释标记 reserved）。既有用户配置含已删键仍可加载（分层 merge 不拒未知键）|
+|D102|**ponytail 清理（死导出×3 + 薄壳×3 + 夹具单源）**：死导出 `roomDisplay`（C1）/`isPicodeError`/`canConsumeModel`（C3）删除，grep 三面零残留；单导出薄壳 mcp-server `errors.ts`/`schema.ts`、orchestrator `jsonl.ts` 并入调用方（C4，readJsonl 单宿主导出+跨引）；24 处本地 `tmpGitRepo`/mkdtemp 夹具收敛 test-utils 共享单源（C5，行为不变）|
+|D103|**环境教训：工作房 node_modules 断链治理（C1/C2/C4 同型问题）**：worktree 内 node_modules 指向不存在的 `.picode/node_modules` 断链，`@picode/core` 解析落主仓陈旧 dist——三次复现均以重建自链修复（gitignored 零 repo diff）；工作房环境治理流程（node_modules 自链 + tsbuildinfo 清理 + HOME 隔离）沉淀为 run 标准操作，后续工作房统一布局|
 ## D084 — Skill harness 落地（技能承载体系）
 - 2026-08-14 · 来源：run-lead 自治规划 run-2026-08-13T23-50-59-484Z（从 anthropics/skills + agentskills spec 学习，改 picode 自身技能承载体系）
 - 问题：`paths.skills_root` 是 D055 死键（声明零读取），两个种子 SKILL.md 无任何校验守卫，新 skill 可任意书写；`Persona.skills[]` 是必填维度但零消费；ready 消息若硬注入 skill 正文会爆 context
@@ -416,3 +421,54 @@
 - 2026-08-14 · 来源：run-2026-08-14T11-14-26-837Z 规划（E14 后续候选 #2 评估）
 - 决定：`self_evolve.checkpoints.enabled` 默认翻转 true（guardian_tick 周期捕获 + pre_merge 捕获生效）；显式 false 可关闭；快照只读/文件为准边界不变（D082）
 - commit: 2c0d718（C2）
+
+## D099 — deepMerge 深拷贝修复（Bug A · C1 task-config-singleton）
+- 2026-08-15 · 来源：run-2026-08-15T01-12-43-3NZ C1（run-lead 实证：guardianTick 顺序依赖失败 + 不隔离 HOME 15+ 失败）
+- 问题：`deepMerge(DEFAULTS, {})`（core/src/config.ts:537-566，558-564 `out={...a}` 浅拷贝）→ 未覆盖嵌套子树与 `DEFAULTS` 共享引用 → `config.opencode === DEFAULTS.opencode` → `enableOpencode()`（self-drive.test.ts:172-177）改「加载后 config」→ **污染 DEFAULTS 全局单例** → 同进程后续 `loadConfig`（loader.ts:32-54）读到被篡改值（opencode.enabled=true）→ guardianTick 用例顺序依赖失败（官方测试 303/304 失败 1；不隔离 HOME 15+ 失败）
+- 决定：`cloneValue` 递归深拷贝——对象分支未覆盖键深拷贝、覆盖键递归 deepMerge、b-only 键深拷贝；数组分支 byId/rest 项深拷贝；fallback 深拷贝。合并结果与 DEFAULTS/overlay 完全独立。**语义保持**：数组按 id 合并、`enabled:false`/`_delete` 删除、无 id 项追加（13 §2 既有+新用例守护）
+- 附带发现（假绿→暴露）：checkpoint-auto 用例（self-drive.test.ts:815-846）基线「绿」依赖 Bug A 污染的静默 wake 失败——修复移除污染后暴露（task 无 progress.json → `sweepProgress` 判 staleSec=∞ → `progress_due` 正常唤醒，与 checkpoint 捕获无关）。**裁决 = co-001 变更单**（run-lead 2026-08-15 授权 C1 行级夹具修复，`188b057`，仅 1 文件 +13 行；不碰 guardianTick/checkpoint 实现语义）
+- 实现：`packages/core/src/config.ts`（cloneValue 深拷贝）+ `config.test.ts`（两次 loadConfig 互不影响回归）+ `loader.test.ts`（user-global enabled 存活 / defaults 深等语义不变）+ `orchestrator/src/t-regression.test.ts`（roomDisplay 引用清理）
+- 验证：core 122/122、bus 19/19、orchestrator **304/304**、pi-extension 17/17、mcp-server 18/18、dashboard-server 16/16，官方 `npm test`（HOME 隔离）`FULL_TEST_EXIT=0`；C1 合并（2df7486）后全量 502/502 复核通过
+- commit: d229eea（C1 task-config-singleton 合并）+ 188b057（co-001 夹具修复）
+
+## D100 — E2/E7 排除语义按层分组判定（Bug B · C2 task-evolve-glob-fix）
+- 2026-08-15 · 来源：run-2026-08-15T01-12-43-3NZ C2（run-lead 实证：E7 与 E2 双处同病，比审计记录多一处）
+- 问题：`layers=[knowledge,docs]` → `evolveWritePaths` 扁平并集（evolve.ts:64-75）→ docs 层 carve-out `!docs/knowledge/**` 在并集后被扁平化 → `assertEvolveWritePathAllowed`（evolve.ts:85-91）「任一 exclude 命中即 throw」**误拒 knowledge 层 include**（E2）；`checkPersonas`（staffing.ts:289-296）`outsideLayer = excluded || !includes` **同病**（E7）
+- 决定：core 新增共享判定 `isEvolveWritePathAllowed(config, evolve, writePath)`——**按层分组**：路径 ∈ 某层 includes ∧ ∉ 该层 excludes → 放行；goal `forbidden_paths` 全局否决；carve-out 只否决其所属层，不否决其他层 include。E2 `assertEvolveWritePathAllowed` 委托该判定（保留 `excluded by evolve layer` / `not inside any evolve layer` 两种错误消息）；E7 `checkPersonas` 改调该判定（删除本地同病逻辑，import 同步清理）。**单一事实源**
+- 单层语义不变（硬约束）：docs 层（无 knowledge 层）对 `docs/knowledge/**` 仍拒（orchestrator evolve.test.ts:66-81 原样保留，防「为修 bug 放水」）
+- 实现：core `evolve.ts` + `evolve.test.ts`（×4 双层放行/单层仍拒/forbidden 全局否决+非层内仍拒/并集形态契约）、orchestrator `staffing.ts` + `staffing.test.ts`（×2 E7 双层零问题/单层仍报）、`evolve.test.ts`（×1 多层放行对照）
+- 验证：build 0 error；针对性回归 37/37；官方 npm test 506/507（唯一失败=guardianTick 基线 flake，stash 对照 303/304 同失败，单独跑 1/1 通过）；orchestrator 306/307 vs 基线 303/304（+3 新用例全过）；diff 门禁 5/5 ⊆ write_paths
+- commit: 492e2ac → merge **362718a**（C2 task-evolve-glob-fix）
+
+## D101 — yagni 死配置清理（D055 局部解除 · C1 task-config-singleton）
+- 2026-08-15 · 来源：run-2026-08-15T01-12-43-3NZ C1（ponytail-audit 转达 + D055 reserved 6 处逐键甄别）
+- 问题：D055 预留的 6 个配置键零读取（sess_mgr.enabled / allow_orch_force_wake / self_evolve.enabled / require_sponsor_merge / knowledge_log_glob / idle_sleep_sec），配置面冗余误导
+- 决定：5 删 1 留——
+  - **删 ×5**（全仓 grep 零读取，接口+DEFAULTS 同步删）：`sess_mgr.enabled`、`sess_mgr.allow_orch_force_wake`、`self_evolve.enabled`、`self_evolve.require_sponsor_merge`、`self_evolve.knowledge_log_glob`
+  - **留 ×1**：`sess_mgr.idle_sleep_sec`——真实读取点 `orchestrator/src/self-drive.ts:373,380`（`sleepIdleSessions` opt-in），**不得删除**，仅刷新注释标记 reserved
+  - **兼容**：既有用户配置含已删键仍可加载（分层 merge 不拒未知键、validateConfig 不查已删键，loader.test.ts 新用例守护）
+- 实现：`packages/core/src/config.ts` + `config.test.ts`（D4 断言 :85 self_evolve.enabled 同步）+ `loader.test.ts`
+- 验证：core 122/122、官方 npm test 全绿（FULL_TEST_EXIT=0）；残留键配置可加载
+- commit: d229eea（C1 task-config-singleton）；docs 侧摘录同步（default-config.snippet.yaml）归 C6（D101 落地）；spec 17/19 历史 yaml 示例仍含已删键字样（非运行时引用，C6 不动，见 E16 剩余风险留档）
+
+## D102 — ponytail 清理（死导出×3 + 薄壳×3 + 夹具单源 · C1/C3/C4/C5）
+- 2026-08-15 · 来源：run-2026-08-15T01-12-43-3NZ（plan (e) 排期：死导出 / 薄壳并入 / 夹具单源）
+- 问题：监督者 ponytail-audit 全仓审计——死导出符号（roomDisplay / isPicodeError / canConsumeModel，prod 引用 0 仅测试引用）；单导出薄壳（mcp-server errors.ts/schema.ts、orchestrator jsonl.ts，复制粘贴风险）；24 处本地 tmpGitRepo/mkdtemp 夹具重复
+- 决定：
+  - **死导出 ×3**：`roomDisplay` 定义（config.ts:779）+ 唯一测试引用 t-regression.test.ts:12,86 同 chunk 闭环（C1）；`isPicodeError`/`canConsumeModel` 删除 + 引用同步（C3：errors.test.ts:8,25、core session.test.ts:6,68-70、orchestrator session.test.ts:8,61-65 改内联等价断言），grep 三面（prod+test+dist）零残留
+  - **薄壳 ×3 并入调用方（C4）**：mcp-server `errors.ts`（toMcpError → index.ts）/ `schema.ts`（toZodShape → index.ts）并入 + 测试改走 test-utils 共享 helper（**禁止 import ./index.js**——顶层 `await server.connect(StdioServerTransport)` 会触发服务器启动）；orchestrator `jsonl.ts`（readJsonl）→ **rules-engine.ts 单宿主导出 + merge.ts 跨引**（C4 复核打回复制粘贴，279c8d7 修正）
+  - **夹具单源（C5）**：两包 test-utils 共享 `gitInit`（branch 选项）+ `tmpGitRepo` 包装，24 文件本地定义归零（A 类 5 直换 / B 类 15 / C 类 2 特殊步骤保留 / D 类 2 自定义行为 branch:null 逐字保留）；行为零变化（分支/email/name/前缀/自定义步骤逐字等价抽查）
+- 验证：C1 合并 2df7486、C3 合并 f4c4a4b、C4 合并 6fa14ab、C5 合并 1f93f55；每合并点官方 npm test 全绿，C5 后全量 **502/502**（core 125/bus 19/orch 307/pi 17/mcp 18/dash 16）；diff 门禁 C5 26/26 ⊆ write_paths
+- commit: d229eea（C1）/ ef25cd2（C3）/ 9f5a2f2+279c8d7（C4）/ adf7cda（C5）
+
+## D103 — 环境教训：工作房 node_modules 断链治理（C1/C2/C4 同型问题）
+- 2026-08-15 · 来源：run-2026-08-15T01-12-43-3NZ 实施期观察（C1/C2/C4 工作房同型问题上报）
+- 问题：git worktree 内 `node_modules/@picode/*` 指向不存在的 `.picode/node_modules`（断链），`@picode/core` 解析落主仓**陈旧 dist**，测试/构建读到旧产物（TS2688 瞬时错误 / 串扰）；C1/C2/C4 三次复现，每次均需重建自链修复
+- 决定：工作房环境治理流程沉淀为 run 标准操作——
+  1. worktree 内重建 `node_modules/@picode/*` 自链（指向本 worktree 的 packages dist）
+  2. `find packages -name "*.tsbuildinfo" -delete` 清理缓存，避免瞬时 TS2688
+  3. 官方 `npm test`（HOME 隔离）跑全量；补充包级跑另设 `TH=$(mktemp -d)`
+  4. sdet/审查复建环境须重复上述步骤（gitignored 自链零 repo diff）
+- 影响：后续 run 工作房统一布局（node_modules 自链 + 缓存清理 + HOME 隔离）；不改变任何业务语义，纯环境/工具面治理
+- 验证：C4 evidence（精卫）按此流程双跑取证（/private/tmp/picode-base-c4-*、picode-chunk-c4-*）；C5 全量 502/502 复证
+- commit: 无独立提交（流程沉淀，证据见各 chunk handoff/evidence.yaml）

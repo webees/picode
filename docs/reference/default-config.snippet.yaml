@@ -5,9 +5,7 @@
 config_schema_version: "1"
 
 sess_mgr:
-  enabled: true            # Reserved (D055): 未读
-  idle_sleep_sec: 600      # Reserved (D055): 未读
-  allow_orch_force_wake: true   # Reserved (D055): 未读
+  idle_sleep_sec: 600      # 读取点 self-drive.ts sleepIdleSessions（D101 保留，opt-in）；D055 标记已解除
   max_awake: 8
   always_register: true
   rules:
@@ -154,12 +152,9 @@ windows:
 run_allowlist: []          # 空 = run_allowlisted 全拒（COMMAND_NOT_ALLOWLISTED）
 
 self_evolve:
-  enabled: true            # Reserved (D055): 未读（goal.kind 驱动）
   default_kind: delivery
   allowed_layers: [knowledge, prompts, docs, tests]
   verify_commands: ["npm test"]
-  require_sponsor_merge: true                # Reserved (D055): 未读
   require_code_review_on_code_layer: true
-  knowledge_log_glob: "docs/knowledge/evolve/"   # Reserved (D055): 路径固定
   platform_root_markers: ["package.json"]
   forbidden_path_globs: ["**/.env", "**/.env.*", "**/secrets/**", "**/*.pem"]

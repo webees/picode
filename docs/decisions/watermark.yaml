@@ -1,5 +1,5 @@
 schema_version: "1"
-next_number: 95
+next_number: 104
 reservations:
   - run: run-2026-08-14T07-27-45-654Z
     start: 89
@@ -12,4 +12,16 @@ reservations:
   - run: run-2026-08-14T10-07-06-439Z
     start: 92
     count: 3
+    status: landed
+  - run: run-2026-08-14T11-14-26-837Z
+    start: 95
+    count: 2
+    status: landed
+  - run: run-2026-08-14T11-14-26-837Z
+    start: 97
+    count: 2
     status: reserved
+  - run: run-2026-08-15T01-12-43-3NZ
+    start: 99
+    count: 5
+    status: landed
