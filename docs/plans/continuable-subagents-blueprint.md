@@ -1,11 +1,11 @@
-<!-- 文档小组产物 · chunk-c4-continuable-blueprint · drafted_by: engineer（覃思/经纬） · checked_by: sdet（校雠）· 状态：draft（输入 gate 未满足，brief 引用条目为占位） -->
+<!-- 文档小组产物 · chunk-c4-continuable-blueprint · drafted_by: engineer（覃思/经纬） · checked_by: sdet（校雠）· 状态：v1 写实（输入 gate 满足：brief 已落盘 2026-08-15T17:05+0700；§5 引用写实由 squad-lead 擘画按 brief 组装，待 sdet 复核） -->
 <!-- run_id: run-2026-08-15T02-30-00-DSH · baseline: 6b9610b · 写集：docs/plans/continuable-subagents-blueprint.md（纯 docs 层，零代码零配置） -->
 
 # C4 — continuable 子代理集成蓝图（docs 层存档）
 
-> **一句话**：picode 下轮若做「可续子代理」，方向 = **转录+摘要+续跑投喂增强**（现状 `continuation.ts` 语义的延伸，增量 steer + durable 身份 + 三道围栏），**不引入事件溯源恢复路径**（守 D002 文件真相，D082 只读先例）。本蓝图给出取舍论证、与 `continuation.ts`/`opencode-adapter` 的衔接点、docs/spec/17 修订点清单、Pi 不支持冷恢复时的降级方案。
+> **一句话**：picode 下轮若做「可续子代理」，方向 = **转录+摘要+续跑投喂增强**（现状 `continuation.ts` 语义的延伸，增量 steer + durable 身份 + 三道围栏），**不引入事件溯源恢复路径**（守 D002 文件真相，D082 只读先例）。本蓝图给出取舍论证、与 `continuation.ts`/`opencode-adapter` 的衔接点、docs/spec/17 修订点清单、冷恢复能力不足时的降级方案。
 >
-> **输入 gate 状态（2026-08-15）**：`research/briefs/pi-persistence.md` **尚未落盘**（`research/briefs/` 为空目录）。按 WORK_BRIEF 输入 gate 纪律，凡依赖该 brief 的条目一律以 **`[待写实]` 占位标注**呈现，不猜测、不代查；brief 到达后由 sdet 核对、写实并刷新本文件修订表。
+> **输入 gate 状态（v1 写实）**：`research/briefs/pi-persistence.md` **已落盘**（2026-08-15T17:05+0700；ind-res 产出，含来源 URL + retrieved_at）。brief 结论：**支持（部分接口限制）**——opencode（picode 实际集成运行时）原生支持 durable session identity + cold resume（同 sessionID 续写）；关键限制在 picode 侧使用方式（sleep 现走 DELETE 销毁会话）。据此 §2.4 分支裁决 = **分支①（resume API 直连）为主路径**，§4 增量 steer 降级方案转「兜底 + 投喂语义增强」。引用条目见 §5（含 URL + retrieved_at）。
 
 ---
 
@@ -83,7 +83,7 @@
 
 - **持久 id = `agent_id`（含 task 绑定）**，跨轮/跨进程/跨 serve 重启不变；**ephemeral 句柄 = `pi_session_id`（`oc-<id>`）**，只在本 run 内、serve 存活期内有效。两者分层：`agent_id` 进文件真相（session.yaml），`oc-<id>` 只是"当前激活的 serve 会话"指针。
 - 子代理身份建议沿用 `agent_id` 命名空间（如 `subagent@<parent-task>-<n>` 或任务席位模式——**【推断】** 具体命名属下轮决策，本蓝图只钉"持久 id 复用 agent_id 主键、不新建 id 体系"原则）。
-- 若 Pi 支持持久会话（待 brief 写实）：`pi_session_id` 可扩展"平台持久会话引用"字段（保留句柄 + 冷恢复目标），但**该字段仍只是文件真相里的一个指针，不承担真相**（衔接 D002/D082 边界）。
+- 若 brief 支持持久会话（**v1 写实：支持**）：`pi_session_id` 可扩展"平台持久会话引用"字段（保留句柄 + 冷恢复目标——resume = 同 sessionID `POST /session/{id}/message`，brief §2.2），但**该字段仍只是文件真相里的一个指针，不承担真相**（衔接 D002/D082 边界）。
 
 ### 2.2 父→子消息通道（opencode `/session/{id}/message`）
 
@@ -108,7 +108,7 @@
 **设计建议（interrupt 保活）**：
 
 - **interrupt（暂停）≈ `sleep`**：保留会话身份、转录、预算与记忆指针；**resume（恢复）≈ `wake` + 重投喂（含摘要）**。现状"sleep 清 `pi_session_id`"意味着恢复时要么 `sendReady`（serve 会话还在）要么重 spawn（注入摘要）——两条恢复腿都已存在。
-- 若 Pi 不支持冷恢复（待 brief）：interrupt 保活 = sleep + 转录完整 + 预算持久化，恢复 = wake + 摘要投喂（现状路径，无需新机制）；若支持：sleep 可保留平台会话引用，恢复直连（见 2.1）。
+- **v1 写实（brief 支持）**：interrupt 保活 = sleep **保留**平台会话引用（不再 DELETE，或 `PATCH archived`，brief §4.2）+ 转录完整 + 预算持久化；恢复 = wake 走 resume（`GET /session/{id}` 校验存在 → `POST /session/{id}/message` 续写，现成 `sendReady` 直接接线），404/失联回退重 spawn + 摘要投喂（brief §4.2 路径 A）。
 - 保活不变量：interrupt/resume 不得丢转录（jsonl append-only）、不得重算预算（`recordContinuation` 幂等计数）、不得丢未认领工作（**现状缺 cancel 保留队列语义**，survey #5@197 点名 —— 列为下轮候选）。
 
 ### 2.4 subagent-settled 通知映射（DSH agentEvents → picode 事件引擎）
@@ -150,9 +150,9 @@
 
 ---
 
-## 4. 降级方案：Pi 不支持冷恢复 → 增量 steer 而非整体重投
+## 4. 降级方案：冷恢复能力不足时 → 增量 steer 而非整体重投
 
-> 触发条件与前提：**Pi/opencode serve 不支持持久会话 cold-resume**（结论待 `research/briefs/pi-persistence.md` 写实；当前为条件式预案，不以假定代替 brief 结论）。
+> 触发条件与前提（v1 写实）：brief 结论 = opencode **支持** cold resume（同 sessionID 续写），故本方案由「若 Pi 不支持冷恢复时的主路径」转为 **「resume API 失效 / serve 数据目录迁移 / 平台不可用时的兜底」+「投喂语义增强」**（brief §4.5：转录重投喂与 resume API 可叠加）。增量 steer 语义独立于 resume 是否可用，作为下轮 I1 保留建议。
 
 ### 4.1 现状"整体重投"语义（作为对照基线）
 
@@ -178,14 +178,51 @@
 
 ---
 
-## 5. Pi 持久化 brief 引用（输入 gate · 未到前留占位）
+## 5. Pi 持久化 brief 引用（输入 gate · 已写实）
 
-> 唯一事实来源：`research/briefs/pi-persistence.md`（ind-res 产出，含来源 URL + retrieved_at）。**截至本蓝图编写时刻（2026-08-15）该文件未落盘**，以下条目全部为占位标注；brief 到达后由 sdet 核对、写实并更新修订表。**不猜测、不代查**（WORK_BRIEF §4 输入 gate 纪律；engineer 人设禁区）。
+> 事实来源：`research/briefs/pi-persistence.md`（ind-res 产出，run-2026-08-15T02-30-00-DSH / task-chunk-c4-continuable-blueprint；检索时间 2026-08-15T17:04:17+0700）。**brief 已于 2026-08-15T17:05+0700 落盘**，以下条目为按 brief 写实；§2.1 分支选择据此裁决。本地勘察（§3.1 表）由 brief 引自 picode 源码与本机 opencode DB；联网来源（§3.2 表）URL + retrieved_at 如下。
 
-- **[待写实 · P1]** Pi/opencode serve 会话持久化/cold-resume 可行性结论（支持 / 不支持 / 部分支持 + 条件）——决定 2.1 中"持久会话引用字段"是否启用、2.3 恢复腿选型、第 4 节降级方案是否激活。
-- **[待写实 · P2]** brief 内来源 URL + retrieved_at（ind-res 产出、docs 组装引用；写实时补入第 4 节触发条件行与 1.2 对比表的出处标注）。
-- **[待写实 · P3]** 若 Pi 支持冷恢复 → 蓝图 2.1/2.3 的主路径分支（保留平台会话引用 + 直连恢复）激活；若不支持 → 第 4 节增量 steer 降级方案为实际路径。**两条分支的蓝图内容均已在本文件写全**，brief 只做"激活哪条"的裁决，不改变取舍论证结论（方案 A，守 D002）。
-- **[待写实 · P4]** 本地核实对照（intake §8.2@182-185：Pi/opencode serve 会话恢复能力现状，对照 `continuation.ts` 转录重投喂路径）——由 ind-res 或 sys-arch 产出，随 brief 或独立条目写实。
+### 5.1 可行性结论（P1 写实）
+
+**结论：支持（部分接口限制）。** picode 实际集成的运行时是 **opencode**（opencode.ai / Anomaly，`opencode serve` + `@opencode-ai/sdk`），**原生支持 durable session identity + 会话续写/恢复**（brief §0）：
+
+- **durable session identity：支持** — 会话以稳定 id（`ses_...`）持久化在磁盘 SQLite（本机 `~/.local/share/opencode/opencode.db`），跨 serve 进程重启有效（brief §2.1，事实）；本机存在 5 天前创建的 `picode:*` 会话仍可查（brief §2.1 本地 DB 证据）。
+- **cold resume：支持** — 恢复 = 同一 sessionID 重新 `POST /session/{id}/message`（无独立 resume 端点）；`GET /session`（列表）+ `GET /session/{id}`（存在性校验）+ `POST /session/{id}/message`（续写）三件套即可实现（brief §2.2，事实）。
+- **全量历史拉取：支持** — `GET /session/{id}/message` 返回全量消息（`{info, parts}`，limit 分页），可旁路校准本地 transcript.jsonl（brief §2.4）。
+- **checkpoint/快照：部分支持** — `revert/unrevert` + 服务端快照 + 长会话自动 compaction；无客户端显式 checkpoint 导出 API（brief §2.4）。
+- **关键限制（picode 侧使用方式问题，非平台缺失）**：`DELETE /session/{id}` 永久删除会话及全部数据；picode 当前 `sleepAgent` 正是走 DELETE 关会话 → 「睡眠即销毁 durable 身份」。cold resume 需**停止在 sleep 时 DELETE**（改用保留会话或 `PATCH archived`），wake 走 resume API（复用现成 `sendReady`）而非重 spawn（brief §0/§4.2）。
+- **范围澄清**：**Pi（pi.dev / Earendil）≠ opencode（opencode.ai / Anomaly）**，二者是不同产品；C4 蓝图所问「Pi 平台持久化能力」应指向 opencode（picode 的 `opencode.enabled` 配置与 `oc-<id>` 句柄）（brief §1，事实）。
+- **对 brief 一处表述的更正（squad-lead 源码复核 2026-08-15）**：brief §3.1 称 `sendReady`「已实现但全仓无调用方」——**不准确**：`self-drive.ts:256`（P1 serve 恢复路径 `attemptServeRecovery`）已调用 `spawner.sendReady(session.pi_session_id, agentId, env)` 对 error 会话同会话重投喂。准确表述：`sendReady` **已接线于 serve 恢复路径，但未接线于 wake/resume 路径**（`wakeWithOpencode`@301 仍重 spawn + 摘要）——分支① 的接线面实际比 brief 所述更小（仅补 wake 路径），serve 恢复路径本身即「同会话续写」的现成范例（衔接 §5.4）。
+
+### 5.2 分支裁决（P3 写实 · 机械判定）
+
+按蓝图 §2.4 预设逻辑 + brief 结论「支持（含 picode 侧使用方式限制）」：
+
+- **分支①（resume API 直连）激活为主路径**：durable 会话身份 + 会话复用（2.1/2.3 的 sendReady 接线方案）成立；`pi_session_id`（`oc-<id>`）可作「平台持久会话引用」字段保留，作为文件真相里的指针。
+- **§4 降级方案状态**：由「若 Pi 不支持冷恢复时的主路径」转为 **「resume API 失效/serve 数据目录迁移时的兜底」+「投喂语义增强（增量 steer）」** —— 即 brief §4.5「转录重投喂与 resume API 可叠加：resume 保证上下文连续，转录/摘要作为审计与降级」。
+- **brief §4.5 关键结论**：opencode 无「durable 子会话/子代理树/父子权限」成熟语义（`children`/`fork` 是会话分支；`background`/`warp` 为实验接口）——**子代理的可恢复性由 picode 侧用 `oc-<id>` 句柄 + 路径 A 实现，无需自建会话存储**。
+
+### 5.3 来源引用（P2 写实 · URL + retrieved_at）
+
+| 来源 | URL | 支撑点 |
+|---|---|---|
+| opencode 官方 Server 文档（Last updated: Aug 14, 2026） | https://opencode.ai/docs/server/ | `opencode serve` 用法、§2.2 全 API 表、`noReply`、`prompt_async`、DELETE 语义（retrieved 2026-08-15T17:04+0700） |
+| opencode 官方 SDK 文档 | https://opencode.ai/docs/sdk/ | `createOpencodeClient`、`client.session.prompt`（retrieved 2026-08-15T17:04+0700） |
+| opencode 源码 `packages/core/src/global.ts`（dev 分支） | https://github.com/anomalyco/opencode/blob/dev/packages/core/src/global.ts | 数据目录 = `xdgData()/opencode`（retrieved 2026-08-15T17:04+0700） |
+| opencode 源码 `packages/core/src/session/sql.ts`（dev 分支） | https://github.com/anomalyco/opencode/blob/dev/packages/core/src/session/sql.ts | Session/Message/Part 表定义，与本机 DB 逐列一致（retrieved 2026-08-15T17:04+0700） |
+| pi.dev 官方 Sessions 文档 | https://pi.dev/docs/latest/sessions | Pi（Earendil）会话模型：JSONL 存 `~/.pi/agent/sessions/`；`pi -c/-r/--session/--fork` 恢复（retrieved 2026-08-15T17:04+0700） |
+
+> 完整来源清单（含 SDK 文档、Intro 文档、serve.ts 源码、remove-opencode-db spec、pi.dev 首页）见 brief §3.2 表。retrieved_at 统一为 brief 检索时间 **2026-08-15T17:04+0700**（ind-res 标注；联网检索同一时区）。
+
+### 5.4 本地核实对照（P4 写实 · brief §3.1）
+
+| 勘察点 | brief 结论 | 对本蓝图含义 |
+|---|---|---|
+| `opencode-adapter.ts`：`sendReady`（同会话重投喂）已实现 | 事实（brief §3.1；**brief「全仓无调用方」表述不准确**——见 §5.1 更正） | 分支① 核心接线点：wake 走 resume（sendReady）替换重 spawn 分支；serve 恢复路径（`self-drive.ts:256`）已是「同会话续写」现成范例，**仅需补 wake 路径接线**（衔接 §2.3/§5.1） |
+| `continuation.ts`：wake 恢复 = 重 spawn + 摘要（非 resume 旧会话） | 事实 | 下轮 I2 改造对象：恢复路径从「重 spawn + 摘要」改「resume 优先 + 摘要兜底」 |
+| `session-store.ts`：`pi_session_id`（oc-<id>）已在 session.yaml | 事实 | durable 句柄已存在，仅需 sleep 不再清空/DELETE |
+| `pi-adapter.ts sleepAgent`：opencode 会话先 `DELETE /session/{id}` 再 sleep | 事实（brief §3.1） | **改造关键**：sleep 保留（或 `PATCH archived`）替代 DELETE——这是 cold resume 的前提（brief §5 风险 1） |
+| 本机 opencode.db：10,836 会话 / 20,249 消息 / 51,044 parts；单会话最多 1,187 消息 | 事实（brief §3.1） | 长会话持久化能力实证；compaction part（5 条）→「全量历史以本地 transcript.jsonl 为准」纪律成立（brief §2.4/§5 风险 2） |
 
 ---
 
@@ -196,7 +233,7 @@
 | # | 建议 | 关联蓝图节 | 涉及面（下轮实现范围） |
 |---|---|---|---|
 | I1 | 续跑投喂语义分级：followup/steer/inject + wake 门闩 | 2.2 / 4.2 | `continuation.ts` 派生与投喂形态（S 变体可不碰 17） |
-| I2 | durable 会话身份：`agent_id` 主键 + `pi_session_id` 分层，可选平台持久会话引用字段 | 2.1 | session.yaml schema 增量 + opencode-adapter |
+| I2 | durable 会话身份：`agent_id` 主键 + `pi_session_id` 分层；**resume API 接线为主路径**（sleep 保留/归档替代 DELETE + wake `sendReady` resume，404 回退重 spawn） | 2.1 / 2.3 / 5.2 | session.yaml schema 增量 + opencode-adapter（`sendReady` 接线）+ pi-adapter `sleepAgent` 改造（brief §4.2 路径 A） |
 | I3 | 子代理 spawn/注册 + 深度围栏 ≤N（默认 3） | 3.1 | orchestrator spawn 校验 + 17 §4 字段增量 |
 | I4 | 父子写集继承只收窄（子 ⊆ 父 write_paths） | 3.2 | 04 §2 校验增量 + staffing persona 生成 |
 | I5 | 所有权围栏（子会话仅父可路由 + 子代理不可直接问人） | 3.3 | bus 校验增量 + 17 §9 房间增量 |
@@ -209,7 +246,7 @@
 
 ## 7. Open Questions / known issues 素材（供 handoff 交接）
 
-1. **输入 gate 未满足（阻塞项）**：`research/briefs/pi-persistence.md` 未落盘；第 5 节全部条目为占位。需 squad-lead 报 run-lead 催办 ind-res。
+1. **输入 gate 已满足（2026-08-15T17:05+0700）**：`research/briefs/pi-persistence.md` 落盘；§5 引用写实完成（结论「支持（部分接口限制）」+ URL/retrieved_at）。**剩余阻塞**：v1 写实待 sdet 复核 + run-lead 签收；C1 验收判定待复核通过。
 2. **N 值（深度围栏上限）**：建议默认 3（对齐 DSH `maxDepth`@29），是否按 run 规模可配？【推断：可配，默认 3】
 3. **子代理身份命名**：`subagent@<parent-task>-<n>` vs 任务席位模式，下轮决策。【推断】
 4. **结算事件类型**：复用 `task_dissolved`/`cell_done` vs 新增事件类型（需决策编号 + spec 10 注册）——本蓝图倾向复用，下轮定。
@@ -241,7 +278,7 @@
 - `.picode/plans/dsh-source-survey.md`：§2 #10@268-281（durable descriptor/深度围栏/冷恢复/权限边界）、§2 #5@188-201（inbox 三原语 + wake 门闩）、§2 #4@169-186（事件溯源机件 vs 真相模型）、§4 P1 C@357-361
 - `.picode/plans/run-2026-08-15T02-08-48-06-DSH-intake.md`：§2.3@62-67（D002 文件真相）、§3 C@76、§5 non_goals@110-120、§6 C1-C3@148-152、§8.2@182-185
 - `.picode/plans/research-brief-deepseek-harness.md`：§1 ①@26-28（会话=事件日志）、§1 ②@30-32（continuable 子代理全机制）、§1 ⑩@62-64（子代理不可问人）、§4 来源 11/12@115-116
-- `research/briefs/pi-persistence.md`：**未落盘（输入 gate）**——第 5 节占位待写实
+- `research/briefs/pi-persistence.md`：**已落盘（2026-08-15T17:05+0700）**——§5 引用写实完成；结论「支持（部分接口限制）」，URL + retrieved_at 见 §5.3
 
 ---
 
@@ -250,3 +287,4 @@
 | 修订 | 内容 | 状态 |
 |---|---|---|
 | v0 draft（2026-08-15） | 蓝图骨架成文：四要素 + brief 占位；输入 gate 未满足 | draft（待 sdet 核对 + brief 写实 + run-lead 签收） |
+| v1 写实（2026-08-15T17:1x+0700） | 输入 gate 满足（brief 落盘）：§5 引用写实（P1 结论/P2 URL+retrieved_at/P3 分支裁决/P4 本地对照）；§4 降级方案转兜底+增强；§2.1/§2.3 分支收敛为①（resume API 直连） | 待 sdet 复核（recheck_trigger）+ run-lead 签收 |
