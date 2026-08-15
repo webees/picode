@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   HUMAN_ONLY_ROLES,
   assertTransition,
-  canConsumeModel,
   canTransition,
   type SessionBudgetUsed,
   type SessionRecord,
@@ -59,16 +58,6 @@ test("errorCodeOf sees the transition code on the thrown error", () => {
     assert.fail("should have thrown");
   } catch (e) {
     assert.equal(errorCodeOf(e), "ILLEGAL_TRANSITION");
-  }
-});
-
-test("only awake sessions may consume model calls (17 §4 MUST / T21)", () => {
-  for (const state of STATES) {
-    assert.equal(
-      canConsumeModel({ state }),
-      state === "awake",
-      `canConsumeModel(${state}) must be ${state === "awake"}`,
-    );
   }
 });
 

@@ -5,7 +5,6 @@ import {
   PicodeError,
   errorCodeOf,
   formatPicodeError,
-  isPicodeError,
 } from "./errors.js";
 
 test("ErrorCode registry values are stable strings", () => {
@@ -22,7 +21,7 @@ test("ErrorCode registry values are stable strings", () => {
 test("PicodeError carries a stable code and message", () => {
   const e = new PicodeError(ErrorCode.BUS_TYPE_DENIED, "unknown bus message type: x");
   assert.ok(e instanceof Error);
-  assert.ok(isPicodeError(e));
+  assert.ok(e instanceof PicodeError);
   assert.equal(e.code, "BUS_TYPE_DENIED");
   assert.equal(e.message, "unknown bus message type: x");
   assert.equal(e.name, "PicodeError");
