@@ -2298,3 +2298,29 @@ entries:
     task_id: task-chunk-chat-ui
     seat: sdet
     first_used_at: 2026-08-15T07:00:00Z
+
+  # —— run-2026-08-15T04-00-00-DASHBOARD（波2：砥柱）——
+  - kind: team_name
+    name: 砥柱
+    run_id: run-2026-08-15T04-00-00-DASHBOARD
+    task_id: task-chunk-flow-ui
+    seat: null
+    first_used_at: 2026-08-15T07:30:00Z
+  - kind: codename
+    name: 司关
+    run_id: run-2026-08-15T04-00-00-DASHBOARD
+    task_id: task-chunk-flow-ui
+    seat: squad-lead
+    first_used_at: 2026-08-15T07:30:00Z
+  - kind: codename
+    name: 钤印
+    run_id: run-2026-08-15T04-00-00-DASHBOARD
+    task_id: task-chunk-flow-ui
+    seat: engineer
+    first_used_at: 2026-08-15T07:30:00Z
+  - kind: codename
+    name: 稽核
+    run_id: run-2026-08-15T04-00-00-DASHBOARD
+    task_id: task-chunk-flow-ui
+    seat: sdet
+    first_used_at: 2026-08-15T07:30:00Z
