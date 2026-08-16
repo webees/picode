@@ -8,7 +8,7 @@ import { execSync } from "node:child_process";
 export const BASE = process.env.SERVE_URL ?? "http://127.0.0.1:7788";
 
 // P1-5（R17 修复波）：主仓根用 git-common-dir 推导（主仓或工作房内运行均准确），
-// 替代已迁移失效的硬编码 /Users/x/Desktop/iOS/picode 与 /tmp/picode-dogfood。
+// 替代已迁移失效的历史硬编码路径（P1-5）。
 import path from "node:path";
 const HERE = new URL(".", import.meta.url).pathname;
 export const REPO_ROOT = process.env.PICODE_REPO_ROOT ?? (() => {
@@ -23,10 +23,10 @@ export const REPO_ROOT = process.env.PICODE_REPO_ROOT ?? (() => {
   }
 })();
 
-/** orchestrator CLI 入口（可用 PICODE_CLI 覆盖）。 */
+/** orchestrator CLI 入口（可用 PICODE_CLI 覆盖；默认 REPO_ROOT 派生，P1-5）。 */
 export const PICODE = process.env.PICODE_CLI ?? `${REPO_ROOT}/packages/orchestrator/dist/cli.js`;
 
-/** dogfood 仓库（可用 PICODE_REPO 覆盖；默认回退主仓——历史默认 /tmp/picode-dogfood 已失效）。 */
+/** dogfood 仓库（可用 PICODE_REPO 覆盖；默认回退主仓，P1-5）。 */
 export const REPO = process.env.PICODE_REPO ?? REPO_ROOT;
 
 /** 取 `--name` 参数值；缺省返回 null。 */

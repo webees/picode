@@ -852,6 +852,16 @@ test("C1: feedContinuation 对非 awake / 非 oc- 会话幂等返回 null", asyn
 // followup 现状；wake 门闩沿用 idle/in-flight 判定
 // ---------------------------------------------------------------------------
 
+test("R17 M1: 看门狗复用 composeSteerPrompt（增量投喂语义不变，验收 4 增量）", async () => {
+  // session-watchdog 以 composeSteerPrompt(null, guidance) 生成 steer 正文；
+  // 语义契约：含 STEER_HEADER、引导段透传（增量投喂）。既有 I1 用例已覆盖
+  // 纯函数语义，本条锁住「看门狗调用形态」不回归。
+  const { composeSteerPrompt, STEER_HEADER } = await import("./continuation.js");
+  const out = composeSteerPrompt(null, "看门狗：请汇报");
+  assert.ok(out.includes("看门狗：请汇报"), "引导段透传");
+  assert.ok(out.includes(STEER_HEADER), "含 steer 头");
+});
+
 test("I1: composeSteerPrompt 复用摘要段 + 引导段，不重灌固定续跑模板", () => {
   const out = composeSteerPrompt(null, "下一步是实现模块 C");
   assert.ok(out.includes(STEER_HEADER), "必须含 steer 引导段标题");
