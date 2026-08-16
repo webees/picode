@@ -72,13 +72,17 @@ chunks:
     owner_chunk: null
     status: ready
   - id: chunk-watchdog
-    title: "零产出看门狗（M1：按 agent 追踪产出信号，2 轮无产出→at_risk+steer 投喂，再 2 轮→bus 通知+takeover_candidate）+ 会话复活重投喂（M3：probeServeHealth 扩展）+ supervise 陈旧路径修复"
+    title: "零产出看门狗（M1）+ 会话复活重投喂（M3）+ supervise 陈旧路径修复（P1-5）+ 自治循环修复（P1-2 命令队列消费 / P1-3 guardian 顶层错误边界 / P1-7 budget 重置）"
     wave: 2
     write_paths:
       - "packages/orchestrator/src/session-watchdog.ts"
       - "packages/orchestrator/src/session-watchdog.test.ts"
       - "packages/orchestrator/src/self-drive.ts"
       - "packages/orchestrator/src/self-drive.test.ts"
+      - "packages/orchestrator/src/rules-engine.ts"
+      - "packages/orchestrator/src/rules-engine.test.ts"
+      - "packages/orchestrator/src/session-store.ts"
+      - "packages/orchestrator/src/session-store.test.ts"
       - "packages/orchestrator/src/continuation.test.ts"
       - "scripts/supervise/supervise.mjs"
       - "scripts/supervise/lib.mjs"
@@ -93,7 +97,8 @@ chunks:
       - "session-watchdog.ts：按 agent_id 追踪最近产出信号（git 提交 / 工作房文件 mtime / 转录 incoming），无产出 2 轮→at_risk（composeSteerPrompt 投 steer，I1 档），再 2 轮→bus 通知 run-lead + takeover_candidate 标记；零 LLM 决策（纯规则）；幂等（不重复投喂）；终态会话跳过"
       - "self-drive.ts 接线：guardianTick 中集成 watchdog 检查（复用既有节奏）；probeServeHealth 扩展——error 会话失活超阈值自动 re-wake + resume（sendReady + clearError），失败保持原态不抖动"
       - "supervise.mjs/lib.mjs/feed.mjs：陈旧路径修复（PICODE/REPO 从硬编码改 $REPO_ROOT 派生），supervise 可运行并接线 watchdog（调用 orchestrator 的 watchdog 检查函数或 CLI）"
-      - "测试：session-watchdog.test.ts（计数/升级/幂等/终态跳过/steer 投喂触发）；self-drive.test.ts 增量（复活重投喂路径）；continuation.test.ts 增量（复用 composeSteerPrompt 不破坏既有语义）"
+      - "测试：session-watchdog.test.ts（计数/升级/幂等/终态跳过/steer 投喂触发）；self-drive.test.ts 增量（复活重投喂路径 + guardian 顶层错误边界：tick 内抛错不退出循环、错误落盘退避续跑）；continuation.test.ts 增量（复用 composeSteerPrompt 不破坏既有语义）"
+      - "修复波（sys-arch 扫描 P1）：rules-engine.ts drain 命令队列消费语义改为至多执行一次（processed 游标/截断，杜绝 wake→sleep 每 tick 振荡与队列无限增长）；session-store.ts maxTurns 提供重置/衰减路径（CLI session budget-reset 或按 run 窗口衰减），terminate 后重注册不报 SESSION_ALREADY_REGISTERED 死锁；supervise 全家 PICODE/REPO 硬编码旧路径（/Users/x/Desktop/iOS/picode、/tmp/picode-dogfood）改 $REPO_ROOT/import.meta.url 派生"
       - "全量 npm test 绿 + npm run check 三 lint 0"
     owner_chunk: null
     status: planned
