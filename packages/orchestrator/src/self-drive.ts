@@ -10,6 +10,7 @@ import {
   type ApplyResult,
 } from "./rules-engine.js";
 import { sweepDraftPark, readGoal } from "./run-store.js";
+import { runWatchdogCheck } from "./session-watchdog.js";
 import { isBriefApproved } from "./task.js";
 import { sweepProgress, type SweepResult } from "./progress.js";
 import { sleepAgent, buildPiEnv } from "./pi-adapter.js";
@@ -440,6 +441,10 @@ export interface CodeUpdatedSignal {
 
 /** Result of one guardian tick (one pass over the run). */
 export interface GuardianTickResult {
+  /** P1-3：tick 顶层错误（正常 tick 为 undefined） */
+  error?: string;
+  /** R17 M1：零产出看门狗结果 */
+  watchdog?: import("./session-watchdog.js").WatchdogRunResult;
   ticked_at: string;
   drained: number;
   draft_parked: string | null;
@@ -655,6 +660,52 @@ export async function guardianTick(
   config: PicodeConfig,
   opts: { idleSleep?: boolean; baseSha?: string | null } = {},
 ): Promise<GuardianTickResult> {
+  // P1-3（R17 修复波）：tick 顶层错误边界——任一环节抛错（坏 yaml/LOCK_TIMEOUT/
+  // sleepAgent 失败等）不再整轮 tick 死亡退出 runGuardian 循环；错误落盘 + 返回
+  // 含 error 字段的结果（runGuardian 侧退避续跑，自治 run 不静默停摆）。
+  try {
+    return await guardianTickInner(dir, config, opts);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const reason = `guardian tick 失败（P1-3 边界捕获）: ${msg.slice(0, 300)}`;
+    try {
+      fs.appendFileSync(
+        path.join(dir, "guardian-errors.log"),
+        `${new Date().toISOString()} ${reason}\n`,
+        "utf8",
+      );
+    } catch {
+      /* 日志落盘失败不掩盖原始错误 */
+    }
+    return {
+      ticked_at: new Date().toISOString(),
+      drained: 0,
+      draft_parked: null,
+      progress: { checked: 0, overdue: [], woke: [] },
+      events: [{
+        event: "guardian_tick_error",
+        rejected: true,
+        actions: [{ agent_id: "*", action: "skip", outcome: "rejected", reason }],
+      }],
+      slept: [],
+      serve: { ok: false, failed: [] },
+      budgets: { stopped: [], exceeded: [], gate_commands: [] },
+      continuation: { fed: [], gate: [] },
+      settled: [],
+      checkpoints: { boundary: "guardian", captured: [] },
+      code_updated: null,
+      slept_platform: [],
+      halt: false,
+      error: reason,
+    } satisfies GuardianTickResult;
+  }
+}
+
+async function guardianTickInner(
+  dir: string,
+  config: PicodeConfig,
+  opts: { idleSleep?: boolean; baseSha?: string | null } = {},
+): Promise<GuardianTickResult> {
   const parked = sweepDraftPark(dir, config);
   const drain = await drainSessionCommands(dir, config);
 
@@ -710,6 +761,10 @@ export async function guardianTick(
   const slept = opts.idleSleep ? await sleepIdleSessions(dir, config) : [];
   const serve = await probeServeHealth(dir, config);
 
+  // R17 M1：零产出看门狗——产出信号/at_risk/接管候选（纯规则；动作幂等；
+  // error 前缀 TOOL_ENV_BROKEN:/WORKTREE_MISSING: 触发立即 at_risk）。
+  const watchdog = await runWatchdogCheck(dir, path.resolve(dir, "../../.."), config);
+
   const runState = readRunState(dir);
   // R2-C3: 仅当守护进程提供了启动时基线 HEAD 才检测代码更新（单次 tick 无基线 → null）。
   const code_updated =
@@ -728,6 +783,7 @@ export async function guardianTick(
     checkpoints,
     code_updated,
     slept_platform,
+    watchdog,
     halt: runState?.halt ?? false,
   };
 }
@@ -787,10 +843,37 @@ export async function runGuardian(
         break;
       }
       ticks += 1;
-      const result = await guardianTick(dir, config, {
-        idleSleep: opts.idleSleep,
-        baseSha,
-      });
+      let result: GuardianTickResult;
+      try {
+        result = await guardianTick(dir, config, {
+          idleSleep: opts.idleSleep,
+          baseSha,
+        });
+      } catch (e) {
+        // 保底（P1-3）：guardianTick 自身意外抛错（不应发生，边界已内聚）也继续循环
+        const msg = e instanceof Error ? e.message : String(e);
+        result = {
+          ticked_at: new Date().toISOString(),
+          drained: 0,
+          draft_parked: null,
+          progress: { checked: 0, overdue: [], woke: [] },
+          events: [{
+            event: "guardian_tick_error",
+            rejected: true,
+            actions: [{ agent_id: "*", action: "skip", outcome: "rejected", reason: msg.slice(0, 200) }],
+          }],
+          slept: [],
+          serve: { ok: false, failed: [] },
+          budgets: { stopped: [], exceeded: [], gate_commands: [] },
+          continuation: { fed: [], gate: [] },
+          settled: [],
+          checkpoints: { boundary: "guardian", captured: [] },
+          code_updated: null,
+          slept_platform: [],
+          halt: false,
+          error: `runGuardian 保底捕获: ${msg.slice(0, 200)}`,
+        };
+      }
       ticksRun.push(result);
       if (ticksRun.length > MAX_TICKS_RETAINED) ticksRun.shift();
       if (result.code_updated?.detected && !codeWarned) {

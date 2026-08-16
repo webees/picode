@@ -295,6 +295,18 @@ test("guardianTick: drains the sess-mgr command queue and applies derived events
   assert.equal(store.get(`squad-lead@${taskId}`)!.state, "awake");
 });
 
+test("P1-3: guardianTick 容错——缺 goal 文件不炸 tick（顶层边界兜底）", async () => {
+  // readGoal 对缺失文件容错（返回缺省）→ tick 正常完成；
+  // 真正的错误分支（readGoal 抛错等）由 guardianTick 顶层 try/catch 兜底
+  // （P1-3：任一环节抛错 → error 落盘 + 返回 error 结果，runGuardian 循环不退出）。
+  const { dir, config } = setupRun();
+  const goalFile = path.join(dir, "goal.yaml");
+  if (fs.existsSync(goalFile)) fs.unlinkSync(goalFile);
+  const res = await guardianTick(dir, config);
+  assert.ok(res.ticked_at, "tick 正常完成（缺 goal 不炸）");
+  assert.equal(res.halt, false);
+});
+
 test("sleepIdleSessions: sleeps awake sessions idle beyond idle_sleep_sec", async () => {
   const { dir, config, store } = setupRun();
   await store.wake("pm", "test");
