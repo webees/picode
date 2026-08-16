@@ -2220,3 +2220,29 @@ entries:
     task_id: task-chunk-settle-feed
     seat: sdet
     first_used_at: 2026-08-15T05:00:00Z
+
+  # —— run-2026-08-15T04-00-00-DASHBOARD（波1：观澜）——
+  - kind: team_name
+    name: 观澜
+    run_id: run-2026-08-15T04-00-00-DASHBOARD
+    task_id: task-chunk-dashboard-server
+    seat: null
+    first_used_at: 2026-08-15T06:00:00Z
+  - kind: codename
+    name: 凭栏
+    run_id: run-2026-08-15T04-00-00-DASHBOARD
+    task_id: task-chunk-dashboard-server
+    seat: squad-lead
+    first_used_at: 2026-08-15T06:00:00Z
+  - kind: codename
+    name: 听涛
+    run_id: run-2026-08-15T04-00-00-DASHBOARD
+    task_id: task-chunk-dashboard-server
+    seat: engineer
+    first_used_at: 2026-08-15T06:00:00Z
+  - kind: codename
+    name: 漱石
+    run_id: run-2026-08-15T04-00-00-DASHBOARD
+    task_id: task-chunk-dashboard-server
+    seat: sdet
+    first_used_at: 2026-08-15T06:00:00Z
