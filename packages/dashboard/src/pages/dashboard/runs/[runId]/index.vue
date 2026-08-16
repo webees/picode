@@ -12,6 +12,7 @@ import MergeTrain from './components/merge-train.vue'
 import PersonnelView from './components/personnel-view.vue'
 import ProgressView from './components/progress-view.vue'
 import RoomsView from './components/rooms-view.vue'
+import ChatRoomView from './components/chat-room-view.vue'
 import SessionsLive from './components/sessions-live.vue'
 import TasksBoard from './components/tasks-board.vue'
 
@@ -19,6 +20,10 @@ const route = useRoute()
 // 审计 P1：route.params 每次导航返回新对象，setup 时快照会导致 runId 无响应式
 // 依赖（URL 变化页面仍显示旧 run 数据）——必须在 computed 内取值
 const runId = computed(() => String((route.params as Record<string, string>).runId ?? ''))
+const chatRoom = computed(() => {
+  const r = route.query.room
+  return typeof r === 'string' && r ? r : null
+})
 
 const tabs = [
   { name: '概览', value: 'overview' },
@@ -30,6 +35,7 @@ const tabs = [
   { name: '会话活跃度', value: 'sessions' },
   { name: '合并队列', value: 'merge' },
   { name: '质量门禁', value: 'gates' },
+  { name: '聊天室', value: 'chat' },
 ]
 
 // 审计 P2-17：激活 tab 与 URL ?tab= 同步（刷新/深链不再丢回概览页）
@@ -90,7 +96,15 @@ const activeTab = computed({
       </TabsContent>
       <TabsContent value="gates" class="space-y-4">
         <GatesPanel :run-id="runId" />
-      </TabsContent>
+      
+    <TabsContent value="chat">
+      <ChatRoomView v-if="chatRoom" :run-id="runId" :room="chatRoom" />
+      <div v-else class="rounded-lg border p-6 text-center text-sm text-muted-foreground">
+        请从「房间」tab 点击一个房间进入聊天室
+      </div>
+    </TabsContent>
+
+</TabsContent>
     </Tabs>
   </BasicPage>
 </template>

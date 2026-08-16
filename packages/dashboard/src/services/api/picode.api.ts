@@ -374,3 +374,73 @@ export function useGates(runId: string) {
     staleTime: LIVE_POLL_INTERVAL_MS,
   })
 }
+
+// —— C4 聊天室（W1a 冻结协议：GET /bus、GET /bus/:room?limit=、POST /bus/:room） ——
+export interface BusRoomEntry { room: string; messages: number }
+export interface BusMessageItem {
+  ts: string; id?: string; from: string; room: string; type: string
+  body: string; refs?: string[]; reply_to?: string | null; meta?: Record<string, unknown>
+}
+export interface BusMemberItem { id: string; access?: string; post_types_allow?: string[] }
+export interface PostBusResult { posted: boolean; message?: BusMessageItem }
+
+function fetchBus<T>(runId: string, path: string, init?: RequestInit): Promise<T> {
+  return apiFetch(`/api/runs/${runId}${path}`, init)
+}
+
+/** GET /api/runs/:id/bus — 房间列表（含消息数）。 */
+export function useBusRooms(runId: string) {
+  return useQuery({
+    queryKey: ['picode', 'bus', runId, 'rooms'],
+    queryFn: () => fetchBus<{ rooms: BusRoomEntry[] }>(runId, '/bus').then((r) => r.rooms),
+    enabled: !!runId,
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    staleTime: LIVE_POLL_INTERVAL_MS,
+  })
+}
+
+/** GET /api/runs/:id/bus/:room?limit= — 消息流（最近 N 条）。 */
+export function useBusMessages(runId: string, room: string | null, limit = 50) {
+  return useQuery({
+    queryKey: ['picode', 'bus', runId, 'messages', room, limit],
+    queryFn: () =>
+      fetchBus<{ room: string; messages: BusMessageItem[] }>(
+        runId,
+        `/bus/${encodeURIComponent(room ?? '')}?limit=${limit}`,
+      ),
+    enabled: !!runId && !!room,
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    staleTime: LIVE_POLL_INTERVAL_MS,
+  })
+}
+
+/** GET /api/runs/:id/bus/:room/members — 参与者。 */
+export function useBusMembers(runId: string, room: string | null) {
+  return useQuery({
+    queryKey: ['picode', 'bus', runId, 'members', room],
+    queryFn: () =>
+      fetchBus<{ room: string; members: BusMemberItem[] }>(
+        runId,
+        `/bus/${encodeURIComponent(room ?? '')}/members`,
+      ),
+    enabled: !!runId && !!room,
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    staleTime: LIVE_POLL_INTERVAL_MS,
+  })
+}
+
+/** POST /api/runs/:id/bus/:room — 以 sponsor 身份发 chat（ACL fail-closed）。 */
+export async function postBusMessage(
+  runId: string,
+  room: string,
+  body: string,
+): Promise<PostBusResult> {
+  return fetchBus<PostBusResult>(runId, `/bus/${encodeURIComponent(room)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'chat', body }),
+  })
+}
