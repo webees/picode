@@ -1,12 +1,12 @@
 schema_version: "1"
-task_id: task-chunk-env-gate
+task_id: task-chunk-watchdog
 run_id: run-2026-08-16T09-30-00-EFFICIENCY
 approved_by: run-lead
-approved_at: "2026-08-16T11:40:00Z"
+approved_at: "2026-08-16T13:00:00Z"
 checks:
-  evidence: pass          # E1-E7 全 passed（真实执行，含自链环境重验）
-  review: pass            # docs/reviews/2026-08-16-task-chunk-env-gate-e5.md（r1 needs-work → r2 pass）
-  diff: "7 files ⊆ write_paths（+paths.ts run-lead 授权扩展）"
-  tests: "全量绿（core 162/orch 390/bus 25/pi-ext 36/mcp 18/ds 31+2skip）+ 三 lint 0"
-  base: b0be509
-  note: "合并门 R9 通过；P1 worktreePath canonical 对齐（22ed0a7）"
+  evidence: pass          # sdet 宵柝旧版 NOT_PASS（基于 r1）→ run-lead 复核节 pass（HEAD 81f4abf）
+  review: pass            # docs/reviews/2026-08-16-task-chunk-watchdog-e5.md（r1→r4 四轮，r4 pass）
+  diff: "9-12 files ⊆ write_paths"
+  tests: "orchestrator 405/405 + 全量 6 包 fail 0 + 三 lint 0"
+  base: 9f93100
+  note: "M1 看门狗 + P1-2/3/5/7 自治修复；延续项 P2 记录在案"
