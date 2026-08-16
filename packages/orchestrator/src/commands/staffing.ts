@@ -18,12 +18,12 @@ export const staffingCommands: Command[] = [
     path: ["staffing", "pool"],
     summary: "列出人才池候选画像（评分-招聘回路消费侧，只读）",
     usage:
-      "picode staffing pool --repo <path> --run <id> [--grade S,A,B,C,D] [--skills a,b] [--seat engineer,sdet]",
+      "picode staffing pool --repo <path> --run <id> [--grade S,A,B,C,D] [--skill a,b] [--seat engineer,sdet]",
     async run(ctx: CommandContext) {
       const pool = readTalentPool(ctx.repo, ctx.config!);
       const grades = (ctx.arg("--grade") ?? "").split(",").map((g) => g.trim()).filter(Boolean) as import("../hr-talent.js").Grade[];
       const seats = (ctx.arg("--seat") ?? "").split(",").map((x) => x.trim()).filter(Boolean) as Seat[];
-      const skills = (ctx.arg("--skills") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+      const skills = (ctx.arg("--skill") ?? ctx.arg("--skills") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
       const records = queryTalentPool(pool, { grades, seats, skills });
       console.log(JSON.stringify({ count: records.length, records }, null, 2));
     },
