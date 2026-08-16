@@ -104,3 +104,50 @@ packages/orchestrator/src/staffing.test.ts   packages/core/src/errors.ts   packa
 2. **时序缺口**（P1-1 伴生）：确认 approve→prepare→唤醒的完整链路在真实后端下可闭环（预建房 by run-lead / prepare 后自动重唤醒），否则补机制或文档化人工步骤。
 
 P2/P3 不阻断合并，建议随上述修改或后续轮次顺手处理（P2-1 一行修复 + 测试；P3-2 summary 同步）。
+
+---
+
+## 7. 第二轮复审（r2）— 修复增量 22ed0a7（E5 P1 打回后）
+
+- 审查对象：`git -C <工作房> diff f504c69..22ed0a7`（3 文件，+19/-2）
+- 修复提交：`22ed0a7` fix(env-gate): worktreePath canonical 对齐顶层 squad-<taskId>（E5 P1）+ findExecutableOn isFile 排除目录（P2-1）+ 命名契约测试（run-lead 代修，队内会话失联）
+- 基线：f504c69（E5 首轮）/ b0be509（run 基线）
+- 审查方式：逐文件读 + worktreePath 调用点全量核对 + `.picode/worktrees` 残留引用全仓检索 + 真实布局核验（本工作房即顶层 `squad-task-chunk-env-gate` 实证 + worktree-setup.sh 源码核对）
+- 环境备注：本轮 bash/grep/glob 工具全部故障（spawn ENOENT / ripgrep launch failed），**未能独立复跑测试**（run-lead 已跑 orchestrator 390/390 + core 162/162；计数一致性已核：首轮 orch 389 + 本增量新增 1 用例 = 390，core 162 未动）。不替代 sdet 验证，采信 run-lead 全绿 + 首轮独立复跑结论。
+- Reviewed-by: code-review（门禁层，r2 复审）
+- 审查日期：2026-08-16
+
+### r2-1 逐项结论
+
+| # | 审查项 | 结论 | 说明 |
+|---|---|---|---|
+| 1a | P1 改动最小且注释清晰 | PASS | paths.ts:12-23 仅改 return + 参数改名 `_runId`（语义化忽略）+ 5 行注释（R17 P1 / E5 裁决 / canonical 依据 / 旧实现故障链），零附带改动；调用点零改动（位置传参，自动跟随） |
+| 1b | 调用点语义一致 | PASS | closure.ts:163/293/460、pi-adapter.ts:134（taskWorktreeCwd）+ :445（wakeAgent 门闩经 task.ts:192）、task.ts:192/263 全部 `worktreePath(repoRoot, config, basename(dir), taskId)` → 顶层 `squad-<taskId>`，与真实布局一致（首轮 16 实证 + 本工作房顶层实证）；M4 门闩/cwd/交接/解散/清理全部落到真实路径，不再误判 |
+| 1c | 旧路径假设残留 | PASS（有上报项） | 见 r2-2 残留清单——全部属写集外文件，不阻断，需 run-lead 另行授权清理 |
+| 2 | 命名契约测试 | PASS | staffing.test.ts:108-115：精确断言 `<repo>/.picode/worktrees/squad-<taskId>` + endsWith + 不含 runId 段；import 于 :8；走真实 setup()（createRun + addChunkAndTask） |
+| 3 | P2-1 findExecutableOn | PASS（实现）/ 附 P3 项 | pi-adapter.ts:385-386：try 内 `statSync().isFile()` 前置排除目录（X_OK 对目录误判），statSync 跟随软链（PATH 软链工具仍命中），缺失→catch→continue；**未补"目录命中"反例测试**（首轮打回意见"一行修复 + 测试"，仅一行修复落地，见 r2-3） |
+| 4 | 写集 / 验证 | PASS | `diff b0be509..HEAD --stat` = 恰 7 文件（errors.test.ts、errors.ts、paths.ts、pi-adapter.test.ts、pi-adapter.ts、staffing.test.ts、task.ts）= 6 原写集 + paths.ts（run-lead 授权扩展）；修复增量 f504c69..HEAD 仅 3 文件 ⊆ 7，无越写 |
+
+### r2-2 旧布局残留清单（写集外，非阻断，上报 run-lead）
+
+1. **packages/orchestrator/src/supervise.ts:51** — `worktreesRootOf` 内联拼 `<worktree_root>/<runId>`（未走 worktreePath）→ 观测指标 `worktrees` 恒 0（dashboard 指标降级；无门闩/spawn/路径功能影响）。建议后续改为枚举 `squad-*` 或复用 worktreePath。
+2. **packages/orchestrator/src/summary-noise.ts:12** — agent 就绪提示仍写 `.picode/worktrees/<run>/<task>`（指引漂移，agent 若照抄推导路径会落错）。
+3. **scripts/supervise/supervise.mjs:82** — `${REPO}/.picode/worktrees/${RUN_ID}`（legacy 监督脚本；existsSync 兜底 → 计数 0，不崩溃）。
+4. **docs/domains/git-worktree.md:23** — 布局图仍写 `.picode/worktrees/<run_id>/<task_id>/`（文档陈旧；首轮即与现实脱节，本轮代码对齐后更显性）。
+5. scripts/supervise/{ui,r3,dash}-feed.sh — 2026-08-13 一次性投喂脚本硬编码旧布局（历史工件，仅提示）。
+- 非陈旧（正确保留，不属残留）：config.ts:367 / docs/spec/13-configuration.md:252 `worktree_root: ".picode/worktrees"`（根不变）；management.test.ts:96 子串校验（泛化，仍成立）；task.ts `.git/worktrees/*` 为 git 内部管理域（非 `.picode` 布局）。
+
+### r2-3 非阻断项
+
+- **P3-r2-1** pi-adapter.test.ts 无"PATH 中目录名恰为 node"反例测试——现有"无执行位文件"用例在有/无 isFile 守卫下均通过（accessSync 都失败），守卫回归无测试守护。建议补：`mkdtemp + mkdir node` → `probeCoreTools(dir)` 的 missing 须含 node。
+- **P3-r2-2** E5 打回伴随时序缺口（approve→prepare→唤醒闭环 / prepare 后自动重唤醒）本修复增量未涉及（run-lead 裁决选"对齐命名"路线；实践闭环 = run-lead 预建房，16 实证即此流程产物）。建议 run-lead 在 known_issues/handoff 确认"预建房 or 手工重唤醒"人工步骤文档化（写集外，另行授权）。
+- paths.ts 注释引用 `scripts/worktree-setup.sh` 事实核验通过：脚本存在于主仓 `scripts/`（未跟踪入 git），`--new <name>` 建顶层 `WT_ROOT/<name>`，runId 仅入分支名 `picode/<run>/<name>`——与注释一致。dist/paths.d.ts 已重建为 `_runId`，与 src 一致（dist 未入 diff，非跟踪物）。
+
+### r2-4 结论
+
+**pass（批准）** — Reviewed-by: code-review（门禁层，r2 复审）。
+
+- E5 P1-1（worktreePath 布局脱节 → 生产 M4 误判缺失）已正确、最小修复：canonical 对齐顶层 `squad-<taskId>`，全部调用点语义一致，命名契约测试守护；M4 门闩对真实预建布局不再误判。
+- P2-1（isFile 排除目录）实现正确（补测见 P3-r2-1，后续项）。
+- 写集门禁通过：修复增量 ⊆ 6 原写集 + paths.ts 授权扩展，无越写文件。
+- 无新增 P0/P1。残留旧布局引用（supervise.ts:51、summary-noise.ts:12、supervise.mjs:82、git-worktree.md:23）与 P3-r2-1/2 均属写集外或非阻断，**不阻断本次合并**，建议 run-lead 以单独变更单授权清理。

@@ -1,6 +1,6 @@
-# 运维规程（serve/会话/续跑/guardian 重启/会话生命周期/真相关于文件）
+# 运维规程（serve/会话/续跑/guardian 重启/会话生命周期/工具链/watchdog 运维/真相关于文件）
 
-> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）+ D072/D073（run 收尾自动休眠 + session audit 跨 run 残留审计）+ D077/D078（摘要窗口去噪 / 平台席预算分流）+ D082/D091（会话 checkpoint 显式 + 自动捕获）+ D083/D092（re-spawn 摘要去噪 + 剔噪口径统一）+ D089/D090（决策编号全局分配器 + decision-lint）+ D093（supervise 监控命令正式化）。
+> 来源：run-lead 决策 C7（ERR-04 缓解 + 监督过程固化）+ D066（会话续跑机制）+ R2-C3（guardian 重启信号）+ R3-C2/C3（续跑 gate / 续跑遥测）+ D072/D073（run 收尾自动休眠 + session audit 跨 run 残留审计）+ D077/D078（摘要窗口去噪 / 平台席预算分流）+ D082/D091（会话 checkpoint 显式 + 自动捕获）+ D083/D092（re-spawn 摘要去噪 + 剔噪口径统一）+ D089/D090（决策编号全局分配器 + decision-lint）+ D093（supervise 监控命令正式化）+ **R17 D119-D124（零产出看门狗 / 工具探测+工作房门闩 / 队列消费语义 / guardian 错误边界+budget 衰减 / 工具链脚本集 / 知识自主整理）**。
 > 遵循本规程可避免已知的 serve 类故障人工踩坑，并正确观察/调整续跑、重启守护热载、管理 run 收尾与跨 run 会话残留。
 
 ## 决策编号规程（D089 / D090）
@@ -377,3 +377,131 @@ picode session audit --repo <path> --clean                       # 清理终态 
   上述规程是**开新 run 前的快速闸门**，防止历史 run 的僵尸 awake 会话占满 `max_awake` 阻塞唤醒
 - 非终态 run 不会被清理（`not-terminal` 跳过）；`--clean` 只处理终态 run 的残留
 - `close_run_connected: false` 时 `--clean` 不可用（C1 未合并），先合并 C1 或只用审计
+
+## 工具链脚本（R17 C3 · D123）
+
+R17 起工具链脚本化（陶钧队交付，merge 3cfaaba），各脚本均为纯 bash/sh（零依赖 node 之外）、
+幂等可重复跑；后续修复走 `scripts/` 内维护（scripts/supervise/** 除外，属 watchdog C1 域）。
+
+### worktree-setup.sh — 建房 + 自链
+
+```bash
+bash scripts/worktree-setup.sh --repo <主仓> <主仓>/.picode/worktrees/squad-<taskId>   # 建房+自链
+bash scripts/worktree-setup.sh --repo <主仓> <工作房> --no-link                        # 跳过自链
+bash scripts/worktree-setup.sh --repo <主仓> <工作房> --no-smoke                       # 跳过冒烟
+```
+
+- 语义：`git worktree add` + 分支复用 + 根 node_modules 独立目录、依赖逐条软链主仓、
+  `@picode/*` 本地链接指向**工作房** packages（根治跨包解析落主仓旧 dist 假红）+ 包内
+  node_modules 软链主仓 + tsbuildinfo 清理 + 冒烟（node -v && git rev-parse）+ 幂等跳过
+- **canonical 布局（D120 E5 P1 裁决）**：`<repo>/.picode/worktrees/squad-<taskId>`（顶层，
+  **不嵌套 runId 段**）——所有脚本/代码路径按此布局推导，发现旧布局残留（`<run>/<task>`）
+  一律按 D120 r2 残留清单口径上报清理
+- 失败提示：创建失败会提示先跑本脚本（M4 门闩 WORKTREE_MISSING 中文原因，D120）
+
+### test-iso.sh — 全量隔离测试（根 `npm test` 即此）
+
+```bash
+npm test                      # = bash scripts/test-iso.sh（全量入口）
+bash scripts/test-iso.sh --no-build     # 跳过 tsc -b（不推荐，stale dist 假红风险）
+bash scripts/test-iso.sh --keep-home    # 保留 HOME（不隔离，仅排查用）
+bash scripts/test-iso.sh -- <args>      # 透传包级测试参数
+```
+
+- 顺序固定：清理 tsbuildinfo → **先 tsc -b**（防 stale dist 假红）→ 6 包并行 + dashboard
+  vitest 并入（`.bin/vitest run` 直调，规避 pnpm 软链 abort）；退出码传播（0=通过）
+- dashboard vitest 缺失 → fail=1（不再静默跳过后 exit 0，P1-6 假绿修复）
+- **全量测试唯一入口**：内部包级直跑，不回调根 npm test（无递归）
+
+### env.sh — 环境确认（source 安全）
+
+```bash
+source scripts/env.sh   # 探测 node/npm + 导出 NODE_BIN/NPM_BIN/NODE_DIR/NPM_DIR/NODE_VERSION/NPM_VERSION/PICODE_ENV_OK
+```
+
+- 只 source 不执行（不 exit、return 传失败、不覆盖既有必需变量、可重复 source 幂等）；
+  结合 DSH runtime-commands（node/npm/npx/rg 软链入 PATH）使用（见「环境自检」节）
+
+### tour-check.sh — 巡检三查
+
+```bash
+bash scripts/tour-check.sh <主仓> <run_id>   # 逐 task 输出 产出/无产出/异常；exit 非 0 = 有待关注项
+```
+
+- 三查：progress 增量存在且非空 / 工作房 git status --porcelain 非空或分支独有提交 /
+  sdet evidence.yaml 存在或 progress 标 BLOCKED（`grep -qw` 词边界）；**不扫描 commit subject**
+- 输出「有待关注项」→ 人工按 process-quickwin §2 三查复核 → §3 at_risk 阶梯
+
+### merge-gate.sh — 合并门四查
+
+```bash
+bash scripts/merge-gate.sh <主仓> <task_id>   # 或在工作房内运行（locate_repo_root 用 git-common-dir 推导）
+```
+
+- 四查：evidence 齐（handoff 5 件）/ diff ⊆ write_paths（读 `tasks/<id>/brief/brief.yaml` 权威）/
+  lint（npm run check 三 lint）/ 测试绿（test-iso.sh）
+- 附加硬门禁：**签收门**（acceptance accepted_by 非空，R4）+ **review 版本化门禁**
+  （docs/reviews/<task>-e5*.md 已 tracked，防 review 未提交误导根因分析）
+- 注意：merge-gate 是门禁**输入**，合并批准仍由 run-lead 在 `approvals/merge.yaml` 落（R9）
+
+### kb-triage.mjs — 知识自主整理（D124）
+
+```bash
+node scripts/kb-triage.mjs                                   # --dry-run 默认（只读零写，出判定预览）
+node scripts/kb-triage.mjs --apply                           # 生成报告 docs/knowledge/feedback/kb-triage-<run>.md
+```
+
+- 四维评分（复用性/新颖性/信号强度/行动关联 0-2）+ 一票规则（引用保护/字节重复/永久保留类/
+  流水账上限）→ STORE（≥6）/ STAGING（4-5）/ IGNORE（≤3）；**永不删除文件**
+- 流程：文档小组每 run 收尾运行；STAGING/删除候选批量上报 run-lead 一次审批多条；STORE 自主执行
+
+## watchdog 零产出看门狗运维（R17 M1 · D119）
+
+W2 起 `session-watchdog.ts`（guardianTick 集成，复用既有节奏）自动追踪各 agent 产出信号并分级干预。
+**状态文件 = `<run_dir>/watchdog.yaml`**（D002 文件真相，幂等落盘：动作仅状态跃迁时发出）。
+
+### at_risk / takeover_candidate 语义与处置
+
+| 字段 | 触发 | 处置 |
+|---|---|---|
+| `at_risk` | 无产出 2 轮（或 `session.error` 前缀 `TOOL_ENV_BROKEN:`/`WORKTREE_MISSING:` → **立即**）| 红灯：run-lead 催办（process-quickwin §3 阶梯 2）；已投 steer 引导（I1 档，复用 composeSteerPrompt）|
+| `takeover_candidate` | 再 2 轮仍无产出 → bus 通知 run-lead | 接管候选：run-lead 按 process-quickwin §2 三查核验后决定接管/解散（阶梯 3）|
+
+- **判定/执行分离**：at_risk 在判定层置位（错误前缀/第 2 轮）；takeover_candidate **投递成功才置位**
+  （P1-B/P1-D）——失败下轮自动重试，幂等账本（last_action）不因失败失效
+- **跳过语义**：终态会话跳过；平台席跳过（P1-1）；恢复（有产出）归零重计
+- **零 LLM**：纯规则 evaluateWatchdog，无任何模型决策（D003）
+- **人工兜底**：M1 为机械层，run-lead 人工巡检阶梯（process-quickwin §3）保留，二者不互替
+
+### watchdog.yaml 排查
+
+- `agents[]` 逐 agent：`{agent_id, silent_rounds, at_risk, takeover_candidate, last_action, last_output_at}`
+- 会话无产出但未标红 → 查 silent_rounds 计数是否被平台席/终态跳过误吞；计数冻结在 2 永不升级
+  为既有 P2-3 观察项（error 持久会话），见 review r1 问题清单
+- 通知未达 run-lead → 查 `<run_dir>/bus/leadership.jsonl`（投递成功才置位，失败在下一轮重试）
+
+### guardian-errors.log（P1-3 · D122）
+
+- guardianTick 顶层错误落盘 `<run_dir>/guardian-errors.log`（tick 内抛错**不退出循环**，退避续跑）
+- 该日志为运维观测物：查 guardian 曾遭遇的异常（坏 yaml / LOCK_TIMEOUT / sleepAgent 失败），
+  **不驱动状态决策**；连续错误增长 = 环境/配置问题排查信号
+
+## 环境自检与 workdir 纪律（R17 M2/M5 · D120）
+
+R16 根因实证：子代理 bash/node 不在 PATH（会话默认 cwd 失效）→ spawn ENOENT 静默卡死；工作房从未
+真实创建 → spawn 落在错误目录。R17 双层防线：机械门闩（D120 M2/M4）+ 开工自检人工模板（M5，
+process-quickwin §6）。
+
+### node / rg 位置（DSH runtime-commands）
+
+- 子代理 PATH 含 `~/Library/Application Support/DSH Desktop/runtime-commands/bin/`，node/npm/npx 与
+  rg/ripgrep 均已软链入（探针实证 node v26 / npm 11）——bash/glob/grep 工具失效先查此目录软链
+- 主机侧若需重建：`ln -s $(which node) <runtime-commands>/bin/node`（npx/npm/rg 同理）
+
+### workdir 纪律（唯一解药）
+
+- **DSH harness 层默认 cwd 失效未修**：子代理 bash 不带 workdir 时仍可能 spawn ENOENT；
+  **所有 bash 调用必须显式带 workdir**（R17 全程强制，实证有效）
+- 会话内 `pwd` 三探（node -v / git rev-parse --show-toplevel / pwd）为开工自检第一步（M5）；
+  工作房路径 = `<repo>/.picode/worktrees/squad-<taskId>`（canonical，D120）
+- 工具故障如实留痕（progress 自检节），不得静默跳过（R16 教训：证据 pending 纪律）

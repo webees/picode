@@ -316,6 +316,12 @@
 |D116|**聊天室前端（W2a chunk-chat-ui）**：index.vue 新增「聊天室」tab + rooms-view 房间卡片点击进入聊天室（入口增强）+ chat-room-view 消息流视图（ts/类型徽章中文 labels 映射/body/refs/meta 详情可展开/参与者面板）+ chat-send-box 发送框（POST /bus/:room，成功清空 + 刷新，未授权结构化错误中文提示 ROOM_POST_DENIED/BUS_TYPE_DENIED，非 sponsor 可发房禁用发送框）+ chat.data.ts 派生纯函数 + chat.test.ts fixture 断言；轮询 3s（既有模式）+ 骨架屏/ErrorState（D071 语义 token 不硬编码色值）；审批联动——发送框失败提示与门禁 tab 审批流展示语义一致（本 chunk 不实现审批请求落盘，写代理 fail-closed D114）|
 |D117|**流程项落地（W1b chunk-process-items）**：评分画像消费——hr-talent.ts 新增只读消费入口 `queryTalentPool`（按 grade/skills/seat 筛选、S/A 级优先）+ `picode staffing pool` 子命令（--grade/--seat/--skill，只读零写、不自动注入、非法 grade 结构化拒绝）；createStaffingRequest 支持显式预填 reuse_persona_ids（引用已存在字段，不新增配置键）；文档精简维护——scripts/doc-lean-check.mjs（零依赖只读检查：决策权威/关键目录/DECISIONS 行式/feedback 索引/冗余检测）+ package.json `docs:lean` 接线（可作 merge gate 输入）|
 |D118|**docs 收尾 + 流程教训（W3 chunk-docs）**：D113-D117 落档（表行+详条，来源标注到 chunk）+ D070/D071 行修订标注（面板契约「9 端点全 GET 只读」→「+聊天室读/写 + 审批流/变更单数据源；写仅限 sponsor chat（D114）」）+ decision-catalog §25 同步（面板端点面 + 写代理条目）+ operations.md 监控面板节更新（新端点清单 + 聊天室 tab + 运维要点）+ E19 纪要 + `--land` 闭环（watermark reserved → landed，next_number 119）+ git push origin main（本 run 收尾含 push）|
+|D119|**零产出看门狗（M1 分级干预 · W2 chunk-watchdog）**：按 agent_id 追踪最近产出信号（git 提交/工作房文件 mtime/转录 incoming），无产出 2 轮→at_risk（composeSteerPrompt 投 steer，I1 档），再 2 轮→bus 通知 run-lead + takeover_candidate；`TOOL_ENV_BROKEN:`/`WORKTREE_MISSING:` 错误前缀→**立即 at_risk**（不进 2 轮等待）；零 LLM 决策（纯规则 evaluateWatchdog）；幂等（last_action 落盘 + takeover_candidate 投递成功才置位，失败下轮重试）；终态会话/平台席跳过；guardianTick 接线（M3 复用既有节奏）；bus 通知以 sess-mgr 投递身份（P0-1）|
+|D120|**工具探测 + 工作房门闩（M2/M4 · W1 chunk-env-gate）**：wakeAgent spawn 前 `probeCoreTools` 纯函数探测 bash/node/npm/git（fs X_OK 不 spawn），任一缺失→`TOOL_ENV_BROKEN` 结构化拒绝（PicodeError.details.missing 缺失清单，D050 延续）；worktree 存在性门闩双落点——prepareTask：存在→`assertWorktreeExists` 校验（伪目录拒绝 WORKTREE_MISSING）、缺失→自动创建（方案 D，兼容既有 fixture）、创建失败→中文提示 worktree-setup.sh；wakeAgent（真实后端路径）spawn 前缺失拒绝（不产生任何进程）；纯状态机路径不拦；**canonical 布局裁决 = `<repo>/.picode/worktrees/squad-<taskId>`（顶层，不嵌套 runId 段）**（E5 P1，22ed0a7）；findExecutableOn 补 isFile() 排除目录（P2-1）|
+|D121|**命令队列消费语义（P1-2 · W2 chunk-watchdog）**：rules-engine `drain` 至多执行一次（processed 游标/截断），杜绝 wake→sleep 每 tick 振荡重复执行与队列无限增长；**读+截断均入锁**（P1-4：`.session_commands.lock` 内完成，杜绝两条命令丢失窗口）；处理异常（LOCK_TIMEOUT 等）时截断跳过→下轮重放（不违反至多一次）；drain 后 processed=0 断言（二次消费用例）；指令仍仅接受 from=sess-mgr（D028 延续）|
+|D122|**guardian 错误边界 + budget 衰减（P1-3/P1-7 · W2 chunk-watchdog）**：guardianTick 顶层 try/catch → `GuardianTickResult`（progress/checkpoints/events 形状编译期 satisfies 校验）；错误落盘 `<run>/guardian-errors.log`；tick 内抛错不退出循环（退避续跑）；runGuardian 保底 catch 形状一致；session-store maxTurns 提供重置/衰减路径——24h 窗口（>24h → turns 从 1 重计，continuations 不重置）；terminate 后重注册放行且 budget 归零（不再 SESSION_ALREADY_REGISTERED 死锁）；非 terminated 重复注册仍拒绝（既有契约不破坏）|
+|D123|**工具链脚本集与测试编排（C3 · W1 chunk-toolchain）**：scripts/{worktree-setup,test-iso,env,merge-gate,tour-check}.sh + 根 package.json `test` 编排（test → test-iso.sh）；worktree-setup=建房+自链（@picode/* 本地链接指向工作房 packages，根治跨包解析落主仓旧 dist 假红）+ 冒烟 + 幂等；test-iso=mktemp HOME 隔离 + 清理 tsbuildinfo→先 tsc -b（防 stale dist 假红）→6 包并行 + dashboard vitest 并入（.bin/vitest run 直调，规避 pnpm 软链 abort）；env=node/npm 探测 + 绝对路径导出 + source 安全幂等；tour-check=巡检三查（progress 增量/git status+log/evidence）废除 commit subject 扫描 + `grep -qw BLOCKED` 词边界；merge-gate=四查（evidence 5 件齐/diff ⊆ write_paths（读 brief.yaml 权威）/lint/测试绿）+ **签收门（acceptance accepted_by 非空，R4 硬门禁）** + **review 版本化门禁（[5] 检查 docs/reviews/<task>-e5*.md tracked）** + locate_repo_root git-common-dir 覆盖 worktree 内运行|
+|D124|**知识自主整理（kb-triage · 修复波）**：scripts/kb-triage.mjs 零依赖 node——四维评分（复用性/新颖性/信号强度/行动关联 0-2 分）+ 一票规则（引用保护/字节重复检测/永久保留类（E 纪要/handoff/hr 数据底座）/流水账 >50KB 上限）→ 判定 STORE（≥6）/ STAGING（4-5）/ IGNORE（≤3）；--dry-run 默认（只读零写）、--apply 生成报告 docs/knowledge/feedback/kb-triage-<run>.md；**永不删除文件**（IGNORE/过时项由 docs 按 DOC-LIFECYCLE 移 .trash/ 二次确认后执行）；STAGING/删除候选批量上报 run-lead 一次审批多条，STORE 自主执行；首跑 57 候选→34 STORE/18 STAGING/4 IGNORE（自动发现 2 份字节重复 evolve 纪要）|
 ## D084 — Skill harness 落地（技能承载体系）
 - 2026-08-14 · 来源：run-lead 自治规划 run-2026-08-13T23-50-59-484Z（从 anthropics/skills + agentskills spec 学习，改 picode 自身技能承载体系）
 - 问题：`paths.skills_root` 是 D055 死键（声明零读取），两个种子 SKILL.md 无任何校验守卫，新 skill 可任意书写；`Persona.skills[]` 是必填维度但零消费；ready 消息若硬注入 skill 正文会爆 context
@@ -660,3 +666,67 @@
 - 验证：decision-lint **0 error**（docs/** 全量扫描）；`node scripts/doc-lean-check.mjs`（docs:lean）OK；diff 门禁 = 5 写集文件 ⊆ write_paths（纯 docs 层 + watermark，零代码零配置）；决策编号闭环 `--reserve`（113-118，count 6，已由 run-lead 预留）→ 落档 → `--land`（status=landed）
 - 剩余风险（E19 终态）：**W2b flow-ui 待合并**（D115 实测数字与最终视图增强清单由 run-lead 在合并门后收尾补录 E19）；serve 侧会话累积 GC（D109 遗留，跨轮候选延续）；流程简化 A 级试点排下一轮流程优化 run（D112/E18 后续候选延续，本轮不实施）
 - commit: 本提交（chunk-docs / W3）
+
+## D119 — 零产出看门狗（M1 分级干预 · W2 chunk-watchdog）
+- 2026-08-16 · 来源：W2 金柝队（更筹/戍鼓/宵柝）+ run-lead 代实现 05f3201（队内会话失能，证据证据 evidence.yaml 留痕）+ E5 审查四轮（r1 needs-work 1P0+5P1 → r2 → r3 → r4 pass）+ merge **e41cc3e**；goal C1-watchdog success_criteria + chunks.yaml:96-102 acceptance ①
+- 问题：子代理零产出无自动检测——2 轮零产出应 at_risk 红灯、4 轮应接管候选通知 run-lead 的机制此前靠人工巡检（R16 金汤队 3 轮内接管验证是手工流程）；工具环境损坏（TOOL_ENV_BROKEN，D120）时等满 2 轮才标红过慢；M1 初版集成层 bus 通知被成员 ACL 恒拒且被 catch 吞掉（E5 P0）
+- 决定：
+  - **M1 零产出看门狗（session-watchdog.ts，新 307 行）**：按 agent_id 追踪最近产出信号（git 提交/工作房文件 mtime/转录 incoming），无产出 2 轮→at_risk（`composeSteerPrompt` 投 steer，I1 档，复用 D111 投喂通道），再 2 轮→bus 通知 run-lead + takeover_candidate 标记；**零 LLM 决策**（纯规则 `evaluateWatchdog` 9 用例，D003 编排器无 LLM 延续）；幂等（last_action 落盘，同轮重复 tick 不重复投喂）；终态会话跳过、平台席跳过（P1-1）；`TOOL_ENV_BROKEN:`/`WORKTREE_MISSING:` 错误前缀（D120 契约）→ **立即 at_risk**（不进 2 轮等待）
+  - **通知投递语义（E5 r2-r4 定稿）**：bus 通知以 **sess-mgr 投递身份**（P0-1 修复，附集成测试）；takeover **判定/执行分离**——判定层置 verdict、执行层投递成功才置位 takeover_candidate 并成对推送 notified/takeover_candidates（P1-B/P1-D），失败不置位下轮重试（幂等账本成立）；at_risk 推送保留判定层原位置
+  - **guardianTick 接线（M3）**：self-drive.ts guardianTick 集成 runWatchdogCheck（复用既有节奏）；probeServeHealth 既有恢复语义不破坏
+  - **supervise 布局（P1-5）**：supervise 全家 PICODE/REPO 从硬编码（/Users/x/Desktop/iOS/picode、/tmp/picode-dogfood）改 `$REPO_ROOT`（git rev-parse --git-common-dir）派生（lib.mjs）；注释残留旧路径字符串清理（81f4abf 验收回修）
+- 验证：E5 审查四轮（r1 needs-work → r4 pass，无新 P0/P1）；orchestrator **405/405** 全绿（含 evaluateWatchdog 9 用例、P0-1 sess-mgr 投递集成测试、P1-1 平台席跳过、P1-7 2 用例、drain 二次消费 1 用例、continuation.test.ts 增量）；全量 6 包 fail 0 + 三 lint 0（decision-lint 127）；merge e41cc3e（11 文件 +636/-25）
+- 边界：watchdog 只读判定不写业务状态（D002 文件真相）；notify/steer 均走既有 bus 词汇（D047 type 注册表）与既有投喂通道（D111）；P2 延续项不阻断（bus payload meta 结构化、转录文件名子串匹配 P2-E、supervise 接线 watchdog 留待交接声明）
+
+## D120 — 工具探测 + 工作房门闩（M2/M4 · W1 chunk-env-gate）
+- 2026-08-16 · 来源：W1 金汤队（虎符/鱼钥/关防）+ E5 审查两轮（r1 needs-work → r2 pass，修复提交 22ed0a7）+ merge **9f93100**；goal C2-env-gate success_criteria + chunks.yaml chunk-env-gate acceptance
+- 问题：R16 根因双实证——子代理 bash/node 不在 PATH（会话默认 cwd 失效）→ spawn ENOENT 静默卡死无结构化上报；工作房从未真实创建 → spawn 落在错误目录；二者此前均无自动拦截，靠人工巡检兜底
+- 决定：
+  - **M2 工具环境自检**：`probeCoreTools` 纯函数（给定 PATH+候选路径 → 探测 bash/node/npm/git，fs X_OK 不 spawn）；wakeAgent spawn 前调用，任一核心工具缺失 → spawn 中止 + `session.error = "TOOL_ENV_BROKEN: …"` 前缀 + `PicodeError(TOOL_ENV_BROKEN, 中文提示, {missing:[…]})`（PicodeError 新增可选 `details` 结构化字段，D050 错误码注册表延续）；findExecutableOn 补 `isFile()` 排除目录（P2-1，22ed0a7）
+  - **M4 工作房存在性门闩（双落点）**：prepareTask——worktree 已存在 → `assertWorktreeExists` 校验（目录 + `.git` gitdir 指向主仓 `.git/worktrees/<name>`，兼容 .git 目录/文件形态；伪目录 → WORKTREE_MISSING 拒绝）；缺失 → 自动创建（**方案 D**，兼容 closure/merge/t-regression fixture 既有语义，零写集外改动）；创建失败 → `PicodeError(WORKTREE_MISSING, 中文原因)`（提示 run-lead 先跑 worktree-setup.sh）；wakeAgent（真实后端路径 spawn 落点）spawn 前同款校验——缺失拒绝 spawn + session.error 前缀（**不产生任何进程**，R16 根因 #2 最前沿拦截）；纯状态机路径不拦（rules-engine 测试语义不变）
+  - **worktreePath canonical 裁决（E5 P1，22ed0a7）**：布局 = `<repo>/.picode/worktrees/squad-<taskId>`（**顶层，不嵌套 runId 段**）——`worktreePath()` 统一按此生成（paths.ts:12-23），closure/task/pi-adapter 全部调用点对齐真实布局（r2 逐调用点核对 16 处）；命名契约测试精确断言（staffing.test.ts:108-115，endsWith + 不含 runId 段）
+- 验证：E5 审查两轮（r1 needs-work → r2 pass）；E7 自链环境（worktree-setup.sh 方案 D 自链）重验全绿：build core/orchestrator 成功 + npm test exit 0（core 162 / bus 25 / orch 390 / pi-ext 36 / mcp 18 / dash 31+2skip，fail 0）+ 三 lint 0（decision-lint 123）；merge 9f93100（7 文件 +479/-20）
+- 边界：纯状态机路径不拦（不 spawn 后端，rules-engine 语义不变）；probeCoreTools 只探测不拉进程（无副作用）；写集外旧布局残留（supervise.ts:51 指标、summary-noise.ts:12 提示、docs/domains/git-worktree.md:23 文档）为 r2 上报项不阻断，需 run-lead 另行授权清理
+
+## D121 — 命令队列消费语义（P1-2 · W2 chunk-watchdog）
+- 2026-08-16 · 来源：修复波 P1-2（sys-arch 扫描）+ W2 watchdog 并入（rules-engine.ts drain）+ E5 审查（P1-4 截断入锁）+ merge **e41cc3e**；watchdog brief.yaml acceptance ⑤
+- 问题：`session_commands.jsonl` drain 每 tick 全量消费 → wake→sleep 每 tick 振荡重复执行同一命令；队列无限增长；截断在读锁外 → 两条命令并发丢失窗口
+- 决定：
+  - **drain 至多执行一次**：processed 游标/截断语义——同轮重复 tick 不重放已消费命令（二次消费用例断言 processed=0）
+  - **读+截断均入锁**（P1-4）：`session_commands.jsonl` 读与截断全部在 `.session_commands.lock` 临界区内完成（appendSessionCommand 与 drain 同锁），杜绝锁外截断的丢命令窗口
+  - **异常语义**：处理异常（LOCK_TIMEOUT 等）时截断跳过 → 下轮重放（不违反「至多执行一次」，失败可重试）
+  - 指令来源纪律不变：仍仅接受 from=sess-mgr（D028 延续）
+- 验证：rules-engine.test.ts drain 二次消费 1 用例（e41cc3e 内，ev-full-test 引用）；orchestrator 405/405 全绿；E5 r1 P1-4 打回 → r2 修复落锁后复审通过
+- 边界：队列文件真相不变（D002/D028）；drain 消费语义为机械执行，无 LLM 决策（D003）
+
+## D122 — guardian 错误边界 + budget 衰减（P1-3/P1-7 · W2 chunk-watchdog）
+- 2026-08-16 · 来源：修复波 P1-3/P1-7 + W2 watchdog（self-drive.ts / session-store.ts）+ E5 审查 + merge **e41cc3e**；watchdog brief.yaml acceptance ④⑤
+- 问题：guardianTick 内抛错 → 守护循环退出（自治循环单点故障，R16 曾现 guardian 静默死亡）；maxTurns 无重置 → 会话 budget 用尽后永不可恢复（terminate 后重注册还报 SESSION_ALREADY_REGISTERED 死锁）
+- 决定：
+  - **P1-3 guardian 顶层错误边界**：guardianTick 顶层 try/catch → `GuardianTickResult`（progress/checkpoints/events 形状编译期 `satisfies` 校验，字段逐项核对）；错误落盘 `<run>/guardian-errors.log`（路径安全）；runGuardian 保底 catch 形状一致；**tick 内抛错不退出循环**（退避续跑）
+  - **P1-7 budget 重置/衰减**：session-store maxTurns 提供重置路径——24h 窗口（>24h → turns 从 1 重计，continuations 不重置）；terminate 后重注册放行且 budget 归零（不再 SESSION_ALREADY_REGISTERED 死锁）；非 terminated 重复注册仍拒绝（既有契约不破坏）
+- 验证：session-store.test.ts P1-7 ×2 + self-drive.test.ts 容错用例（E5 r1 打回「缺注入抛错用例」→ r2 补容错路径）；watchdog evidence ev-full-test（P1-7 2 用例、drain 二次消费 1 用例）+ 全量 405/405 + 三 lint 0
+- 边界：watchdog 状态不随重注册重置（P3 观察项）；注入抛错/退避续跑测试列为 P2 延续项（不阻断）；guardian-errors.log 为运维观测物，不驱动状态决策
+
+## D123 — 工具链脚本集与测试编排（C3 · W1 chunk-toolchain）
+- 2026-08-16 · 来源：W1 陶钧队（执规/斫轮/持矩）+ E5 审查一轮 pass + merge **3cfaaba**；goal C3-toolchain success_criteria + chunks.yaml chunk-toolchain acceptance
+- 问题：R16 三大假红/卡死根因——pnpm 软链 abort（dashboard 测试跑不起来）、stale dist 假红（跨包解析落主仓旧 dist，滞后 1.5 天致 9 假失败）、HOME 未隔离假红（loadConfig 加载 ~/.picode/config.yaml 串环境）；同时无一键化工具链（worktree 建立/测试隔离/合并门/巡检全靠手搓）
+- 决定（5 脚本 + 根测试编排）：
+  - **worktree-setup.sh**：建房+自链——根 node_modules = 独立目录 + 依赖逐条软链主仓 + `@picode/*` 本地链接指向**工作房** packages（根治跨包解析落主仓旧 dist 假红）+ packages/*/node_modules 软链主仓（pnpm 整目录软链特例）+ tsbuildinfo 清理 + 冒烟（node -v && git rev-parse --show-toplevel）+ 幂等（已正确软链跳过）+ 分支复用 add + 失败可行动提示；--no-link/--no-smoke；83d4b09 路径统一物理解析（pwd -P + REPO_ROOT git-common-dir）
+  - **test-iso.sh**：mktemp HOME 隔离 + 清理 tsbuildinfo → **先 tsc -b**（防 stale dist 假红）→ 6 包并行 + dashboard vitest 并入（`.bin/vitest run` 直调，规避 pnpm 软链 abort + run 模式防挂起）；dashboard vitest 缺失→fail=1（P1-6 假绿修复，9907341）；参数透传（--no-build/--keep-home/--）+ 退出码传播
+  - **env.sh**：node/npm 探测 + 绝对路径导出（NODE_BIN/NPM_BIN/NODE_DIR/NPM_DIR/…/PICODE_ENV_OK）+ PATH 含 node 目录检查 + source 安全（不 exit、return 传失败、不覆盖既有必需变量、可重复 source 幂等）；配合 DSH runtime-commands 修复（R17 C-0）
+  - **tour-check.sh**：巡检三查（progress 增量存在且非空 / 工作房 git status --porcelain 非空或分支独有提交 / sdet evidence.yaml 存在或 progress 标 BLOCKED）；`grep -qw BLOCKED` 词边界（P2-14⑥ 修复 UNBLOCKED 误报，9907341）；**不依赖 commit subject 扫描**（R16 两次误报教训）
+  - **merge-gate.sh**：四查——evidence 齐（handoff 5 件）/ diff ⊆ write_paths（读 brief.yaml 权威 write_paths）/ lint（npm run check 三 lint）/ 测试绿（test-iso.sh）；**签收门**（acceptance accepted_by 非空，R4 硬门禁，9907341）+ **review 版本化门禁**（[5] 检查 docs/reviews/<task>-e5*.md 已 tracked，杜绝 review 未提交误导后续根因分析，9907341）；locate_repo_root 用 git-common-dir 覆盖 worktree 内运行；task/run 从分支名 picode/<run>/<task> 推导
+  - **package.json**：`test` → `bash scripts/test-iso.sh`（dashboard vitest + 包级并行 + HOME 隔离一次性落地）；其余脚本不动
+- 验证：sdet 持矩独立复核（evidence.yaml ev-01~07：sh -n 5 脚本全过、worktree-setup 自链幂等两遍 + 迷你 --new + 3 类失败路径、test-iso 全量绿（dashboard vitest 59 并入）、env.sh source 安全幂等、merge-gate 四形态、tour-check 三形态 + exit 0/1 契约、根 npm test 全量绿 + 三 lint 0）；D4（83d4b09 路径规范化）/ D5（84dca73 chmod 755）修复复验通过；merge 3cfaaba（6 文件 +805/-1）
+- 边界：merge-gate 为门禁输入非终裁（R9 合并门批准仍由 run-lead 在 approvals/merge.yaml 落）；脚本零依赖 node 之外（纯 bash/sh）；test-iso 为全量测试唯一入口（根 test 即调它，无递归）
+
+## D124 — 知识自主整理（kb-triage · 修复波）
+- 2026-08-16 · 来源：修复波（sponsor「全面检查 picode 所有隐患和 bug，全面修复一波，把调整记录下来」指令）+ 首跑提交 a5de16f + docs/knowledge/feedback/DOC-LIFECYCLE.md §7 试点章程延伸；决策编号经 watermark 分配最终落地 **D124**（初始提交 a5de16f 与 r17-fix-wave-record.md 曾以「D119 预留」标记，属预留期引用，正式编号以 DECISIONS 为准）
+- 问题：knowledge/ 无自主整理机制——存什么/忽略什么全凭人工逐项拍板，run-lead 逐项审批开销大；噪音/流水账/重复文档累积无机械检测（首跑即发现 2 份字节重复 evolve 纪要、codename-ledger 0KB 低信号）
+- 决定：
+  - **scripts/kb-triage.mjs**（零依赖 node）：四维评分（复用性/新颖性/信号强度/行动关联 0-2 分）+ 一票规则（引用保护/字节重复检测/永久保留类（E 纪要/handoff/hr 数据底座）/流水账 >50KB 上限）→ 判定 **STORE（≥6）/ STAGING（4-5）/ IGNORE（≤3）**
+  - **流程**：--dry-run 默认（只读零写）；--apply 生成报告 `docs/knowledge/feedback/kb-triage-<run>.md`；**永不删除文件**（IGNORE/过时项由 docs 按 DOC-LIFECYCLE 移 .trash/ 二次确认后执行）；STAGING/删除候选批量上报 run-lead 一次审批多条，STORE 自主执行——run-lead 不再逐项拍板
+  - **首跑（R17）**：57 候选（1 跳过索引/模板）→ STORE 34 / STAGING 18 / IGNORE 4
+- 验证：首跑报告 docs/knowledge/feedback/kb-triage-run-2026-08-16T09-30-00-EFFICIENCY.md（判定明细表全量留痕）；与 DOC-LIFECYCLE（生命周期章程）/ D117 docs:lean（结构检查）构成文档维护三件套
+- 边界：护栏不删除文件（判定为建议，IGNORE 执行需 docs 二次确认）；扫描范围为 docs/knowledge/**；文档小组每 run 收尾运行

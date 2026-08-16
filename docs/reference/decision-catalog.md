@@ -1141,3 +1141,87 @@ DECISIONS 行）。
 | 修订标注 | D070/D071 行 + 详条边界：面板契约「9 端点全 GET 只读」→「+聊天室读/写 + 审批流/变更单数据源；写仅限 sponsor chat（D114）」（2026-08-15）|
 | 同步 | operations.md 监控面板节（新端点清单 + 聊天室 tab + 运维要点）；E19 纪要（flow-ui 部分占位，run-lead 合并后收尾）|
 | 闭环 | `--reserve`（113-118）→ 落档 → `--land`（status=landed）；push origin main（rev-list 0）|
+
+## 26. 会话失能机制修复 + 运行效率工具链（D119-D124 · R17 EFFICIENCY）
+
+R17 三块落地：会话失能机制修复（工具自检/工作房门闩/零产出看门狗）+ 运行效率工具链（5 脚本 + 测试
+编排）+ 流程快赢规范（W3 docs）。决策 D119-D124（--land 闭环，watermark next 119→125）。
+
+### 26.1 零产出看门狗（D119 · W2 chunk-watchdog）
+
+**D119 已定：M1 分级干预——产出信号追踪 + 2 轮 at_risk / 4 轮接管通知；错误前缀立即 at_risk；零 LLM。**
+
+| 项 | 语义 |
+|------|------|
+| 产出信号 | git 提交 / 工作房文件 mtime / 转录 incoming（按 agent_id）|
+| 2 轮 | at_risk + steer 投喂（composeSteerPrompt，I1 档，复用 D111 通道）|
+| 4 轮 | bus 通知 run-lead + takeover_candidate 标记（sess-mgr 投递身份，P0-1）|
+| 立即 at_risk | `session.error` 前缀 `TOOL_ENV_BROKEN:` / `WORKTREE_MISSING:`（D120 契约）|
+| 纪律 | 零 LLM 纯规则（D003）；幂等（投递成功才置位，失败下轮重试）；终态/平台席跳过；guardianTick 接线（M3）|
+
+处置运维见 operations.md「watchdog 零产出看门狗运维」节；人工阶梯兜底见 process-quickwin §3。
+
+### 26.2 工具探测 + 工作房门闩（D120 · W1 chunk-env-gate）
+
+**D120 已定：M2 工具探测 + M4 工作房门闩双落点 + worktreePath canonical 裁决。**
+
+| 项 | 语义 |
+|------|------|
+| M2 探测 | `probeCoreTools` 纯函数（fs X_OK 不 spawn）；wakeAgent spawn 前探测 bash/node/npm/git；缺失→`TOOL_ENV_BROKEN`（PicodeError.details.missing 缺失清单）；findExecutableOn `isFile()` 排除目录（P2-1）|
+| M4 门闩 | prepareTask：存在→assertWorktreeExists（伪目录拒绝）/缺失→自动创建（方案 D）/失败→WORKTREE_MISSING 中文提示；wakeAgent（真实后端路径）spawn 前缺失拒绝（不产生进程）；纯状态机路径不拦|
+| canonical | 布局 = `<repo>/.picode/worktrees/squad-<taskId>`（**顶层，不嵌套 runId**，E5 P1 裁决 22ed0a7）——所有调用点（closure/task/pi-adapter 16 处）按此对齐|
+
+### 26.3 队列消费语义（D121 · W2 watchdog）
+
+**D121 已定：drain 至多执行一次 + 截断入锁。**
+
+- processed 游标/截断：同轮重复 tick 不重放（二次消费断言 processed=0）；读+截断均在
+  `.session_commands.lock` 内（P1-4，防丢命令窗口）；异常时截断跳过→下轮重放；指令仅接受 from=sess-mgr
+  （D028 延续）。
+
+### 26.4 guardian 错误边界 + budget 衰减（D122 · W2 watchdog）
+
+**D122 已定：guardianTick 顶层 try/catch + guardian-errors.log + maxTurns 24h 窗口重置。**
+
+- 错误边界：tick 内抛错不退出循环（退避续跑）；GuardianTickResult 形状编译期校验；错误落盘
+  `<run>/guardian-errors.log`（运维观测物，不驱动状态决策）。
+- budget：>24h → turns 从 1 重计（continuations 不重置）；terminate 后重注册放行且 budget 归零
+  （不再 SESSION_ALREADY_REGISTERED 死锁）；非 terminated 重复注册仍拒绝。
+
+### 26.5 工具链脚本集与测试编排（D123 · W1 chunk-toolchain）
+
+**D123 已定：5 脚本 + 根 test 编排（test → test-iso.sh）。**
+
+| 脚本 | 职责 |
+|------|------|
+| worktree-setup.sh | 建房+自链（@picode/* 链接指向工作房 packages，根治旧 dist 假红）+ 冒烟 + 幂等 + --no-link/--no-smoke |
+| test-iso.sh | mktemp HOME 隔离 + 先 tsc -b（防 stale dist）+ 6 包并行 + dashboard vitest 并入（.bin/vitest run 直调）+ 退出码传播；dashboard vitest 缺失→fail（P1-6）|
+| env.sh | node/npm 探测 + 绝对路径导出 + source 安全幂等（不 exit）|
+| tour-check.sh | 巡检三查（progress 增量 / git status+log / evidence）；grep -qw BLOCKED 词边界；不扫描 commit subject |
+| merge-gate.sh | 四查（evidence 5 件/diff ⊆ write_paths（读 brief.yaml）/lint/测试绿）+ 签收门（accepted_by 非空）+ review 版本化门禁（[5]）+ git-common-dir 推导 |
+| package.json | `test` → test-iso.sh（dashboard vitest + 包级并行 + HOME 隔离一次性落地）|
+
+R16 三坑根治：pnpm 软链 abort（.bin/vitest 直调）/ stale dist 假红（tsc -b 先行）/ HOME 未隔离（mktemp）。
+
+### 26.6 知识自主整理（D124 · kb-triage）
+
+**D124 已定：kb-triage.mjs 四维评分 + 一票规则 → STORE/STAGING/IGNORE；永不删除文件。**
+
+- 评分：复用性/新颖性/信号强度/行动关联 0-2 分；一票规则：引用保护/字节重复检测/永久保留类（E 纪要/
+  handoff/hr 数据底座）/流水账 >50KB 上限 → STORE（≥6）/ STAGING（4-5）/ IGNORE（≤3）。
+- 流程：--dry-run 默认、--apply 出报告 `docs/knowledge/feedback/kb-triage-<run>.md`；STORE 自主执行、
+  STAGING/删除候选批量上报 run-lead 一次审批；护栏不删除文件（docs 移 .trash/ 二次确认）。
+- 首跑（R17）：57 候选 → 34 STORE / 18 STAGING / 4 IGNORE。文档维护三件套 = kb-triage + DOC-LIFECYCLE +
+  docs:lean（D117）。
+
+### 26.7 docs 收尾（W3 chunk-docs · E20）
+
+**W3 已定：D119-D124 落档 + catalog §26 + operations 工具链/watchdog/环境自检节 + process-quickwin-r17 +
+E20 纪要 + name-ledger 补录 + --land + push。**
+
+| 项 | 内容 |
+|------|------|
+| 决策落档 | D119-D124 表行+详条（来源标注到 chunk/队：W2 金柝 / W1 金汤 / W1 陶钧 / 修复波）|
+| operations | 工具链脚本用法（worktree-setup/test-iso/env/merge-gate/tour-check/kb-triage）+ watchdog 运维（at_risk/takeover_candidate/watchdog.yaml/guardian-errors.log）+ 环境自检（runtime-commands/workdir 纪律）|
+| 流程规范 | process-quickwin-r17.md：增量进度格式/接管三查/at_risk 阶梯/评分 checklist/巡检三查/开工自检（M5）|
+| 闭环 | `--reserve`（119-124）→ 落档 → `--land`（status=landed，next=125）；push origin main（rev-list 0）|
