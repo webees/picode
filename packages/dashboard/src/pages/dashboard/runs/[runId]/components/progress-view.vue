@@ -22,6 +22,7 @@ import type { BadgeVariant } from '@/lib/utils'
 
 import { deriveProgress } from './views.data'
 import { PHASE_PROGRESS } from './role-meta.data'
+import { latchBadge } from './flow.data'
 
 function phaseValue(phase: string | null | undefined): number {
   if (phase === null || phase === undefined)
@@ -35,6 +36,14 @@ const props = defineProps<{ runId: string }>()
 const { data, isLoading, isError, error } = useTasks(props.runId)
 
 const view = computed(() => deriveProgress(data.value?.tasks ?? []))
+
+const latchByTask = computed(() => {
+  const map = new Map<string, { brief: string | null, staffing: string | null }>()
+  for (const t of data.value?.tasks ?? []) {
+    map.set(t.task_id, { brief: t.latch?.brief ?? null, staffing: t.latch?.staffing ?? null })
+  }
+  return map
+})
 
 const statusVariant: Record<string, BadgeVariant> = {
   in_progress: 'default',
@@ -102,6 +111,7 @@ function formatTime(iso: string | null) {
           <TableRow>
             <TableHead>任务</TableHead>
             <TableHead>状态</TableHead>
+            <TableHead>双门闩</TableHead>
             <TableHead>阶段</TableHead>
             <TableHead>进度</TableHead>
             <TableHead>阻塞</TableHead>
@@ -118,6 +128,17 @@ function formatTime(iso: string | null) {
               <Badge :variant="statusVariant[row.status] ?? 'outline'">
                 {{ label(TASK_STATUS, row.status) }}
               </Badge>
+            </TableCell>
+            <TableCell>
+              <div v-if="latchByTask.get(row.task_id)" class="flex gap-1">
+                <Badge :variant="latchBadge(latchByTask.get(row.task_id)!.brief).variant" class="px-1.5 py-0 text-[10px]">
+                  {{ latchBadge(latchByTask.get(row.task_id)!.brief).label }}
+                </Badge>
+                <Badge :variant="latchBadge(latchByTask.get(row.task_id)!.staffing).variant" class="px-1.5 py-0 text-[10px]">
+                  {{ latchBadge(latchByTask.get(row.task_id)!.staffing).label }}
+                </Badge>
+              </div>
+              <span v-else class="text-xs text-muted-foreground">-</span>
             </TableCell>
             <TableCell>
               <Badge variant="outline">
@@ -143,7 +164,7 @@ function formatTime(iso: string | null) {
               {{ formatTime(row.updated_at) }}
             </TableCell>
           </TableRow>
-          <TableEmpty v-if="view.rows.length === 0" :colspan="7">
+          <TableEmpty v-if="view.rows.length === 0" :colspan="8">
             <Empty>
               <EmptyContent>
                 <EmptyMedia variant="icon" />

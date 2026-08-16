@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useChunks } from '@/services/api/picode.api'
+import { useChunks, useMerge } from '@/services/api/picode.api'
 import { CHUNK_STATUS, label } from '@/utils/labels'
 import { ErrorState } from '@/components/dashboard'
 import type { BadgeVariant } from '@/lib/utils'
@@ -21,8 +21,19 @@ import type { BadgeVariant } from '@/lib/utils'
 const props = defineProps<{ runId: string }>()
 
 const { data, isLoading, isError, error } = useChunks(props.runId)
+const mergeQuery = useMerge(props.runId)
 
 const chunks = computed(() => data.value?.chunks ?? [])
+
+const mergedTaskIds = computed(() =>
+  new Set((mergeQuery.data.value?.queue ?? []).filter(m => m.status === 'merged' || m.status === 'failed').map(m => m.task_id)),
+)
+
+/** 依赖 chunk 是否已满足合并条件（其对应任务 merged 或 failed，D045 对齐服务器 depSatisfied）。 */
+function depMerged(dep: string): boolean {
+  const depChunk = chunks.value.find(c => c.id === dep)
+  return !!depChunk?.task_id && mergedTaskIds.value.has(depChunk.task_id)
+}
 
 const statusVariant: Record<string, BadgeVariant> = {
   ready: 'default',
@@ -73,8 +84,19 @@ const statusVariant: Record<string, BadgeVariant> = {
           <TableCell class="font-mono text-xs">
             {{ chunk.task_id ?? '-' }}
           </TableCell>
-          <TableCell class="font-mono text-xs">
-            {{ chunk.depends_on.length ? chunk.depends_on.join(', ') : '-' }}
+          <TableCell>
+            <div v-if="chunk.depends_on.length" class="flex flex-wrap gap-1">
+              <Badge
+                v-for="dep in chunk.depends_on"
+                :key="dep"
+                variant="outline"
+                class="px-1.5 py-0 font-mono text-[10px]"
+                :class="depMerged(dep) ? '' : 'text-amber-600 dark:text-amber-400'"
+              >
+                {{ dep }}{{ depMerged(dep) ? '' : ' · 等待' }}
+              </Badge>
+            </div>
+            <span v-else class="text-xs text-muted-foreground">-</span>
           </TableCell>
           <TableCell class="max-w-72 truncate font-mono text-xs" :title="chunk.write_paths.join(' ')">
             {{ chunk.write_paths.length }} 项
