@@ -271,10 +271,11 @@ export async function drainSessionCommands(
 ): Promise<DrainResult> {
   const file = path.join(dir, "session_commands.jsonl");
   if (!fs.existsSync(file)) return { processed: 0, results: [] };
-  // 逐行容错（P1）：一行损坏不再炸掉整个 drain / guardian tick
-  const lines = readJsonl<SessionCommand>(file);
 
   const drain = await withFileLock(path.join(dir, ".session_commands.lock"), async () => {
+    // P1-C（E5 r2）：读快照也必须在锁内——锁外读 + 锁内截断存在
+    // 「读后、获锁前入队命令被截断清掉」的丢失窗口。
+    const lines = readJsonl<SessionCommand>(file);
     const store = new SessionStore(dir);
     const results: DrainResult["results"] = [];
     for (const cmd of lines) {
@@ -318,10 +319,19 @@ export async function drainSessionCommands(
         outcome,
       });
     }
+    // P1-4（E5 审查）：截断必须在锁内执行——锁外截断存在
+    // 「读在锁外 + 截断在锁外」的双写丢失窗口（至多一次退化为可能零次）。
+    try {
+      fs.writeFileSync(file, "", "utf8");
+    } catch {
+      /* 截断失败不致命：下一轮仍会重放，但错误可见（不静默） */
+    }
     return results;
   });
 
-  // audit marker so re-drains can be told apart (kept append-only)
+  // P1-2（R17 修复波）：消费语义 = 每条命令至多执行一次——
+  // 处理完成后截断队列文件（audit 保留在 DrainResult.results + guardian tick 结果），
+  // 杜绝「每 tick 重放全部历史命令 → wake→sleep 振荡 + 队列无限增长」。
   return { processed: drain.length, results: drain };
 }
 

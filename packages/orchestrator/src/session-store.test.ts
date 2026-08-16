@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ErrorCode, PicodeError } from "@picode/core";
+import { ErrorCode, PicodeError, readYamlFile, writeYamlFile } from "@picode/core";
 import { SessionStore } from "./session-store.js";
 
 function freshStore(): SessionStore {
@@ -155,10 +155,35 @@ test("transition on a missing session throws coded SESSION_NOT_FOUND", async () 
     expectCode(e, ErrorCode.SESSION_NOT_FOUND);
     return true;
   });
-  await assert.rejects(() => store.terminate("ghost", "x"), (e: unknown) => {
-    expectCode(e, ErrorCode.SESSION_NOT_FOUND);
-    return true;
-  });
+});
+
+test("P1-7: terminate 后允许重新注册（复用 agent_id，不再 SESSION_ALREADY_REGISTERED 死锁）", async () => {
+  const store = freshStore();
+  store.register("engineer", { agentId: "eng@task-a", initialState: "sleeping" });
+  await store.terminate("eng@task-a", "done");
+  // terminate 后重注册应放行（P1-7：旧实现一律拒绝 → 长期会话永久停死）
+  const b = store.register("engineer", { agentId: "eng@task-a" });
+  assert.equal(b.state, "registered");
+  assert.deepEqual(b.budget, { turns: 0, continuations: 0 });
+});
+
+test("P1-7: run 窗口衰减——距上次唤醒 >24h 的会话 wake 后 turns 归零重计", async () => {
+  const store = freshStore();
+  const agentId = "pm";
+  store.register("pm", { initialState: "sleeping" });
+  // 伪造 last_wake_at 为 25h 前（直接改 sessions yaml）
+  const runDir = (store as unknown as { runDir: string }).runDir;
+  const p = path.join(runDir, "sessions", `${agentId}.yaml`);
+  const rec = readYamlFile(p) as Record<string, unknown> & {
+    last_wake_at: string; budget: { turns: number; continuations: number };
+  };
+  rec.last_wake_at = new Date(Date.now() - 25 * 3600 * 1000).toISOString();
+  rec.budget = { turns: 7, continuations: 2 };
+  writeYamlFile(p, rec);
+  await store.wake(agentId, "test");
+  const cur = store.get(agentId)!;
+  assert.equal(cur.budget?.turns ?? 0, 1, "超过 24h 窗口 → turns 从 1 重计");
+  assert.equal(cur.budget?.continuations ?? 0, 2, "continuations 不重置");
 });
 
 test("A4: concurrent transitions serialize under the session lock", async () => {

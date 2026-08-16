@@ -139,9 +139,12 @@ test("session command queue: sess-mgr wake command is drained by orchestrator", 
   assert.equal(drain.results[0].outcome, "ok");
   assert.equal(store.get("pm")!.state, "awake");
 
-  // re-drain is idempotent-safe (already awake → skipped)
+  // P1-2（R17 修复波）：消费语义 = 每条命令至多执行一次——drain 后队列截断，
+  // 重 drain 不重放（processed=0）；既有「重放得 skipped」语义已废弃
+  // （旧行为每 tick 重放全部历史 → wake→sleep 振荡 + 队列无限增长）。
   const drain2 = await drainSessionCommands(dir, config);
-  assert.equal(drain2.results[0].outcome, "skipped");
+  assert.equal(drain2.processed, 0);
+  assert.deepEqual(drain2.results, []);
 });
 
 test("drain respects max_awake unless force", async () => {

@@ -78,10 +78,16 @@ while (true) {
         }
       }
     }
-    // worktree 文件数
-    const wt = `${REPO}/.picode/worktrees/${RUN_ID}`;
-    if (fs.existsSync(wt)) {
-      row.worktrees = execSync(`find ${wt} -type f -name "*.ts" | wc -l`, { encoding: "utf8" }).trim();
+    // worktree 文件数（P1-5 修复：旧布局 worktrees/<RUN_ID>/ 已废弃，
+    // canonical 为顶层 squad-<taskId>——对全部 squad-* 工作房计数）
+    const wtsRoot = `${REPO}/.picode/worktrees`;
+    if (fs.existsSync(wtsRoot)) {
+      const dirs = fs.readdirSync(wtsRoot).filter((d) => d.startsWith("squad-"));
+      if (dirs.length > 0) {
+        row.worktrees = dirs.map((d) => `${d}:${
+          execSync(`find ${wtsRoot}/${d} -type f -name "*.ts" | wc -l`, { encoding: "utf8" }).trim()
+        }`).join(", ");
+      }
     }
     // 任务/合并状态
     const st = cli("status");

@@ -95,7 +95,9 @@ export class SessionStore {
     }
     const agentId = opts.agentId ?? roleId;
     const existing = this.get(agentId);
-    if (existing) {
+    if (existing && existing.state !== "terminated") {
+      // P1-7（R17 修复波）：terminate 后允许重新注册（复用 agent_id）——
+      // 原实现一律 SESSION_ALREADY_REGISTERED，terminate 后重注册即死锁。
       throw new PicodeError(ErrorCode.SESSION_ALREADY_REGISTERED, `session already registered: ${agentId}`);
     }
 
@@ -139,6 +141,11 @@ export class SessionStore {
           );
         }
       }
+      // P1-7（R17 修复波）：run 窗口衰减——距上次唤醒 >24h 的会话 turns 归零重计
+      // （长期平台席多次 resume 不会被 maxTurns 永久停死；continuations 不重置）。
+      const WINDOW_MS = 24 * 60 * 60 * 1000;
+      const lastWake = cur.last_wake_at ? new Date(cur.last_wake_at).getTime() : 0;
+      const staleWindow = lastWake > 0 && Date.now() - lastWake > WINDOW_MS;
       return {
         ...cur,
         wake_reason: reason,
@@ -146,7 +153,7 @@ export class SessionStore {
         // C1-run-budgets: each sleeping→awake transition counts as one turn.
         // N3: 续跑计数持久化 — 重 wake 只加 turn，绝不重置 continuations。
         budget: {
-          turns: (cur.budget?.turns ?? 0) + 1,
+          turns: staleWindow ? 1 : (cur.budget?.turns ?? 0) + 1,
           continuations: cur.budget?.continuations ?? 0,
         },
       };
