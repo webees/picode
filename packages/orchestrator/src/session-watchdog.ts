@@ -266,8 +266,8 @@ export async function runWatchdogCheck(
     if (verdict.action === "none") continue;
     const now = new Date().toISOString();
     if (next.at_risk && !result.at_risk.includes(s.agent_id)) result.at_risk.push(s.agent_id);
-    if (next.takeover_candidate && !result.takeover_candidates.includes(s.agent_id))
-      result.takeover_candidates.push(s.agent_id);
+    // P1-D（E5 r3）：takeover_candidates 推送移至 notify 成功分支（本处检查在动作
+    // 分发前执行，而 takeover_candidate 是投递成功后才置位 → 此处恒不命中）。
 
     if (verdict.action === "steer") {
       // 幂等：同 agent 同轮只投一次（last_action=steer 且刚投过 → 跳过；状态已跃迁则投）
@@ -296,6 +296,7 @@ export async function runWatchdogCheck(
         next.last_action = "notify_takeover";
         next.last_action_at = now;
         result.notified.push(s.agent_id);
+        result.takeover_candidates.push(s.agent_id);
       } catch {
         // 投递失败：不标记 takeover_candidate，下轮重试
       }
