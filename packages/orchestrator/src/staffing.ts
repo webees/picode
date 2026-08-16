@@ -137,6 +137,7 @@ export async function createStaffingRequest(
     notes?: string;
     teamName?: string;
     codenameOverrides?: Record<string, string>;
+    reusePersonaIds?: string[];
   } = {},
 ): Promise<{ request: StaffingRequest }> {
   if (readStaffingRequest(dir, taskId)) {
@@ -150,7 +151,7 @@ export async function createStaffingRequest(
     skills_wanted: opts.skills ?? [],
     constraints: opts.constraints ?? [],
     notes: opts.notes ?? "",
-    reuse_persona_ids: [],
+    reuse_persona_ids: opts.reusePersonaIds ?? [],
     ...(opts.teamName ? { team_name: opts.teamName } : {}),
     ...(opts.codenameOverrides && Object.keys(opts.codenameOverrides).length > 0
       ? { codename_overrides: opts.codenameOverrides }

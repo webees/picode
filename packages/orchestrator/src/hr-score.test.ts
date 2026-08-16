@@ -134,3 +134,74 @@ test("score: refuses a task that has not finished (16 §9 P07 gate)", async () =
   // task.status is still "queued" (never dissolved) → must refuse
   await assert.rejects(scoreTask(repo, dir, config, taskId), /not finished/);
 });
+
+// --- 消费侧边界扩展（评分回路闭环：scores.yaml → 人才池 talent.yaml） ---
+
+function readTalentPoolFile(repo: string): {
+  records: Array<{ task_id: string; seat: string; score: number; grade: string }>;
+  summary: { count: number; avg: number; by_grade: Record<string, number> };
+} {
+  return YAML.parse(
+    fs.readFileSync(path.join(repo, "docs/knowledge/hr/talent.yaml"), "utf8"),
+  ) as unknown as {
+    records: Array<{ task_id: string; seat: string; score: number; grade: string }>;
+    summary: { count: number; avg: number; by_grade: Record<string, number> };
+  };
+}
+
+test("score: talent pool records carry the S grade for a perfect run (grade 档位)", async () => {
+  const { repo, dir, config, taskId } = await setup();
+  await hire(repo, dir, config, taskId);
+  finishTask(dir, taskId);
+  await scoreTask(repo, dir, config, taskId);
+  const pool = readTalentPoolFile(repo);
+  // happy path = 100 per persona (95 shared + seat delta 5) → gradeFor(100) = S
+  assert.equal(pool.records.length, 3);
+  for (const r of pool.records) {
+    assert.equal(r.task_id, taskId);
+    assert.equal(r.score, 100);
+    assert.equal(r.grade, "S");
+  }
+});
+
+test("score: a failed run maps every record to grade D (grade 档位边界)", async () => {
+  const { repo, dir, config, taskId } = await setup();
+  await hire(repo, dir, config, taskId);
+  const tpath = path.join(dir, "tasks", taskId, "task.yaml");
+  const task = YAML.parse(fs.readFileSync(tpath, "utf8")) as { status: string; retries: number };
+  task.status = "failed";
+  task.retries = 2;
+  fs.writeFileSync(tpath, YAML.stringify(task));
+  submitEvidence(dir, taskId, {
+    cmds: [{ cmd: "npm test", exit_code: 1, log_ref: "evidence/fail.log" }],
+    by: `sdet@${taskId}`,
+  });
+  await scoreTask(repo, dir, config, taskId);
+  const pool = readTalentPoolFile(repo);
+  assert.equal(pool.records.length, 3);
+  for (const r of pool.records) {
+    assert.equal(r.grade, "D");
+  }
+});
+
+test("score: re-scoring keeps talent pool records idempotent (记录幂等)", async () => {
+  const { repo, dir, config, taskId } = await setup();
+  await hire(repo, dir, config, taskId);
+  finishTask(dir, taskId);
+  await scoreTask(repo, dir, config, taskId);
+  await scoreTask(repo, dir, config, taskId);
+  const pool = readTalentPoolFile(repo);
+  assert.equal(pool.records.length, 3, "upsert keyed by run+task+seat must not duplicate");
+});
+
+test("score: talent pool summary matches the records (汇总口径)", async () => {
+  const { repo, dir, config, taskId } = await setup();
+  await hire(repo, dir, config, taskId);
+  finishTask(dir, taskId);
+  await scoreTask(repo, dir, config, taskId);
+  const pool = readTalentPoolFile(repo);
+  assert.equal(pool.summary.count, 3);
+  assert.equal(pool.summary.avg, 100);
+  assert.equal(pool.summary.by_grade.S, 3);
+  assert.equal(pool.summary.by_grade.A, 0);
+});

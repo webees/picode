@@ -104,6 +104,40 @@ export function readTalentPool(repoRoot: string, config: PicodeConfig): TalentPo
   );
 }
 
+
+/** C4 流程项（评分-招聘回路消费侧）：只读查询人才池。grade 优先级 S>A>B>C>D；
+ *  filter: { grades?, seats?, skills? } 均为可选数组过滤（skills 为 AND 语义）；
+ *  返回按 grade 降序、score 降序；纯函数不修改入参池。 */
+export interface TalentPoolFilter {
+  grades?: Grade[];
+  seats?: Seat[];
+  skills?: string[];
+}
+export function queryTalentPool(
+  pool: TalentPool,
+  filter: TalentPoolFilter = {},
+): TalentRecord[] {
+  const GRADE_ORDER: Grade[] = ["S", "A", "B", "C", "D"];
+  return pool.records
+    .filter((r) => {
+      if (filter.grades && filter.grades.length > 0 && !filter.grades.includes(r.grade))
+        return false;
+      if (filter.seats && filter.seats.length > 0 && !filter.seats.includes(r.seat))
+        return false;
+      if (filter.skills && filter.skills.length > 0) {
+        const want = filter.skills.map((x) => x.toLowerCase());
+        // AND 语义：画像须具备每个请求技能（精确匹配，大小写不敏感）
+        if (!want.every((w) => r.skills.some((sk) => sk.toLowerCase() === w))) return false;
+      }
+      return true;
+    })
+    .sort(
+      (a, b) =>
+        GRADE_ORDER.indexOf(a.grade) - GRADE_ORDER.indexOf(b.grade) ||
+        b.score - a.score,
+    );
+}
+
 export function readNameLedger(repoRoot: string, config: PicodeConfig): NameLedger {
   return (
     readYamlFile<NameLedger>(nameLedgerPath(repoRoot, config)) ?? {

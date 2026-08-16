@@ -3,6 +3,7 @@ import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import YAML from "yaml";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -36,6 +37,8 @@ test("E2: --help groups commands by domain and lists every registered command", 
     "picode goal set-status",
     "picode session list",
     "picode session audit",
+    "picode staffing request",
+    "picode staffing pool",
     "picode staffing approve",
     "picode merge process",
     "picode window compress",
@@ -117,4 +120,108 @@ test("intake E2E: add(open, board Backlog) → triage(triaged+bus, leaves board)
   const closed = runCli(["intake", "close", "--repo", repo, "--run", runId, "--id", feed.id]);
   assert.equal(closed.status, 0, closed.stderr);
   assert.equal((JSON.parse(closed.stdout) as { status: string }).status, "done");
+});
+
+/**
+ * 评分回路消费侧（scoring-driven §4.2）：`staffing pool` 只读消费人才池——
+ * 按 --grade/--skills/--seat 筛选、S/A 优先输出；人才池文件前后字节一致（只读零写）。
+ */
+test("staffing pool: read-only talent pool consumption (S/A first, filters, zero writes)", async () => {
+  const repo = tmpGitRepo({ prefix: "picode-pool-", readme: "# t\n" });
+  const init = runCli(["init", "--repo", repo, "--goal-title", "t"]);
+  assert.equal(init.status, 0, init.stderr);
+  const { runId } = JSON.parse(init.stdout) as { runId: string };
+
+  const poolFile = path.join(repo, "docs", "knowledge", "hr", "talent.yaml");
+  fs.mkdirSync(path.dirname(poolFile), { recursive: true });
+  fs.writeFileSync(
+    poolFile,
+    YAML.stringify({
+      schema_version: "1",
+      updated_at: "2026-08-15T00:00:00.000Z",
+      records: [
+        {
+          at: "2026-08-15T00:00:00.000Z",
+          run_id: "r1",
+          task_id: "t1",
+          team_name: "队甲",
+          seat: "engineer",
+          codename: "乙-中级",
+          skills: ["typescript"],
+          score: 60,
+          grade: "B",
+          result: "dissolved",
+        },
+        {
+          at: "2026-08-15T00:00:00.000Z",
+          run_id: "r1",
+          task_id: "t2",
+          team_name: "队乙",
+          seat: "engineer",
+          codename: "甲-高级",
+          skills: ["typescript"],
+          score: 88,
+          grade: "A",
+          result: "dissolved",
+        },
+        {
+          at: "2026-08-15T00:00:00.000Z",
+          run_id: "r1",
+          task_id: "t3",
+          team_name: "队丙",
+          seat: "sdet",
+          codename: "丙-顶尖",
+          skills: ["testing"],
+          score: 95,
+          grade: "S",
+          result: "dissolved",
+        },
+      ],
+      summary: {
+        count: 3,
+        avg: 81,
+        by_grade: { S: 1, A: 1, B: 1, C: 0, D: 0 },
+        by_seat: { engineer: { count: 2, avg: 74 }, sdet: { count: 1, avg: 95 } },
+      },
+    }),
+  );
+  const before = fs.readFileSync(poolFile, "utf8");
+
+  // grade + skill 组合筛选：B 被 grade 挡、S 缺 typescript → 只剩 A
+  const r1 = runCli([
+    "staffing", "pool", "--repo", repo, "--run", runId,
+    "--grade", "S,A", "--skills", "typescript",
+  ]);
+  assert.equal(r1.status, 0, r1.stderr);
+  const out1 = JSON.parse(r1.stdout) as {
+    count: number;
+    records: Array<{ codename: string; grade: string; seat: string }>;
+  };
+  assert.equal(out1.count, 1);
+  assert.deepEqual(out1.records.map((x) => x.codename), ["甲-高级"]);
+
+  // grade + seat 组合筛选 → 仍只剩 A/engineer
+  const r2 = runCli([
+    "staffing", "pool", "--repo", repo, "--run", runId,
+    "--grade", "S,A", "--seat", "engineer",
+  ]);
+  assert.equal(r2.status, 0, r2.stderr);
+  const out2 = JSON.parse(r2.stdout) as { count: number; records: Array<{ codename: string }> };
+  assert.equal(out2.count, 1);
+  assert.deepEqual(out2.records.map((x) => x.codename), ["甲-高级"]);
+
+  // S/A 优先：无筛选时 S 在前、A 次之、B 垫底（grade 序 + score 降序）
+  const r3 = runCli(["staffing", "pool", "--repo", repo, "--run", runId]);
+  assert.equal(r3.status, 0, r3.stderr);
+  const out3 = JSON.parse(r3.stdout) as { count: number; records: Array<{ codename: string }> };
+  assert.equal(out3.count, 3);
+  assert.deepEqual(out3.records.map((x) => x.codename), ["丙-顶尖", "甲-高级", "乙-中级"]);
+
+  // 未知 grade 值 → 无匹配（空结果），不写库
+  const r4 = runCli(["staffing", "pool", "--repo", repo, "--run", runId, "--grade", "X"]);
+  assert.equal(r4.status, 0, r4.stderr);
+  assert.deepEqual(JSON.parse(r4.stdout), { count: 0, records: [] });
+
+  // 只读零写（防隐式行为变更）：人才池文件在命令运行前后逐字节一致
+  assert.equal(fs.readFileSync(poolFile, "utf8"), before, "talent.yaml must be untouched");
 });
