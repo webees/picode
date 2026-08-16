@@ -15,6 +15,7 @@ import {
   draftPersonas,
   parsePersonaFile,
   readStaffing,
+  readStaffingRequest,
 } from "./staffing.js";
 
 function setup() {
@@ -503,4 +504,42 @@ test("I4: checkPersonas flags a parent_task that disappeared (fails loudly)", as
   const eng = issues.find((i) => i.seat === "engineer");
   assert.ok(eng, "engineer should be flagged");
   assert.match(eng!.problems.join("; "), /parent task not found/);
+});
+
+// --- reuse_persona_ids 显式预填（评分回路消费侧接线 · scoring-driven §4.2） ---
+
+test("reuse_persona_ids: explicit prefill lands in request.yaml (只读引用已存在字段)", async () => {
+  const { dir, config, taskId } = setup();
+  await createStaffingRequest(dir, config, taskId, {
+    skills: ["typescript"],
+    reusePersonaIds: ["品藻", "铨叙"],
+  });
+  const req = readStaffingRequest(dir, taskId)!;
+  assert.deepEqual(req.reuse_persona_ids, ["品藻", "铨叙"]);
+  // on-disk truth (D002): request.yaml carries the prefilled ids
+  const onDisk = YAML.parse(
+    fs.readFileSync(path.join(dir, "tasks", taskId, "staffing", "request.yaml"), "utf8"),
+  ) as { reuse_persona_ids: string[] };
+  assert.deepEqual(onDisk.reuse_persona_ids, ["品藻", "铨叙"]);
+});
+
+test("reuse_persona_ids: defaults to empty array when not provided", async () => {
+  const { dir, config, taskId } = setup();
+  await createStaffingRequest(dir, config, taskId, { skills: ["typescript"] });
+  const req = readStaffingRequest(dir, taskId)!;
+  assert.deepEqual(req.reuse_persona_ids, []);
+});
+
+test("reuse_persona_ids: survives the full hire chain into staffing.yaml/approval", async () => {
+  const { repo, dir, config, taskId } = setup();
+  await createStaffingRequest(dir, config, taskId, {
+    skills: ["typescript"],
+    reusePersonaIds: ["云岫"],
+  });
+  draftPersonas(repo, dir, config, taskId);
+  const { staffing } = await approveStaffing(repo, dir, config, taskId);
+  assert.equal(staffing.status, "approved");
+  // prefill is a request-level reference — approve must not erase or rewrite it
+  const req = readStaffingRequest(dir, taskId)!;
+  assert.deepEqual(req.reuse_persona_ids, ["云岫"]);
 });

@@ -24,7 +24,8 @@
     "mcp": "node packages/mcp-server/dist/index.js",
     "check": "npm run build -w @picode/core && node packages/core/dist/validate/persona-lint.js . && node packages/core/dist/validate/skill-lint.js . && node packages/core/dist/validate/decision-lint.js .",
     "test:e2e": "bash scripts/e2e/smoke.sh",
-    "typecheck": "tsc -b --pretty false"
+    "typecheck": "tsc -b --pretty false",
+    "docs:lean": "node scripts/doc-lean-check.mjs"
   },
   "engines": {
     "node": ">=20"
