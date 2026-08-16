@@ -73,12 +73,22 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# 主仓根：--repo 显式 > 脚本位置推导（scripts/ 上一级）
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# 主仓根：--repo 显式 > git-common-dir 定位（脚本可能在主仓 scripts/ 或任务工作房 scripts/
+# 下运行；工作房的 .git 是指针文件非目录，不能靠「脚本位置上一级」推导）
+# 注意：所有路径统一解析为**物理路径**（pwd -P）——macOS /tmp 是 /private/tmp 的符号链接，
+# bash `cd && pwd` 返回逻辑路径，而 `git worktree list --porcelain` / `git rev-parse
+# --show-toplevel` 返回物理路径；逻辑/物理混用会导致「--new 创建成功仍误报未注册」「传主仓
+# 本身误报未注册」（D4 教训）。
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 if [ -z "$REPO_ROOT" ]; then
-  REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  COMMON="$(git -C "$SCRIPT_DIR" rev-parse --git-common-dir 2>/dev/null || true)"
+  case "$COMMON" in
+    .git) REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)" ;;   # 主仓内运行
+    /*)   REPO_ROOT="$(dirname "$COMMON")" ;;               # worktree 内运行（common 指向主仓 .git）
+    *)    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)" ;;   # 兜底
+  esac
 fi
-REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
+REPO_ROOT="$(cd "$REPO_ROOT" && pwd -P)"
 
 # 校验主仓
 if [ ! -f "$REPO_ROOT/package.json" ] || [ ! -d "$REPO_ROOT/.git" ]; then
@@ -118,11 +128,11 @@ if [ -n "$NEW_NAME" ]; then
   fi
 fi
 
-# ---- 目标解析与校验 ----
+# ---- 目标解析与校验（pwd -P 物理路径，见文件头 D4 说明） ----
 if [ -z "$TARGET" ]; then
-  TARGET="$(pwd)"
+  TARGET="$(pwd -P)"
 fi
-TARGET="$(cd "$TARGET" 2>/dev/null && pwd || echo "$TARGET")"
+TARGET="$(cd "$TARGET" 2>/dev/null && pwd -P || echo "$TARGET")"
 
 if [ ! -d "$TARGET" ]; then
   echo "错误：目标目录不存在：$TARGET" >&2
