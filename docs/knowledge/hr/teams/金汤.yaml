@@ -1,0 +1,10 @@
+team_name: "金汤"
+records:
+  - { run_id: run-2026-08-16T09-30-00-EFFICIENCY, task_ids: [task-chunk-env-gate], team_score: 70, at: "2026-08-16T13:00:00Z" }
+summary: { count: 1, avg: 70, min: 70, max: 70 }
+personas:
+  - { codename: "虎符", seat: squad-lead }
+  - { codename: "鱼钥", seat: engineer }
+  - { codename: "关防", seat: sdet }
+notes:
+  - "W1（task-chunk-env-gate，M2 工具探测 + TOOL_ENV_BROKEN + M4 工作房门闩）：evidence E1-E7 全 passed（HOME 隔离 + 自链环境两次全量验证）+ E5 两轮（r1 打回 worktreePath 布局 → r2 pass）+ 提交纪律 + bash 故障自救；失分：E5 打回修复 22ed0a7 由 run-lead 代修（队内会话失联，E5 尾段）。画像：门闩/探测双件套落地、证据两轮全绿（B）；尾段失联拖累，能力面认可度高。"

@@ -1,0 +1,92 @@
+# 人才池主档（talent.yaml · 由 hr-talent 身份台账演进而来，评分回路回写）
+# 每 task 评分闭合（P16）后由 people-qa 回写 score/grade/skills/seat/codename；
+# 招聘侧（reuse_persona_ids / 用工标准）引用本档 + personas/<codename>.yaml 画像。
+# grade 分档：A >=90 / B 70-89 / C 50-69 / D <50；seat：squad-lead | engineer | sdet。
+schema_version: "1"
+updated_at: "2026-08-16T13:00:00Z"
+last_run: run-2026-08-16T09-30-00-EFFICIENCY
+people:
+  # ---- R17 W1 · team 金汤（task-chunk-env-gate，队分 70/B）----
+  - codename: "虎符"
+    seat: squad-lead
+    team_name: 金汤
+    task_id: task-chunk-env-gate
+    score: 75
+    grade: B
+    skills: [方案决策/方案D定稿, 写集互斥协调, 并发协作者整合, 交接包, bash故障自救]
+    portrait: "指挥型主责：方案 D + 协作者整合 + bash 自救；E5 尾段失联（非能力因素）"
+    note: "E5 修复 22ed0a7 由 run-lead 代修；会话韧性待观察，复聘建议配探活"
+  - codename: "鱼钥"
+    seat: engineer
+    team_name: 金汤
+    task_id: task-chunk-env-gate
+    score: 75
+    grade: B
+    skills: [orchestrator TS, probeCoreTools 工具探测, worktree 门闩, PicodeError 错误码, TDD先红后绿, 真实环境取证]
+    portrait: "TDD 实现扎实：探测/门闩双件套 + 真实取证；E5 尾段失联（非能力因素）"
+    note: "测试真实非空转（PATH 替换 + 真实 git worktree add）；失联见队级注记"
+  - codename: "关防"
+    seat: sdet
+    team_name: 金汤
+    task_id: task-chunk-env-gate
+    score: 75
+    grade: B
+    skills: [证据链 command/exit_code/log_ref, HOME隔离全量测试, 自链环境验证, diff门禁]
+    portrait: "证据纪律典范：E1-E7 全绿实测、恢复后回填不伪造"
+    note: "两次全量验证（主仓共享 dist + 纯工作房自链）均全绿"
+  # ---- R17 W1 · team 陶钧（task-chunk-toolchain，队分 95/A）----
+  - codename: "执规"
+    seat: squad-lead
+    team_name: 陶钧
+    task_id: task-chunk-toolchain
+    score: 100
+    grade: A
+    skills: [squad-lead协调, bash故障自救/转write-edit, 诚实pending纪律, 并发冲突消解, 交接包]
+    portrait: "bash 全损下的协调型主责：停竞争编辑、转写实测、诚实 pending"
+    note: "E5 一次过；工具链类 task 首选主责"
+  - codename: "斫轮"
+    seat: engineer
+    team_name: 陶钧
+    task_id: task-chunk-toolchain
+    score: 100
+    grade: A
+    skills: [shell脚本工程, bash3.2兼容, worktree自链, 隔离测试编排, merge-gate门禁, git-common-dir, 路径规范化]
+    portrait: "实测担当：脚本实测 + 缺陷修复 + D4 路径规范化"
+    note: "5 提交全带 task id；脚本类工程首选 engineer"
+  - codename: "持矩"
+    seat: sdet
+    team_name: 陶钧
+    task_id: task-chunk-toolchain
+    score: 100
+    grade: A
+    skills: [独立复核签发, 缺陷发现+复验闭环, 迷你仓库夹具, 证据全绿]
+    portrait: "独立复核签发：发现 D4/D5 + 复验闭环"
+    note: "打回-修复-复验闭环教科书级；QA 首选 sdet"
+  # ---- R17 W2 · team 金柝（task-chunk-watchdog，队分 60/C）----
+  - codename: "更筹"
+    seat: squad-lead
+    team_name: 金柝
+    task_id: task-chunk-watchdog
+    score: 50
+    grade: C
+    skills: [squad-lead（会话失能，能力待复训）]
+    portrait: "会话中途失联、实现由 run-lead 接管（非能力因素）；低分待复训"
+    note: "再聘建议低风险席位试训 + 会话韧性探活优先；组合不复用"
+  - codename: "戍鼓"
+    seat: engineer
+    team_name: 金柝
+    task_id: task-chunk-watchdog
+    score: 50
+    grade: C
+    skills: [engineer（会话失能，能力待复训）]
+    portrait: "会话中途失联、实现由 run-lead 接管（非能力因素）；低分待复训"
+    note: "同更筹；复聘前需验证会话稳定性"
+  - codename: "宵柝"
+    seat: sdet
+    team_name: 金柝
+    task_id: task-chunk-watchdog
+    score: 70
+    grade: B
+    skills: [断言矩阵, 集成冒烟实证, bus/ACL 集成层验收, 诚实打回, 证据取证]
+    portrait: "验收贡献突出：集成实证 ACL P0 + 诚实打回 10 缺陷"
+    note: "按实际验收贡献评；纯函数绿≠集成绿的验收标杆，集成类 task sdet 首选"

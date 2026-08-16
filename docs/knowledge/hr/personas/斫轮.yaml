@@ -1,0 +1,8 @@
+codename: "斫轮"
+seat: engineer
+records:
+  - { task_id: task-chunk-toolchain, score: 100, at: "2026-08-16T13:00:00Z" }
+summary: { count: 1, avg: 100, min: 100, max: 100 }
+notes:
+  - "run-2026-08-16T09-30-00-EFFICIENCY W1（team 陶钧，task-chunk-toolchain）：公共项 95 + engineer_evidence_pass 5 = 100。"
+  - "画像：实测担当——逐脚本真实取证（幂等 3 遍/失败路径/冒烟）；修复 env.sh fail() return 缺陷、merge-gate 进程替换 sh -n 兼容、bash 3.2 负索引兼容、D4 路径统一物理解析 + REPO_ROOT git-common-dir 推导；5 提交全带 task id。"

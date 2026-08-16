@@ -1,0 +1,10 @@
+team_name: "金柝"
+records:
+  - { run_id: run-2026-08-16T09-30-00-EFFICIENCY, task_ids: [task-chunk-watchdog], team_score: 60, at: "2026-08-16T13:00:00Z" }
+summary: { count: 1, avg: 60, min: 60, max: 60 }
+personas:
+  - { codename: "更筹", seat: squad-lead }
+  - { codename: "戍鼓", seat: engineer }
+  - { codename: "宵柝", seat: sdet }
+notes:
+  - "W2（task-chunk-watchdog，M1 看门狗 + P1-2/3/5/7）：E5 四轮收敛（r1 1P0+5P1 → r4 pass）+ 终态 orchestrator 405/405 全绿 + 提交纪律 + 宵柝诚实打回；失分：更筹/戍鼓会话中途失联、实现由 run-lead 代实现（05f3201，非能力因素）、handoff 仅 evidence + artifacts。画像：看门狗 4 轮收敛、2/3 失联由 run-lead 代实现（C）；宵柝（sdet）独立扛起验收（70），更筹/戍鼓低分待复训。再聘纪律：金柝组合不复用；watchdog 类高风险自治核心 task 优先派陶钧型已验证组合。"

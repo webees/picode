@@ -1,0 +1,8 @@
+codename: "鱼钥"
+seat: engineer
+records:
+  - { task_id: task-chunk-env-gate, score: 75, at: "2026-08-16T13:00:00Z" }
+summary: { count: 1, avg: 75, min: 75, max: 75 }
+notes:
+  - "run-2026-08-16T09-30-00-EFFICIENCY W1（team 金汤，task-chunk-env-gate）：公共项 70 + engineer_evidence_pass 5 = 75。"
+  - "画像：TDD 先红后绿实现扎实——errors.ts 错误码 + PicodeError.details、probeCoreTools 纯函数、wakeAgent M2 探测/M4 门闩、assertWorktreeExists；真实环境取证（PATH 缺失模拟、worktree 缺失拒绝）非 mock 空转。失分项：E5 修复尾段会话失联（非能力因素）。"

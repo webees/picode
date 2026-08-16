@@ -1,0 +1,8 @@
+codename: "戍鼓"
+seat: engineer
+records:
+  - { task_id: task-chunk-watchdog, score: 50, at: "2026-08-16T13:00:00Z" }
+summary: { count: 1, avg: 50, min: 50, max: 50 }
+notes:
+  - "run-2026-08-16T09-30-00-EFFICIENCY W2（team 金柝，task-chunk-watchdog）：公共项 60 + engineer_no_delivery -10 = 50。"
+  - "画像：会话中途失联、无 engineer 交付；M1 实现与 E5 r1-r4 修复、验收回修均由 run-lead 代实施（队内会话失能）。低分主因会话/环境故障（非能力因素），能力存疑待复训。"

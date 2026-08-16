@@ -1,0 +1,8 @@
+codename: "宵柝"
+seat: sdet
+records:
+  - { task_id: task-chunk-watchdog, score: 70, at: "2026-08-16T13:00:00Z" }
+summary: { count: 1, avg: 70, min: 70, max: 70 }
+notes:
+  - "run-2026-08-16T09-30-00-EFFICIENCY W2（team 金柝，task-chunk-watchdog）：公共项 60 + sdet_commands_all_green 5 + honest_rejection_lead 5 = 70（按实际验收贡献评）。"
+  - "画像：验收贡献突出——19 条真实证据（exit_code 实测 + artifacts 归档）、断言矩阵先行、集成冒烟实证定位 M1 P0（bus ACL 恒拒 → steer/通知静默失败）、诚实打回 NOT_PASS 10 缺陷（不伪造 402/402 绿）；打回基于旧版 05f3201，其项已由 E5 r1-r4 + 验收回修逐项修复（复验为 run-lead 代执行）。"
