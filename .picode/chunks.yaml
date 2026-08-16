@@ -1,132 +1,34 @@
-# run-2026-08-16T09-30-00-EFFICIENCY 分块方案（run-lead 定稿 · 依据 sys-arch/proc-audit 双分析）
-# 基线：main = 9b782c8（R16 DASHBOARD 收尾后）。scale=M，并行 ≤3 组，3 波次。
-# 范围：① 会话失能机制修复（工具自检 M2 + 工作房门闩 M4 + 零产出看门狗 M1 + 复活重投喂 M3）
-#       ② 运行效率工具链（worktree-setup/test-iso/env/merge-gate/tour-check + 测试编排）
-#       ③ 流程快赢规范（增量进度/接管留痕/at_risk 三查）+ 决策 + E20 纪要
-# 根因（双分析共识）：子代理工具 ENOENT（cwd 失效+node 不在 PATH，已修 node/npm/npx 软链）+ 工作房
-#   从未真实创建 + 无自动 at_risk/接管机制 + 接管绕过审查门轨迹 + 评分回路断裂。
+# run-2026-08-16T20-14-40-FIX500 分块方案（run-lead 定稿 · 依据 sys-arch 复核 subagent-53）
+# 基线：main @ 214d7ef（R17 收尾后，工作树干净）。scale=S，1 chunk，1 组并行。
+# 根因：statusSnapshot（status.ts:236-237）对 goal.acceptance/product_acceptance 无空值保护；
+#       readGoal（run-store.ts:252-270）缺省对象无两字段，且 GoalState 类型契约要求必填；
+#       触发链 = goal.yaml 缺失 → 500；对照 router.ts:173-174 列表端点有 ?.length ?? 0 防御。
+# 修复：b（治本）readGoal 缺省补 acceptance:[]/product_acceptance:[]（兼修 run-store.ts:415 隐性点）
+#       + a（防御）status.ts 改 ?.length ?? 0（防显式 null 覆盖缺省）。
+#       S 规模合并为单 chunk（写集互斥、无依赖环、单三角交付）。
 
-shared_files:
-  - path: "packages/core/src/errors.ts"
-    owner_chunk: chunk-env-gate
-    note: "TOOL_ENV_BROKEN 新错误码由 env-gate 追加；watchdog/docs 只读引用"
-  - path: "package.json"
-    owner_chunk: chunk-toolchain
-    note: "测试编排（workspace concurrency + dashboard vitest 并入）由 toolchain 一次性落地；其余 chunk 不碰"
-  - path: "scripts/supervise/supervise.mjs"
-    owner_chunk: chunk-watchdog
-    note: "watchdog 接线 + 陈旧路径修复（lib.mjs 同属 supervise 目录由 watchdog 一并修，写集含 scripts/supervise/*）"
-  - path: "docs/guides/operations.md"
-    owner_chunk: chunk-docs
-    note: "监控面板/工具链运维节由 docs 更新；toolchain 只读引用"
+shared_files: []
 
 chunks:
-  - id: chunk-env-gate
-    title: "工具环境自检（M2：wakeAgent 前置探测 bash/node/git + TOOL_ENV_BROKEN 错误码）+ 工作房存在性门闩（M4：双门闩加 worktree 已建校验）"
+  - id: chunk-fix-500
+    title: "runs 端点 500 修复：readGoal 缺省补 acceptance 字段（治本）+ statusSnapshot 空值防御（双保险）+ 回归测试（orchestrator + dashboard-server 端点级）"
     wave: 1
     write_paths:
-      - "packages/orchestrator/src/pi-adapter.ts"
-      - "packages/orchestrator/src/pi-adapter.test.ts"
-      - "packages/orchestrator/src/task.ts"
-      - "packages/orchestrator/src/staffing.ts"
-      - "packages/orchestrator/src/staffing.test.ts"
-      - "packages/core/src/errors.ts"
-      - "packages/core/src/errors.test.ts"
+      - "packages/orchestrator/src/run-store.ts"
+      - "packages/orchestrator/src/status.ts"
+      - "packages/orchestrator/src/status.test.ts"
+      - "packages/dashboard-server/src/index.test.ts"
     read_paths:
-      - "packages/orchestrator/src/self-drive.ts"
-      - "packages/orchestrator/src/continuation.ts"
-      - ".picode/runs/run-2026-08-15T04-00-00-DASHBOARD/tasks/*/handoff/evidence.yaml"
-      - "docs/knowledge/feedback/sponsor-feedback-and-process-audit.md"
+      - "packages/orchestrator/src/run-store.test.ts"
+      - "packages/dashboard-server/src/router.ts"
+      - ".picode/goal.yaml"
+      - ".picode/plan_draft.md"
     depends_on: []
     acceptance:
-      - "工具探测纯函数（可单测）：给定 PATH/候选路径，探测 bash/node/npm/git 可用性；wakeAgent spawn 前调用，任一核心工具缺失→spawn 中止并置 session.error=TOOL_ENV_BROKEN（结构化，含缺失清单）"
-      - "core errors.ts 新增 TOOL_ENV_BROKEN（错误码+中文可读文案），pi-adapter 使用之；errors.test.ts 断言"
-      - "工作房存在性门闩：staffing 批准或 task prepare 时校验 config.git.worktree_root 下 worktree 真实存在（git worktree list 语义）；缺失→拒绝 spawn 并给出明确中文原因（提示 run-lead 先 worktree-setup.sh）"
-      - "测试：pi-adapter.test.ts 探测纯函数 + 失败路径（PATH 缺 node 模拟）；staffing.test.ts 门闩校验（缺失拒绝/存在放行）"
+      - "status.test.ts 新增回归：删除 goal.yaml 的 run → statusSnapshot 不抛错且 goal.acceptance===0、goal.product_acceptance===0"
+      - "run-store.test.ts A1 旧格式补齐测试仍绿（readGoal 缺省变更不破坏既有语义）"
+      - "dashboard-server index.test.ts 新增：fixture 删除 goal.yaml → GET /api/runs/:id 与 /sessions 均 200 且 snapshot.goal.acceptance===0"
+      - "显式空值覆盖防御：goal.yaml 存在但 acceptance: null → 仍不抛错（?.length ?? 0 兜底）"
       - "全量 npm test 绿 + npm run check 三 lint 0"
     owner_chunk: null
     status: ready
-  - id: chunk-toolchain
-    title: "运行效率工具链：worktree-setup.sh / test-iso.sh / env.sh / merge-gate.sh / tour-check.sh + 根 package.json 测试编排（workspace concurrency + dashboard vitest 并入）"
-    wave: 1
-    write_paths:
-      - "scripts/worktree-setup.sh"
-      - "scripts/test-iso.sh"
-      - "scripts/env.sh"
-      - "scripts/merge-gate.sh"
-      - "scripts/tour-check.sh"
-      - "package.json"
-    read_paths:
-      - "docs/guides/operations.md"
-      - ".picode/worktrees/（既有 worktree 结构参考）"
-      - "docs/knowledge/feedback/design-deficiencies-analysis.md"
-    depends_on: []
-    acceptance:
-      - "worktree-setup.sh：git worktree add（或复用）+ packages/*/node_modules 自链（软链指向主仓对应目录，pnpm 软链特例处理）+ tsbuildinfo 清理 + 冒烟验证（node -v && git rev-parse --show-toplevel）；失败时给出明确错误与修复提示；幂等（已存在则跳过重建）"
-      - "test-iso.sh：mktemp HOME 隔离 + 先 tsc -b（防 stale dist 假红，R16 实测 dist 滞后 1.5 天致 9 项假失败）+ 全量测试透传；退出码 0=通过"
-      - "env.sh：导出 node/npm 路径确认 + PATH 检查（配合 runtime-commands 修复）；source 安全"
-      - "merge-gate.sh：合并门一键检查——evidence 齐 + diff ⊆ write_paths（--task 参数）+ lint（persona/skill/decision）+ 测试绿；输出 PASS/FAIL 清单"
-      - "tour-check.sh：巡检三查——progress 增量存在 / 工作房 git status 非空或分支有提交 / sdet evidence 存在或 BLOCKED；输出每 task 结论（产出/无产出/异常），退出码非 0 表示有待关注项"
-      - "根 package.json test 脚本：并入 packages/dashboard vitest（pnpm -C packages/dashboard test 或 workspace 引用）+ 包级并行（npm run -w 并行或 pnpm --workspace-concurrency）；保持 HOME 隔离"
-      - "脚本均有 usage/帮助注释；sh -n 语法检查通过；全量 npm test 绿"
-    owner_chunk: null
-    status: ready
-  - id: chunk-watchdog
-    title: "零产出看门狗（M1）+ 会话复活重投喂（M3）+ supervise 陈旧路径修复（P1-5）+ 自治循环修复（P1-2 命令队列消费 / P1-3 guardian 顶层错误边界 / P1-7 budget 重置）"
-    wave: 2
-    write_paths:
-      - "packages/orchestrator/src/session-watchdog.ts"
-      - "packages/orchestrator/src/session-watchdog.test.ts"
-      - "packages/orchestrator/src/self-drive.ts"
-      - "packages/orchestrator/src/self-drive.test.ts"
-      - "packages/orchestrator/src/rules-engine.ts"
-      - "packages/orchestrator/src/rules-engine.test.ts"
-      - "packages/orchestrator/src/session-store.ts"
-      - "packages/orchestrator/src/session-store.test.ts"
-      - "packages/orchestrator/src/continuation.test.ts"
-      - "scripts/supervise/supervise.mjs"
-      - "scripts/supervise/lib.mjs"
-      - "scripts/supervise/feed.mjs"
-    read_paths:
-      - "packages/core/src/errors.ts"
-      - "packages/orchestrator/src/continuation.ts"
-      - "packages/orchestrator/src/pi-adapter.ts"
-      - "docs/knowledge/feedback/design-deficiencies-analysis.md"
-    depends_on: ["chunk-env-gate"]
-    acceptance:
-      - "session-watchdog.ts：按 agent_id 追踪最近产出信号（git 提交 / 工作房文件 mtime / 转录 incoming），无产出 2 轮→at_risk（composeSteerPrompt 投 steer，I1 档），再 2 轮→bus 通知 run-lead + takeover_candidate 标记；零 LLM 决策（纯规则）；幂等（不重复投喂）；终态会话跳过"
-      - "self-drive.ts 接线：guardianTick 中集成 watchdog 检查（复用既有节奏）；probeServeHealth 扩展——error 会话失活超阈值自动 re-wake + resume（sendReady + clearError），失败保持原态不抖动"
-      - "supervise.mjs/lib.mjs/feed.mjs：陈旧路径修复（PICODE/REPO 从硬编码改 $REPO_ROOT 派生），supervise 可运行并接线 watchdog（调用 orchestrator 的 watchdog 检查函数或 CLI）"
-      - "测试：session-watchdog.test.ts（计数/升级/幂等/终态跳过/steer 投喂触发）；self-drive.test.ts 增量（复活重投喂路径 + guardian 顶层错误边界：tick 内抛错不退出循环、错误落盘退避续跑）；continuation.test.ts 增量（复用 composeSteerPrompt 不破坏既有语义）"
-      - "修复波（sys-arch 扫描 P1）：rules-engine.ts drain 命令队列消费语义改为至多执行一次（processed 游标/截断，杜绝 wake→sleep 每 tick 振荡与队列无限增长）；session-store.ts maxTurns 提供重置/衰减路径（CLI session budget-reset 或按 run 窗口衰减），terminate 后重注册不报 SESSION_ALREADY_REGISTERED 死锁；supervise 全家 PICODE/REPO 硬编码旧路径（/Users/x/Desktop/iOS/picode、/tmp/picode-dogfood）改 $REPO_ROOT/import.meta.url 派生"
-      - "全量 npm test 绿 + npm run check 三 lint 0"
-    owner_chunk: null
-    status: planned
-  - id: chunk-docs
-    title: "流程快赢规范（M5 开工自检模板 + 增量进度报告格式 + 接管留痕 + at_risk 三查判据）+ D119 起决策 + operations.md + E20 纪要 + 评分回路收尾清单"
-    wave: 3
-    write_paths:
-      - "docs/DECISIONS.md"
-      - "docs/decisions/watermark.yaml"
-      - "docs/reference/decision-catalog.md"
-      - "docs/guides/operations.md"
-      - "docs/knowledge/feedback/process-quickwin-r17.md"
-      - "docs/knowledge/evolve/run-2026-08-16T09-30-00-EFFICIENCY.md"
-    read_paths:
-      - "docs/decisions/reserve.mjs"
-      - "packages/orchestrator/src/pi-adapter.ts"
-      - "packages/orchestrator/src/session-watchdog.ts"
-      - "scripts/*.sh"
-      - ".picode/plans/plan-r17-session-fix-efficiency.md"
-    depends_on:
-      - "chunk-env-gate"
-      - "chunk-toolchain"
-      - "chunk-watchdog"
-    acceptance:
-      - "D119 起决策：工具探测+TOOL_ENV_BROKEN（M2）/ 工作房门闩（M4）/ 看门狗分级干预（M1）/ 复活重投喂（M3）/ 工具链脚本集（C 项）/ 流程快赢规范（增量进度+接管留痕+at_risk 三查）——reserve.mjs → DECISIONS.md → --land 闭环"
-      - "process-quickwin-r17.md：增量进度报告格式（时间戳+phase 变更+WIP 产物路径+阻塞，追加式）、接管前置三查核验与变更单式留痕、at_risk 阶梯动作（1 通知/2 红灯/3 接管）、评分回路收尾 checklist（scores 齐 + talent 聚合）——作为下轮 skill 手册同步的权威依据"
-      - "operations.md：工具链脚本用法（worktree-setup/test-iso/env/merge-gate/tour-check）+ watchdog 运维说明（at_risk/takeover_candidate 语义与处置）+ 环境自检说明"
-      - "E20 纪要：根因/修复/合并序列/决策编号/效率实测（脚本耗时对比）"
-      - "decision-lint 0 error；--land 完成；merge 后 git push origin main"
-    owner_chunk: null
-    status: planned

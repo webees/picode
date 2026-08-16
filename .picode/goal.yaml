@@ -1,29 +1,28 @@
-run_id: run-2026-08-16T09-30-00-EFFICIENCY
-title: "会话失能机制修复（工具自检/工作房门闩/零产出看门狗/复活重投喂）+ 运行效率工具链（worktree/test 隔离/巡检脚本/测试编排）+ 流程快赢规范"
-kind: self_evolve
-status: active
-scale: M
+run_id: run-2026-08-16T20-14-40-FIX500
+title: "dashboard-server runs 端点 500 修复（缺失 goal.yaml 容错）+ 回归测试 + 端点级验收"
+kind: fix
+status: completed
+scale: S
 success_criteria:
-  - "C2-env-gate：wakeAgent 前置工具探测（bash/node/git）失败→TOOL_ENV_BROKEN 结构化错误码；双门闩加工作房存在性校验（缺失拒绝 spawn）"
-  - "C3-toolchain：worktree-setup.sh（add+自链+冒烟）/ test-iso.sh（mktemp HOME+先 tsc -b 防 stale dist）/ env.sh / merge-gate.sh / tour-check.sh（三查巡检）；根 test 编排并入 dashboard vitest + workspace concurrency"
-  - "C1-watchdog：session-watchdog 零产出 2 轮→at_risk+steer 投喂、再 2 轮→bus 通知+takeover_candidate；probeServeHealth 复活重投喂；supervise 陈旧路径修复"
-  - "C4-docs：M5 开工自检模板 + 流程快赢规范（增量进度格式/接管留痕/at_risk 红灯三查判据）+ D119+ 决策 + operations.md + E20 纪要"
-  - "全量 npm test 全绿（含新增测试）；npm run check 三 lint 0；串行 merge + push；本轮执行纪律：真实工作房 + 三查巡检 + 接管留痕 + 评分回路闭合"
+  - "GET /api/runs/:id 与 GET /api/runs/:id/sessions 对全部 5 个 run 返回 200（含缺失 goal.yaml 的 run）"
+  - "缺 goal.yaml 时 snapshot.goal.acceptance=0（与列表端点口径一致），不抛 TypeError"
+  - "readGoal 默认值补 acceptance/product_acceptance 空数组（治本），statusSnapshot 调用处加 ?.length ?? 0 防御（双保险）"
+  - "新增回归测试：status.test.ts（缺 goal.yaml 容错）+ dashboard-server index.test.ts（端点级 200）"
+  - "全量 npm test 绿；串行 merge；重启 dashboard-server 实测 5 run × 2 端点全 200"
 non_goals:
-  - "双人组试点（sponsor 确认下轮）"
-  - "人设程序化生成 / 简报半自动（下轮）"
-  - "2 件交接包精简（下轮）"
-  - "serve 会话 GC（D109 遗留独立立项）"
+  - "不重构 statusSnapshot / run-store / readGoal 整体设计"
+  - "不改其它端点（board/chunks/tasks/merge/gates/bus/approvals/change-orders 行为不变）"
+  - "不迁移或改写 .picode/runs 下任何 run 目录数据"
+  - "不推广全量防御性改造"
 constraints:
-  - "E4 gate 全量测试；E5 代码审查；写集互斥 ≤3 组并行；D036 串行 merge"
-  - "决策编号 D119 起"
-  - "本轮 spawn 前核验工作房真实存在（git worktree list）+ 工具探活"
+  - "写集互斥；1 chunk = 1 工作房 = 1 三角；sdet evidence → 代码审查门 → 交接 → 签收 → 串行合并（D036）"
+  - "diff ⊆ write_paths；review 记录 reviews/<task_id>.md"
+  - "验收在真实 dashboard-server 上执行（端口 8788 已运行）"
 product_acceptance:
-  - "子代理会话工具可用性提升：spawn 后 bash/node/git 可执行（或立即结构化上报而非静默卡死）"
-  - "零产出自动检测：无产出 2 轮内 at_risk 红灯可见，4 轮内接管候选通知 run-lead"
-  - "工作房缺失不再静默：双门闩校验失败时 spawn 被拒绝并给出明确原因"
-  - "工具链脚本一键化：worktree 建立/测试隔离/合并门检查/巡检各一命令"
-  - "全量绿 + 三 lint 0 + push"
+  - "对缺 goal.yaml 的 run：GET /api/runs/:id 返回 200 且 snapshot.goal.acceptance=0，非 500"
+  - "同一 run 的 GET /api/runs/:id/sessions 返回 200 且不抛错"
+  - "全部 5 个 run 逐一请求两个端点均 200"
+  - "GET /api/runs 列表端点行为不变（无回归）"
 open_questions: []
-user_confirmed_at: "2026-08-16T09:32:00Z"
-created_at: "2026-08-16T09:30:00Z"
+user_confirmed_at: "2026-08-16T13:51:36Z"
+created_at: "2026-08-16T20:14:40Z"
