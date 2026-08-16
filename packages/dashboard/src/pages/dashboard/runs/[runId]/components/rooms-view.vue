@@ -6,11 +6,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Empty, EmptyContent, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useRun, useTasks } from '@/services/api/picode.api'
+import { useRouter } from 'vue-router'
 import { ErrorState } from '@/components/dashboard'
 
 import { deriveRooms } from './views.data'
 
 const props = defineProps<{ runId: string }>()
+const router = useRouter()
+function openChat(room: string) {
+  void router.push({ query: { tab: 'chat', room } })
+}
 
 const run = useRun(props.runId)
 const tasks = useTasks(props.runId)
@@ -55,7 +60,7 @@ const view = computed(() =>
   </div>
 
   <div v-else class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-    <Card v-for="room in view.rooms" :key="room.room" class="gap-2 p-4">
+    <Card v-for="room in view.rooms" :key="room.room" class="cursor-pointer gap-2 p-4 transition-colors hover:border-primary" @click="openChat(room.room)">
       <CardHeader class="gap-1 p-0">
         <div class="flex items-center justify-between gap-2">
           <CardTitle class="text-sm font-semibold">
