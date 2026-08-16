@@ -380,6 +380,10 @@ function findExecutableOn(name: string, dirs: string[]): string | null {
   for (const dir of dirs) {
     const p = path.join(dir, name);
     try {
+      // P2-1（E5 审查）：目录 X 位=可遍历，accessSync(X_OK) 对目录也成功——
+      // PATH 中出现名为 node/npm 的目录会被误判工具可用，必须 isFile() 排除。
+      if (!fs.statSync(p).isFile())
+        continue;
       fs.accessSync(p, fs.constants.X_OK);
       return p;
     } catch {

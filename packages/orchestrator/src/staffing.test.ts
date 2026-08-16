@@ -105,6 +105,15 @@ test("R17 M4: 目录存在但无 worktree 元数据（缺 .git 指针）同样�
   );
 });
 
+test("R17 P1: worktreePath 命名契约 — 顶层 squad-<taskId>（无 runId 段，与 git worktree list 一致）", () => {
+  const { repo, dir, config, taskId } = setup();
+  const wt = worktreePath(repo, config, path.basename(dir), taskId);
+  // canonical：<root>/.picode/worktrees/squad-<taskId>（E5 审查 P1 裁决）
+  assert.equal(wt, path.join(repo, ".picode", "worktrees", `squad-${taskId}`));
+  assert.ok(wt.endsWith(`squad-${taskId}`), "worktree 目录名应为 squad-<taskId>");
+  assert.ok(!wt.includes(path.basename(dir)), "worktree 路径不得含 runId 段");
+});
+
 test("R17 M4: worktree 已真实创建（git worktree list 语义）→ prepare 放行", async () => {
   const { repo, dir, config, taskId } = setup();
   draftBrief(dir, taskId);

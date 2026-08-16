@@ -12,10 +12,14 @@ export function runDir(repoRoot: string, config: PicodeConfig, runId: string): s
 export function worktreePath(
   repoRoot: string,
   config: PicodeConfig,
-  runId: string,
+  _runId: string,
   taskId: string,
 ): string {
-  return path.resolve(repoRoot, config.git.worktree_root, runId, taskId);
+  // R17 P1 修复（E5 审查打回）：canonical 工作房布局 = <root>/.picode/worktrees/squad-<taskId>
+  // （顶层，无 runId 段）——与历史全部 worktree 及 scripts/worktree-setup.sh --new 一致。
+  // 原实现带 runId 段（.picode/worktrees/<runId>/<taskId>）导致 M4 门闩
+  // （assertWorktreeExists）在生产下对真实工作房误判缺失（WORKTREE_MISSING 拒绝唤醒）。
+  return path.resolve(repoRoot, config.git.worktree_root, `squad-${taskId}`);
 }
 
 export function branchName(config: PicodeConfig, runId: string, taskId: string): string {
