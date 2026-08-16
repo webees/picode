@@ -10,7 +10,7 @@
 |---|---|---|---|---|---|---|---|
 | task-chunk-env-gate | W1 | 金汤 | 虎符 adfbb6fb | 鱼钥 4a3238be | 关防 fdf7a8c9 | 已合并 9f93100 | ✅ 合并完成 |
 | task-chunk-toolchain | W1 | 陶钧 | 执规 fba5b616 | 斫轮 a2b0dfb9 | 持矩 53938ff8 | 已合并 3cfaaba | ✅ 合并完成 |
-| task-chunk-watchdog | W2 | 金柝 | 更筹 a13f3ecd | 戍鼓 fe373693 | 宵柝 69b0b48f | .picode/worktrees/squad-task-chunk-watchdog | 🚀 开发中（基线 9f93100） |
+| task-chunk-watchdog | W2 | 金柝 | 更筹(失联) | 戍鼓(失联) | 宵柝 69b0b48f | .picode/worktrees/squad-task-chunk-watchdog | ✅ 05f3201 实现完成（run-lead 代实现），审查+验收中 |
 | task-chunk-docs | W3 | 文档小组 | - | - | - | main 直接 | 依赖全部 |
 
 ## 执行纪律（R17 新增，源自双分析）
