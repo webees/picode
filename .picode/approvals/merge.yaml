@@ -1,0 +1,12 @@
+schema_version: "1"
+task_id: task-chunk-toolchain
+run_id: run-2026-08-16T09-30-00-EFFICIENCY
+approved_by: run-lead
+approved_at: "2026-08-16T11:00:00Z"
+checks:
+  evidence: pass          # sdet 持矩签发，29 条真实可复跑（含 D4/D5 resolved）
+  review: pass            # docs/reviews/2026-08-16-task-chunk-toolchain-e5.md（无 P0/P1，P2 项转修复轮）
+  diff: "6 files ⊆ write_paths（merge-gate 实测）"
+  tests: "全量绿（6 包 + dashboard 59）+ 三 lint 0"
+  base: b0be509
+  note: "合并门 R9 通过；P2 项（usage 越界/awk 终止/词边界等）记入隐患清单由修复轮处理"
