@@ -20,6 +20,7 @@ import { ErrorState } from '@/components/dashboard'
 import type { BadgeVariant } from '@/lib/utils'
 
 import { derivePersonnel } from './views.data'
+import { latchBadge } from './flow.data'
 
 const props = defineProps<{ runId: string }>()
 
@@ -46,6 +47,14 @@ const SEAT_ZH: Record<string, string> = {
   'engineer': '实现',
   'sdet': '验证',
 }
+
+const latchByTask = computed(() => {
+  const map = new Map<string, { brief: string | null, staffing: string | null }>()
+  for (const t of tasks.data.value?.tasks ?? []) {
+    map.set(t.task_id, { brief: t.latch?.brief ?? null, staffing: t.latch?.staffing ?? null })
+  }
+  return map
+})
 </script>
 
 <template>
@@ -116,6 +125,7 @@ const SEAT_ZH: Record<string, string> = {
           <TableRow>
             <TableHead>任务</TableHead>
             <TableHead>小队房间</TableHead>
+            <TableHead>双门闩</TableHead>
             <TableHead>队长</TableHead>
             <TableHead>实现</TableHead>
             <TableHead>验证</TableHead>
@@ -129,6 +139,17 @@ const SEAT_ZH: Record<string, string> = {
             <TableCell class="font-mono text-xs text-muted-foreground">
               {{ t.work_room }}
             </TableCell>
+            <TableCell>
+              <div v-if="latchByTask.get(t.task_id)" class="flex gap-1">
+                <Badge :variant="latchBadge(latchByTask.get(t.task_id)!.brief).variant" class="px-1.5 py-0 text-[10px]">
+                  {{ latchBadge(latchByTask.get(t.task_id)!.brief).label }}
+                </Badge>
+                <Badge :variant="latchBadge(latchByTask.get(t.task_id)!.staffing).variant" class="px-1.5 py-0 text-[10px]">
+                  {{ latchBadge(latchByTask.get(t.task_id)!.staffing).label }}
+                </Badge>
+              </div>
+              <span v-else class="text-xs text-muted-foreground">-</span>
+            </TableCell>
             <TableCell class="font-mono text-xs">
               {{ t.seats.find(s => s.seat === 'squad-lead')?.agent_id ?? '-' }}
             </TableCell>
@@ -139,7 +160,7 @@ const SEAT_ZH: Record<string, string> = {
               {{ t.seats.find(s => s.seat === 'sdet')?.agent_id ?? '-' }}
             </TableCell>
           </TableRow>
-          <TableEmpty v-if="view.triads.length === 0" :colspan="5">
+          <TableEmpty v-if="view.triads.length === 0" :colspan="6">
             <Empty>
               <EmptyContent>
                 <EmptyMedia variant="icon" />

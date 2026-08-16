@@ -14,17 +14,33 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useMerge } from '@/services/api/picode.api'
+import { useMerge, useChunks, useTasks } from '@/services/api/picode.api'
 import { label, MERGE_STATUS } from '@/utils/labels'
 import { ErrorState } from '@/components/dashboard'
 import type { BadgeVariant } from '@/lib/utils'
 
+import { deriveMergeWaitReasons } from './flow.data'
+
 const props = defineProps<{ runId: string }>()
 
 const { data, isLoading, isError, error } = useMerge(props.runId)
+const chunksQuery = useChunks(props.runId)
+const tasksQuery = useTasks(props.runId)
 
 const queue = computed(() => data.value?.queue ?? [])
 const counts = computed(() => data.value?.counts ?? { queued: 0, merged: 0, failed: 0 })
+
+const waitReasons = computed(() =>
+  deriveMergeWaitReasons(
+    tasksQuery.data.value?.tasks ?? [],
+    chunksQuery.data.value?.chunks ?? [],
+    queue.value,
+  ),
+)
+
+function waitReasonOf(taskId: string): string | null {
+  return waitReasons.value.find(w => w.task_id === taskId)?.reason ?? null
+}
 
 const statusVariant: Record<string, BadgeVariant> = {
   merged: 'default',
@@ -92,7 +108,7 @@ function formatTime(iso: string | null) {
             <TableHead>发起</TableHead>
             <TableHead>排队时间</TableHead>
             <TableHead>合并时间</TableHead>
-            <TableHead>错误</TableHead>
+            <TableHead>等待原因 / 错误</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -115,7 +131,10 @@ function formatTime(iso: string | null) {
               {{ formatTime(req.merged_at) }}
             </TableCell>
             <TableCell class="max-w-56 truncate text-xs" :title="req.error ?? undefined">
-              <span v-if="req.error" class="text-destructive">{{ req.error }}</span>
+              <span v-if="req.status === 'queued' && waitReasonOf(req.task_id)" class="text-amber-600 dark:text-amber-400">
+                {{ waitReasonOf(req.task_id) }}
+              </span>
+              <span v-else-if="req.error" class="text-destructive">{{ req.error }}</span>
               <span v-else>-</span>
             </TableCell>
           </TableRow>

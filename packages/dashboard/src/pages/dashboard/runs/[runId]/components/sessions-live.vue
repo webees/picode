@@ -174,6 +174,13 @@ function formatTime(iso: string | null) {
             </TableCell>
             <TableCell class="font-mono text-xs tabular-nums">
               {{ s.budget?.continuations ?? 0 }} / {{ continuation?.max_per_session ?? 0 }}
+              <Badge
+                v-if="(continuation?.max_per_session ?? 0) > 0 && (s.budget?.continuations ?? 0) >= (continuation?.max_per_session ?? 0)"
+                variant="destructive"
+                class="ml-1 px-1.5 py-0 text-[10px]"
+              >
+                预算用尽
+              </Badge>
             </TableCell>
             <TableCell>
               <Badge

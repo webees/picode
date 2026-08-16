@@ -9,6 +9,7 @@ import { ErrorState } from '@/components/dashboard'
 
 import { BOARD_COLUMN_META } from './tasks-board.data'
 import { PHASE_PROGRESS } from './role-meta.data'
+import { dualLatchState } from './flow.data'
 
 const props = defineProps<{ runId: string }>()
 
@@ -31,10 +32,25 @@ const progressByTask = computed(() => {
   return map
 })
 
+const latchByTask = computed(() => {
+  const map = new Map<string, { brief: string | null, staffing: string | null }>()
+  for (const t of tasks.data.value?.tasks ?? []) {
+    map.set(t.task_id, { brief: t.latch?.brief ?? null, staffing: t.latch?.staffing ?? null })
+  }
+  return map
+})
+
 const KIND_ZH: Record<string, string> = { task: '任务', intake: '立项', chunk: '分块' }
 
 function cardsOf(column: string) {
   return cards.value.filter(c => c.column === column)
+}
+
+function cardLatch(card: { id: string }) {
+  const latch = latchByTask.value.get(card.id)
+  if (!latch)
+    return null
+  return dualLatchState(latch.brief, latch.staffing)
 }
 
 function cardPhase(card: { id: string }) {
@@ -99,6 +115,13 @@ function phaseLabel(phase: string | undefined): string {
               class="px-1 py-0 text-[10px]"
             >
               受阻
+            </Badge>
+            <Badge
+              v-if="cardLatch(card) && cardLatch(card)!.label === '审批中' && card.kind === 'task'"
+              variant="outline"
+              class="px-1 py-0 text-[10px] text-amber-600 dark:text-amber-400"
+            >
+              审批中
             </Badge>
           </div>
           <div class="mt-1.5 break-words font-medium leading-snug">

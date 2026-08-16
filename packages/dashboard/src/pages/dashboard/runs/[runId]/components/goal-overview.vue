@@ -5,21 +5,34 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { useRun, useSessions, useTasks } from '@/services/api/picode.api'
+import { useApprovals, useChangeOrders } from '@/services/api/flow.api'
 import { label, RUN_KIND, RUN_SCALE, RUN_STATUS } from '@/utils/labels'
 import { ErrorState } from '@/components/dashboard'
 import type { BadgeVariant } from '@/lib/utils'
 
 import { derivePersonnel, deriveProgress, deriveRooms } from './views.data'
+import { deriveApprovalSummary } from './flow.data'
 
 const props = defineProps<{ runId: string }>()
 
 const run = useRun(props.runId)
 const tasks = useTasks(props.runId)
 const sessions = useSessions(props.runId)
+const approvals = useApprovals(props.runId)
+const changeOrders = useChangeOrders(props.runId)
 
-const isLoading = computed(() => run.isLoading.value || tasks.isLoading.value || sessions.isLoading.value)
-const isError = computed(() => run.isError.value || tasks.isError.value || sessions.isError.value)
-const error = computed(() => run.error.value ?? tasks.error.value ?? sessions.error.value)
+const isLoading = computed(() =>
+  run.isLoading.value || tasks.isLoading.value || sessions.isLoading.value
+  || approvals.isLoading.value || changeOrders.isLoading.value,
+)
+const isError = computed(() =>
+  run.isError.value || tasks.isError.value || sessions.isError.value
+  || approvals.isError.value || changeOrders.isError.value,
+)
+const error = computed(() =>
+  run.error.value ?? tasks.error.value ?? sessions.error.value
+  ?? approvals.error.value ?? changeOrders.error.value,
+)
 
 const goal = computed(() => run.data.value?.goal ?? null)
 const snapshot = computed(() => run.data.value?.snapshot ?? null)
@@ -43,12 +56,18 @@ const progress = computed(() => deriveProgress(taskList.value))
 const rooms = computed(() => deriveRooms(snapshot.value ?? emptySnapshot(), taskList.value))
 const personnel = computed(() => derivePersonnel(taskList.value, sessionList.value))
 
+const approvalSummary = computed(() => deriveApprovalSummary(approvals.data.value?.approvals ?? []))
+const activeChangeOrders = computed(() =>
+  (changeOrders.data.value?.change_orders ?? []).filter(c => c.status !== 'closed').length,
+)
+
 const alerts = computed(() => {
   const list: Array<{ severity: 'error' | 'warn', text: string }> = []
   const failed = taskList.value.filter(t => t.status === 'failed').length
   const blocked = progress.value.blockedCount
   const errored = snapshot.value?.sessions.errored.length ?? 0
   const mergeFailed = snapshot.value?.merge_queue.failed ?? 0
+  const pendingApprovals = approvalSummary.value.pending
   if (failed)
     list.push({ severity: 'error', text: `${failed} 个任务失败` })
   if (blocked)
@@ -57,6 +76,10 @@ const alerts = computed(() => {
     list.push({ severity: 'error', text: `${errored} 个会话异常` })
   if (mergeFailed)
     list.push({ severity: 'error', text: `${mergeFailed} 次合并失败` })
+  if (pendingApprovals)
+    list.push({ severity: 'warn', text: `${pendingApprovals} 个审批待处理` })
+  if (activeChangeOrders.value)
+    list.push({ severity: 'warn', text: `${activeChangeOrders.value} 个变更单进行中` })
   return list
 })
 
@@ -122,7 +145,7 @@ const statusVariant: Record<string, BadgeVariant> = {
           </p>
         </div>
         <Separator />
-        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <div class="rounded-lg border p-3">
             <div class="text-xs text-muted-foreground">
               会话总数
@@ -153,6 +176,22 @@ const statusVariant: Record<string, BadgeVariant> = {
             </div>
             <div class="mt-1 text-xl font-semibold">
               {{ snapshot?.merge_queue.merged ?? 0 }}
+            </div>
+          </div>
+          <div class="rounded-lg border p-3" :class="approvalSummary.pending ? 'border-amber-300 dark:border-amber-800' : ''">
+            <div class="text-xs text-muted-foreground">
+              审批待办
+            </div>
+            <div class="mt-1 text-xl font-semibold" :class="approvalSummary.pending ? 'text-amber-600 dark:text-amber-400' : ''">
+              {{ approvalSummary.pending }}
+            </div>
+          </div>
+          <div class="rounded-lg border p-3" :class="activeChangeOrders ? 'border-amber-300 dark:border-amber-800' : ''">
+            <div class="text-xs text-muted-foreground">
+              变更单活跃
+            </div>
+            <div class="mt-1 text-xl font-semibold" :class="activeChangeOrders ? 'text-amber-600 dark:text-amber-400' : ''">
+              {{ activeChangeOrders }}
             </div>
           </div>
         </div>
