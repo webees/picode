@@ -40,6 +40,27 @@ test("C4: 子代理深度围栏错误码已注册（I3 域，wakeAgent 结构化
   assert.equal(ErrorCode.SUBAGENT_DEPTH_EXCEEDED, "SUBAGENT_DEPTH_EXCEEDED");
 });
 
+test("R17 M2/M4: TOOL_ENV_BROKEN 与 WORKTREE_MISSING 错误码已注册（env-gate 域）", () => {
+  assert.equal(ErrorCode.TOOL_ENV_BROKEN, "TOOL_ENV_BROKEN");
+  assert.equal(ErrorCode.WORKTREE_MISSING, "WORKTREE_MISSING");
+});
+
+test("R17 M2: PicodeError 可携带结构化 details（缺失清单字段，不只靠 message 文本）", () => {
+  const e = new PicodeError(ErrorCode.TOOL_ENV_BROKEN, "工具环境不可用：缺少 node", {
+    missing: ["node"],
+  });
+  assert.equal(e.code, "TOOL_ENV_BROKEN");
+  assert.deepEqual(e.details, { missing: ["node"] });
+  // E3 渲染形态不变：code 前缀 + 中文可读 message
+  assert.equal(
+    formatPicodeError(e),
+    "[picode] ERROR: TOOL_ENV_BROKEN: 工具环境不可用：缺少 node",
+  );
+  // details 为可选：不传则缺省 undefined（既有构造语义不变）
+  const plain = new PicodeError(ErrorCode.NO_RUN, "no run");
+  assert.equal(plain.details, undefined);
+});
+
 test("PicodeError carries a stable code and message", () => {
   const e = new PicodeError(ErrorCode.BUS_TYPE_DENIED, "unknown bus message type: x");
   assert.ok(e instanceof Error);

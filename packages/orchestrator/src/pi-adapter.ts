@@ -18,6 +18,7 @@ import {
 } from "@picode/core";
 import { issueToken } from "@picode/bus";
 import { SessionStore } from "./session-store.js";
+import { assertWorktreeExists } from "./task.js";
 import { OpencodeSpawner, wakeWithOpencode } from "./opencode-adapter.js";
 import { delay } from "./timing.js";
 
@@ -337,6 +338,62 @@ export async function sleepWithPi(
 export const MAX_SUBAGENT_DEPTH = 3;
 
 /**
+ * R17 M2: spawn 前探测的核心工具集（bash/node/npm/git）。
+ * 任一缺失 → wakeAgent 中止 + TOOL_ENV_BROKEN（结构化，含缺失清单）。
+ * 契约（C1 watchdog 只读引用）：probeCoreTools 导出签名、ToolProbeResult 形状、
+ * session.error 的 `TOOL_ENV_BROKEN:` 前缀见 handoff/known_issues.md。
+ */
+export const CORE_TOOLS = ["bash", "node", "npm", "git"] as const;
+export type CoreTool = (typeof CORE_TOOLS)[number];
+
+export interface ToolProbeResult {
+  /** 全部核心工具可用。 */
+  ok: boolean;
+  /** 缺失清单（结构化字段，不只靠 message 文本）。 */
+  missing: CoreTool[];
+  /** 每个工具解析到的可执行路径；未命中为 null。 */
+  found: Record<CoreTool, string | null>;
+}
+
+/**
+ * R17 M2: 工具探测纯函数——给定 PATH（+ 补充候选目录），按顺序解析每个核心
+ * 工具的可执行路径（fs.accessSync X_OK，不 spawn、不执行）。可单测：输入
+ * PATH/候选路径 → 探测结果，无副作用。
+ */
+export function probeCoreTools(
+  pathEnv: string,
+  extraCandidates: string[] = [],
+): ToolProbeResult {
+  const dirs = [
+    ...pathEnv.split(path.delimiter).filter(Boolean),
+    ...extraCandidates.filter(Boolean),
+  ];
+  const found = {} as Record<CoreTool, string | null>;
+  for (const tool of CORE_TOOLS) {
+    found[tool] = findExecutableOn(tool, dirs);
+  }
+  const missing = CORE_TOOLS.filter((t) => found[t] === null);
+  return { ok: missing.length === 0, missing, found };
+}
+
+function findExecutableOn(name: string, dirs: string[]): string | null {
+  for (const dir of dirs) {
+    const p = path.join(dir, name);
+    try {
+      // P2-1（E5 审查）：目录 X 位=可遍历，accessSync(X_OK) 对目录也成功——
+      // PATH 中出现名为 node/npm 的目录会被误判工具可用，必须 isFile() 排除。
+      if (!fs.statSync(p).isFile())
+        continue;
+      fs.accessSync(p, fs.constants.X_OK);
+      return p;
+    } catch {
+      /* keep scanning */
+    }
+  }
+  return null;
+}
+
+/**
  * 统一会话唤醒入口（D057 缺口 2 修复）：CLI 与规则引擎共用同一条 spawn 路径，
  * 保证「规则引擎 wake 的会话」与「CLI wake 的会话」等价——
  *   - opencode.enabled  → 经 opencode serve 建真实会话（pi_session_id = oc-<id>）
@@ -363,6 +420,36 @@ export async function wakeAgent(
       ErrorCode.SUBAGENT_DEPTH_EXCEEDED,
       `subagent delegation depth ${depth} exceeds limit ${MAX_SUBAGENT_DEPTH} for "${agentId}"`,
     );
+  }
+  // R17 M2: spawn 前工具环境探测（不触碰任何后端）。任一核心工具缺失 →
+  // spawn 中止 + session.error 置 TOOL_ENV_BROKEN（结构化，含缺失清单），
+  // 供 C1 watchdog 立即 at_risk（契约见 handoff/known_issues.md）。
+  const probe = probeCoreTools(process.env.PATH ?? "");
+  if (!probe.ok) {
+    const msg =
+      `工具环境不可用：缺少 ${probe.missing.join("、")}（PATH 缺失）。` +
+      `请 run-lead 检查 DSH runtime-commands 软链后重试（node/npm/npx 应可执行）。`;
+    await new SessionStore(dir).setError(agentId, `TOOL_ENV_BROKEN: ${msg}`);
+    throw new PicodeError(ErrorCode.TOOL_ENV_BROKEN, msg, { missing: probe.missing });
+  }
+  // R17 M4: 工作房存在性门闩（task 会话）— spawn 前校验 worktree 真实存在
+  // （git worktree list 语义：目录 + .git 元数据指向主仓 .git/worktrees）。缺失 →
+  // 拒绝 spawn（WORKTREE_MISSING + 中文可操作原因），防 R16 根因 #2 复发——
+  // 平台席/CLI/rules-engine/guardian 触发的所有 task 会话唤醒都经过本入口。
+  // 仅对真实后端路径（pi/opencode 启用）生效：纯状态机路径不 spawn 后端进程，
+  // 门闩（spawn 前置校验）自然不适用（rules-engine 纯状态机测试语义不变）。
+  const taskMatch = /@task-(.+)$/.exec(agentId);
+  if (taskMatch && (config.opencode.enabled || config.pi.enabled)) {
+    const repoRoot = path.resolve(dir, "../../..");
+    try {
+      assertWorktreeExists(repoRoot, dir, config, `task-${taskMatch[1]}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await new SessionStore(dir).setError(agentId, `WORKTREE_MISSING: ${msg}`);
+      throw e instanceof PicodeError
+        ? e
+        : new PicodeError(ErrorCode.WORKTREE_MISSING, msg);
+    }
   }
   if (config.opencode.enabled) {
     const env = buildPiEnv(dir, config, session);

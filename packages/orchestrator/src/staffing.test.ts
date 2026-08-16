@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import YAML from "yaml";
+import { branchName, worktreePath } from "@picode/core";
 import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
 import { addChunkAndTask, approveBrief, draftBrief, prepareTask } from "./task.js";
 import { SessionStore } from "./session-store.js";
@@ -36,8 +37,24 @@ function setup() {
 async function fullHire(repo: string, dir: string, config: ReturnType<typeof resolveRunDir>["config"], taskId: string) {
   await createStaffingRequest(dir, config, taskId, { skills: ["typescript", "testing"] });
   draftPersonas(repo, dir, config, taskId);
-  const { staffing, wokeSquad } = await approveStaffing(repo, dir, config, taskId);
-  return { staffing, wokeSquad };
+  const { staffing, wokeSquad, wokeErrors } = await approveStaffing(repo, dir, config, taskId);
+  return { staffing, wokeSquad, wokeErrors };
+}
+
+/** R17 M4: 按 config 语义真实创建 task worktree（git worktree add 到 worktree_root）。 */
+function addTaskWorktree(
+  repo: string,
+  dir: string,
+  config: ReturnType<typeof resolveRunDir>["config"],
+  taskId: string,
+): string {
+  const wt = worktreePath(repo, config, path.basename(dir), taskId);
+  const branch = branchName(config, path.basename(dir), taskId);
+  execFileSync("git", ["worktree", "add", "-b", branch, wt, "main"], {
+    cwd: repo,
+    stdio: "pipe",
+  });
+  return wt;
 }
 
 test("T18/T24: prepare fails without staffing approval (double latch)", () => {
@@ -46,6 +63,71 @@ test("T18/T24: prepare fails without staffing approval (double latch)", () => {
   approveBrief(dir, taskId, "run-lead");
   // brief approved, staffing missing → prepare must fail
   assert.throws(() => prepareTask(repo, dir, config, taskId), /staffing not approved/);
+});
+
+// --- R17 M4: 工作房存在性门闩（缺失创建/伪目录拒绝/存在放行，git worktree list 语义） ---
+
+test("R17 M4: prepareTask 缺失 worktree 时自动创建（git worktree list 可见，正常推进）", async () => {
+  const { repo, dir, config, taskId } = setup();
+  draftBrief(dir, taskId);
+  approveBrief(dir, taskId, "run-lead");
+  await fullHire(repo, dir, config, taskId);
+  // 双门闩齐但 worktree 未创建（R16 根因 #2 场景）→ prepare 自动创建（既有 fixture
+  // 语义兼容），产物为真实 worktree；spawn 前缺失拒绝由 wakeAgent 承担（见 pi-adapter.test.ts）
+  const r = prepareTask(repo, dir, config, taskId);
+  assert.ok(r.worktree);
+  assert.ok(fs.existsSync(path.join(r.worktree, ".git")), "自动创建应产出 worktree 元数据");
+  const list = execFileSync("git", ["worktree", "list"], { cwd: repo, encoding: "utf8" });
+  assert.ok(list.includes(r.worktree), "git worktree list 应可见该 worktree");
+  const taskYaml = YAML.parse(
+    fs.readFileSync(path.join(dir, "tasks", taskId, "task.yaml"), "utf8"),
+  ) as { status: string };
+  assert.equal(taskYaml.status, "assigned", "prepare 成功后 task 推进到 assigned");
+  assert.ok(fs.existsSync(path.join(dir, "tasks", taskId, "triad.yaml")), "triad.yaml 应写入");
+});
+
+test("R17 M4: 目录存在但无 worktree 元数据（缺 .git 指针）同样拒绝", async () => {
+  const { repo, dir, config, taskId } = setup();
+  draftBrief(dir, taskId);
+  approveBrief(dir, taskId, "run-lead");
+  await fullHire(repo, dir, config, taskId);
+  // 模拟 R16 人设声明的"假目录"：目录在，但非 git worktree（无 .git 元数据）
+  const wt = worktreePath(repo, config, path.basename(dir), taskId);
+  fs.mkdirSync(wt, { recursive: true });
+  fs.writeFileSync(path.join(wt, "placeholder.txt"), "not a real worktree\n");
+  assert.throws(
+    () => prepareTask(repo, dir, config, taskId),
+    (e: unknown) => {
+      assert.equal((e as { code?: string }).code, "WORKTREE_MISSING");
+      assert.match((e as Error).message, /\.git/, "须指明缺 worktree 元数据");
+      return true;
+    },
+  );
+});
+
+test("R17 P1: worktreePath 命名契约 — 顶层 squad-<taskId>（无 runId 段，与 git worktree list 一致）", () => {
+  const { repo, dir, config, taskId } = setup();
+  const wt = worktreePath(repo, config, path.basename(dir), taskId);
+  // canonical：<root>/.picode/worktrees/squad-<taskId>（E5 审查 P1 裁决）
+  assert.equal(wt, path.join(repo, ".picode", "worktrees", `squad-${taskId}`));
+  assert.ok(wt.endsWith(`squad-${taskId}`), "worktree 目录名应为 squad-<taskId>");
+  assert.ok(!wt.includes(path.basename(dir)), "worktree 路径不得含 runId 段");
+});
+
+test("R17 M4: worktree 已真实创建（git worktree list 语义）→ prepare 放行", async () => {
+  const { repo, dir, config, taskId } = setup();
+  draftBrief(dir, taskId);
+  approveBrief(dir, taskId, "run-lead");
+  await fullHire(repo, dir, config, taskId);
+  const wt = addTaskWorktree(repo, dir, config, taskId);
+  const r = prepareTask(repo, dir, config, taskId);
+  assert.equal(r.worktree, wt);
+  // 放行后正常产出 triad.yaml + task.status=assigned
+  assert.ok(fs.existsSync(path.join(dir, "tasks", taskId, "triad.yaml")), "triad.yaml 应写入");
+  const taskYaml = YAML.parse(
+    fs.readFileSync(path.join(dir, "tasks", taskId, "task.yaml"), "utf8"),
+  ) as { status: string };
+  assert.equal(taskYaml.status, "assigned");
 });
 
 test("T24: prepare fails without brief approval even when staffed", async () => {
@@ -60,8 +142,11 @@ test("prepare succeeds only with both latches", async () => {
   draftBrief(dir, taskId);
   approveBrief(dir, taskId, "run-lead");
   await fullHire(repo, dir, config, taskId);
+  // R17 M4: prepare 前 worktree 必须已真实创建（git worktree add 语义）
+  const wt = addTaskWorktree(repo, dir, config, taskId);
   const r = prepareTask(repo, dir, config, taskId);
   assert.ok(r.worktree);
+  assert.equal(r.worktree, wt);
   assert.ok(r.branch);
 });
 
@@ -125,12 +210,39 @@ test("double latch fires task_ready (squad awake) when brief already approved", 
   const { repo, dir, config, taskId } = setup();
   draftBrief(dir, taskId);
   approveBrief(dir, taskId, "run-lead");
+  // R17 M4: 工作房须已真实创建（git worktree add 语义），否则 task_ready 唤醒被门闩拒绝
+  addTaskWorktree(repo, dir, config, taskId);
   const { wokeSquad } = await fullHire(repo, dir, config, taskId);
   assert.equal(wokeSquad, true);
   const store = new SessionStore(dir);
   assert.equal(store.get("squad-lead@task-chunk-a")!.state, "awake");
   assert.equal(store.get("engineer@task-chunk-a")!.state, "awake");
   assert.equal(store.get("sdet@task-chunk-a")!.state, "awake");
+});
+
+test("R17 M4: worktree 缺失时 task_ready 唤醒被门闩拒绝（wokeErrors 中文可操作，不 spawn）", async () => {
+  const { repo, dir, config, taskId } = setup();
+  draftBrief(dir, taskId);
+  approveBrief(dir, taskId, "run-lead");
+  // 真实后端路径（pi.enabled=true）→ spawn 前门闩（wakeAgent）生效；
+  // 纯状态机路径不 spawn 后端，门闩不适用（rules-engine 纯状态机测试语义不变）
+  config.pi.enabled = true;
+  // worktree 从未创建（R16 根因 #2 场景）→ approve 仍 fire 事件（best-effort），
+  // 但每个 task 会话的 spawn 前门闩拒绝并给出中文可操作原因
+  const { wokeSquad, wokeErrors } = await fullHire(repo, dir, config, taskId);
+  assert.equal(wokeSquad, true, "事件仍 fire（D058 best-effort 语义不变）");
+  assert.equal(wokeErrors.length, 3, "三角全部被门闩拒绝");
+  for (const e of wokeErrors) {
+    assert.match(e.reason, /工作房未创建|worktree/);
+    assert.match(e.reason, /worktree-setup\.sh/, "提示 run-lead 先跑 worktree-setup.sh");
+  }
+  const store = new SessionStore(dir);
+  for (const seat of ["squad-lead", "engineer", "sdet"]) {
+    const s = store.get(`${seat}@task-chunk-a`)!;
+    assert.equal(s.state, "sleeping", "不得 spawn（拒绝后保持 sleeping）");
+    assert.equal(s.pi_session_id, null, "不得产生任何进程");
+    assert.match(s.error ?? "", /WORKTREE_MISSING/, "session.error 带结构化错误码");
+  }
 });
 
 test("persona files carry full 17 §6 dimensions after draft", async () => {
@@ -278,6 +390,9 @@ test("D058: no wake errors when max_awake allows the triad", async () => {
   approveBrief(dir, taskId, "run-lead");
   await createStaffingRequest(dir, config, taskId, { skills: ["typescript", "testing"] });
   draftPersonas(repo, dir, config, taskId);
+  // R17 M4: 工作房须已真实创建——否则 wake 会被门闩拒绝（worktree 原因），
+  // 该测试聚焦 max_awake 放行语义，先建好 worktree 排除门闩干扰
+  addTaskWorktree(repo, dir, config, taskId);
   const r = await approveStaffing(repo, dir, config, taskId);
   assert.equal(r.wokeSquad, true);
   assert.deepEqual(r.wokeErrors, []);
