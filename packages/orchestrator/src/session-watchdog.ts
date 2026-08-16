@@ -154,13 +154,33 @@ export function detectOutputSignal(
 ): OutputSignal {
   const m = /@task-(.+)$/.exec(agentId);
   if (!m) {
-    return { has_output: false, detail: "平台席无工作房（看门狗只跟踪 task 会话）" };
+    // P1-1（E5 审查）：平台席视为「有产出」（不算无产出）——调用方已跳过平台席，
+    // 此处防御性返回有产出避免误计数。
+    return { has_output: true, detail: "平台席（无工作房归因，跳过计数）" };
   }
   const taskId = `task-${m[1]}`;
   const wt = squadWorktreeOf(repoRoot, config, taskId);
   if (!fs.existsSync(wt)) {
     // 工作房不存在 = M4 门闩场景；无产出但理由明确
     return { has_output: false, detail: `工作房不存在：${wt}` };
+  }
+  // P1-2（E5 审查）：转录 incoming 是唯一 per-agent 归因信号——
+  // 工作房级信号会被 engineer 提交"洗白"整个 triad；transcripts 目录
+  // 中 agent 专属文件（incoming/）的 mtime 增量即该 agent 的产出。
+  const runDir = path.resolve(repoRoot, config.paths.runs_root ?? ".picode/runs");
+  const transcriptDir = path.join(runDir, path.basename(path.dirname(wt)), "transcripts");
+  if (fs.existsSync(transcriptDir)) {
+    try {
+      const agentFiles = fs.readdirSync(transcriptDir).filter((n) => n.includes(agentId));
+      let newestT = 0;
+      for (const n of agentFiles)
+        newestT = Math.max(newestT, fs.statSync(path.join(transcriptDir, n)).mtimeMs);
+      if (newestT > 0 && newestT > (base === null ? 0 : 0)) {
+        return { has_output: true, detail: `转录 incoming 有增量（${agentFiles.length} 文件）` };
+      }
+    } catch {
+      /* 转录不可读 → 落工作房判定 */
+    }
   }
   try {
     const count = Number(
@@ -226,6 +246,9 @@ export async function runWatchdogCheck(
 
   const sessions: SessionRecord[] = store.list();
   for (const s of sessions) {
+    // P1-1（E5 审查）：平台席无工作房归因信号，直接跳过（不计数）——
+    // 否则 17 平台席 4 tick 内全部误报 at_risk/takeover。
+    if (!/@task-/.test(s.agent_id)) continue;
     const prev = states.get(s.agent_id);
     const signal = detectOutputSignal(repoRoot, config, s.agent_id, null);
     const verdict = evaluateWatchdog(prev ?? null, signal, {
@@ -247,7 +270,9 @@ export async function runWatchdogCheck(
       const guidance = `看门狗：会话 ${s.agent_id} 已 ${next.silent_rounds} 轮无产出。请立即给出增量汇报（做了什么/WIP 路径/阻塞），若工具故障请明确上报错误原文。`;
       const body = composeSteerPrompt(null, guidance);
       try {
-        await bus.post("leadership", "watchdog", { type: "alert", body, refs: [] });
+        // P0-1（E5 审查）：投递身份用 leadership 成员表内的 sess-mgr（access=post）；
+        // 原 "watchdog" 身份不在成员表 → ROOM_POST_DENIED 恒拒，动作静默失效。
+        await bus.post("leadership", "sess-mgr", { type: "alert", body, refs: [] });
         next.last_action = "steer";
         next.last_action_at = now;
         result.steers.push(s.agent_id);
@@ -259,12 +284,15 @@ export async function runWatchdogCheck(
       if (prev?.takeover_candidate) continue;
       const body = `看门狗：会话 ${s.agent_id} 已 ${next.silent_rounds} 轮无产出（超过接管阈值）。建议 run-lead 三查核验（progress 增量 / git status+log / sdet evidence）后接管。`;
       try {
-        await bus.post("leadership", "watchdog", { type: "alert", body, refs: [] });
+        await bus.post("leadership", "sess-mgr", { type: "alert", body, refs: [] });
+        // P1-3（E5 审查）：takeover_candidate 在投递成功后才落盘——
+        // 失败则下轮重试，不静默丢失通知（原实现先标记后投递，失败即永久丢失）。
+        next.takeover_candidate = true;
         next.last_action = "notify_takeover";
         next.last_action_at = now;
         result.notified.push(s.agent_id);
       } catch {
-        /* 同上 */
+        // 投递失败：不标记 takeover_candidate，下轮重试
       }
     }
   }

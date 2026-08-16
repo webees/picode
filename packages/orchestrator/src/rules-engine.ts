@@ -318,18 +318,19 @@ export async function drainSessionCommands(
         outcome,
       });
     }
+    // P1-4（E5 审查）：截断必须在锁内执行——锁外截断存在
+    // 「读在锁外 + 截断在锁外」的双写丢失窗口（至多一次退化为可能零次）。
+    try {
+      fs.writeFileSync(file, "", "utf8");
+    } catch {
+      /* 截断失败不致命：下一轮仍会重放，但错误可见（不静默） */
+    }
     return results;
   });
 
   // P1-2（R17 修复波）：消费语义 = 每条命令至多执行一次——
   // 处理完成后截断队列文件（audit 保留在 DrainResult.results + guardian tick 结果），
   // 杜绝「每 tick 重放全部历史命令 → wake→sleep 振荡 + 队列无限增长」。
-  // 注：原注释自称 "kept append-only"，恰是该缺陷的根源（drain 永不消费）。
-  try {
-    fs.writeFileSync(file, "", "utf8");
-  } catch {
-    /* 截断失败不致命：下一轮仍会重放，但错误可见（不静默） */
-  }
   return { processed: drain.length, results: drain };
 }
 
