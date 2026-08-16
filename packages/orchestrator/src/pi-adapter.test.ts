@@ -4,15 +4,17 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { loadConfig, ErrorCode, PicodeError, type SessionRecord } from "@picode/core";
+import { loadConfig, ErrorCode, PicodeError, worktreePath, type SessionRecord } from "@picode/core";
 import { createRun, resolveRunDir } from "./run-store.js";
 import { SessionStore } from "./session-store.js";
 import {
   buildPiEnv,
   buildSkillIndex,
+  CORE_TOOLS,
   makeSpawner,
   personaDeclaredSkills,
   piPidOf,
+  probeCoreTools,
   sleepAgent,
   sleepWithPi,
   terminateAgent,
@@ -308,7 +310,17 @@ test("I3: wakeAgent 深度围栏 — delegation_depth > 3 结构化拒绝 SUBAGE
   );
   // 拒绝不改变会话状态（仍在 sleeping，未触碰后端）
   assert.equal(store.get("engineer@task-x")!.state, "sleeping");
-  // 深度 3（== 上限）放行
+  // 深度 3（== 上限）放行——R17 M4 门闩：task 会话唤醒须有真实 worktree
+  // （git worktree list 语义：目录 + .git 元数据指向主仓 .git/worktrees），
+  // 先按 M4 判定语义建好 worktree 元数据再验证深度放行。
+  const repo = path.resolve(dir, "../../..");
+  const wtY = worktreePath(repo, config, path.basename(dir), "task-y");
+  fs.mkdirSync(path.join(repo, ".git", "worktrees", "task-y"), { recursive: true });
+  fs.mkdirSync(wtY, { recursive: true });
+  fs.writeFileSync(
+    path.join(wtY, ".git"),
+    `gitdir: ${path.join(repo, ".git", "worktrees", "task-y")}\n`,
+  );
   store.register("engineer", { agentId: "engineer@task-y", initialState: "sleeping", depth: 3 });
   const r3 = (await wakeAgent(dir, config, "engineer@task-y", "wake")) as {
     session: SessionRecord;
@@ -350,4 +362,126 @@ test("I2: terminateAgent 保持终态销毁 — DELETE 语义不变 + pi_session
   } finally {
     globalThis.fetch = orig;
   }
+});
+
+// --- R17 M2: 工具环境探测（probeCoreTools 纯函数 + wakeAgent 接线） ---
+
+/** 临时目录里放一组可执行文件（写 fake 脚本并 chmod +x），模拟 PATH 的目录内容。 */
+function mkBinDir(files: string[]): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-bin-"));
+  for (const f of files) {
+    const p = path.join(dir, f);
+    fs.writeFileSync(p, "#!/bin/sh\nexit 0\n");
+    fs.chmodSync(p, 0o755);
+  }
+  return dir;
+}
+
+test("R17 M2: probeCoreTools 纯函数 — 空 PATH 全缺失（ok=false + missing 全量清单）", () => {
+  const r = probeCoreTools("");
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.missing, [...CORE_TOOLS]);
+  for (const t of CORE_TOOLS) assert.equal(r.found[t], null);
+});
+
+test("R17 M2: probeCoreTools 纯函数 — PATH 命中可执行则解析出路径（ok=true）", () => {
+  const bin = mkBinDir([...CORE_TOOLS]);
+  const r = probeCoreTools(bin);
+  assert.equal(r.ok, true, `missing: ${r.missing.join(",")}`);
+  assert.deepEqual(r.missing, []);
+  for (const t of CORE_TOOLS) {
+    assert.equal(r.found[t], path.join(bin, t), `${t} 应解析到 PATH 内可执行路径`);
+  }
+});
+
+test("R17 M2: probeCoreTools 纯函数 — 部分缺失模拟（PATH 只含 bash，缺 node/npm/git）", () => {
+  const bin = mkBinDir(["bash"]);
+  const r = probeCoreTools(bin);
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.missing, ["node", "npm", "git"]);
+  assert.equal(r.found.bash, path.join(bin, "bash"));
+});
+
+test("R17 M2: probeCoreTools 纯函数 — 目录无可执行位者不计入命中（候选路径注入）", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "picode-bin-"));
+  // 普通文件（无 X_OK）不得命中
+  fs.writeFileSync(path.join(dir, "node"), "#!/bin/sh\nexit 0\n");
+  const r = probeCoreTools(dir);
+  assert.equal(r.ok, false);
+  assert.ok(r.missing.includes("node"), "无执行位文件不应被命中");
+  // extraCandidates 注入：PATH 为空时从补充候选目录补齐（候选追加语义）
+  const extra = mkBinDir(["node", "npm", "git"]);
+  const r2 = probeCoreTools("", [extra]);
+  assert.equal(r2.found.node, path.join(extra, "node"));
+  assert.equal(r2.found.npm, path.join(extra, "npm"));
+  assert.equal(r2.found.git, path.join(extra, "git"));
+  assert.ok(r2.missing.includes("bash"), "extra 未覆盖的 bash 仍缺失");
+  // PATH 优先于候选：PATH 命中真实工具时，found 指向 PATH 解析结果
+  const realPath = process.env.PATH ?? "";
+  const r3 = probeCoreTools(realPath, [extra]);
+  assert.equal(r3.ok, true, `missing: ${r3.missing.join(",")}`);
+  for (const t of CORE_TOOLS) {
+    assert.ok(r3.found[t] !== null && r3.found[t]!.length > 0, `${t} 应从真实 PATH 解析`);
+  }
+});
+
+test("R17 M2: wakeAgent 探测失败 → TOOL_ENV_BROKEN 结构化拒绝（置 session.error、不 wake、不 spawn）", async () => {
+  const { dir, config, store } = setup({ piEnabled: false });
+  config.opencode.enabled = false;
+  // PATH 指向只含 bash 的空壳目录 → node/npm/git 缺失
+  const bin = mkBinDir(["bash"]);
+  const prevPath = process.env.PATH;
+  process.env.PATH = bin;
+  try {
+    await assert.rejects(
+      () => wakeAgent(dir, config, "pm", "intake"),
+      (e: unknown) => {
+        assert.ok(e instanceof PicodeError, "必须是 PicodeError");
+        assert.equal(e.code, ErrorCode.TOOL_ENV_BROKEN);
+        assert.deepEqual(e.details, { missing: ["node", "npm", "git"] }, "缺失清单须为结构化字段");
+        assert.match(e.message, /node/, "消息须含缺失工具");
+        assert.match(e.message, /DSH runtime-commands/, "中文可操作提示");
+        return true;
+      },
+    );
+    const s = store.get("pm")!;
+    assert.equal(s.state, "sleeping", "探测失败不得进入 awake（不产生会话）");
+    assert.equal(s.pi_session_id, null, "探测失败不得 spawn 任何进程");
+    assert.match(s.error ?? "", /^TOOL_ENV_BROKEN:/, "session.error 须带结构化错误码前缀");
+    assert.match(s.error ?? "", /node/, "session.error 须含缺失清单");
+  } finally {
+    if (prevPath === undefined) delete process.env.PATH;
+    else process.env.PATH = prevPath;
+  }
+});
+
+// --- R17 M4: 工作房存在性门闩（task 会话 spawn 前校验，git worktree list 语义） ---
+
+test("R17 M4: task 会话 worktree 缺失 → wakeAgent 拒绝（WORKTREE_MISSING + 中文可操作原因，不 spawn）", async () => {
+  // 真实后端路径（pi.enabled=true，setup 默认）→ M4 门闩在 spawn 前拦截；
+  // 纯状态机路径不 spawn 后端，门闩不适用（rules-engine 纯状态机测试语义不变）
+  const { dir, config, store } = setup({});
+  config.opencode.enabled = false;
+  store.register("engineer", {
+    agentId: "engineer@task-z",
+    initialState: "sleeping",
+    depth: 1,
+    parentSession: "squad-lead@task-z",
+  });
+  // worktree 从未创建（R16 根因 #2 场景：人设声明的路径不存在）
+  await assert.rejects(
+    () => wakeAgent(dir, config, "engineer@task-z", "event:task_ready"),
+    (e: unknown) => {
+      assert.ok(e instanceof PicodeError, "必须是 PicodeError");
+      assert.equal(e.code, ErrorCode.WORKTREE_MISSING, "结构化错误码");
+      assert.match(e.message, /工作房未创建/, "中文可操作原因");
+      assert.match(e.message, /worktree-setup\.sh/, "提示 run-lead 先跑 worktree-setup.sh");
+      return true;
+    },
+  );
+  const s = store.get("engineer@task-z")!;
+  assert.equal(s.state, "sleeping", "拒绝后会话保持 sleeping（不产生会话）");
+  assert.equal(s.pi_session_id, null, "不得 spawn 任何进程");
+  assert.match(s.error ?? "", /^WORKTREE_MISSING:/, "session.error 须带结构化错误码前缀");
+  assert.match(s.error ?? "", /worktree-setup\.sh/, "session.error 含可操作中文提示");
 });

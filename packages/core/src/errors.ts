@@ -68,6 +68,12 @@ export const ErrorCode = {
   APPROVAL_ALREADY_USED: "APPROVAL_ALREADY_USED",
   // E read-before-edit 守卫（C3）：编辑目标未先读
   FS_NOT_OBSERVED: "FS_NOT_OBSERVED",
+  // R17 M2（env-gate）：wakeAgent spawn 前工具探测失败（bash/node/git 缺失）→
+  // spawn 中止 + session.error 置码；details.missing 为结构化缺失清单
+  TOOL_ENV_BROKEN: "TOOL_ENV_BROKEN",
+  // R17 M4（env-gate）：工作房（worktree）未真实创建 → prepare/spawn 拒绝，
+  // 中文可操作原因（提示 run-lead 先跑 scripts/worktree-setup.sh）
+  WORKTREE_MISSING: "WORKTREE_MISSING",
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -76,10 +82,17 @@ export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 export class PicodeError extends Error {
   readonly code: ErrorCode;
 
-  constructor(code: ErrorCode, message: string) {
+  /**
+   * 结构化附加字段（可选，R17 M2 起）：如 TOOL_ENV_BROKEN 的 `{ missing: [...] }`
+   * 缺失清单——调用方可程序化分支，不只靠 message 文本。向后兼容：不传则缺省。
+   */
+  readonly details?: Record<string, unknown>;
+
+  constructor(code: ErrorCode, message: string, details?: Record<string, unknown>) {
     super(message);
     this.name = "PicodeError";
     this.code = code;
+    if (details !== undefined) this.details = details;
   }
 }
 

@@ -5,7 +5,9 @@ import YAML from "yaml";
 import {
   branchName,
   ensureDir,
+  ErrorCode,
   matchGlob,
+  PicodeError,
   readYamlFile,
   worktreePath,
   writeAtomic,
@@ -174,6 +176,74 @@ export function assertPrepareAllowed(
   assertStaffingApproved(dir, taskId);
 }
 
+/**
+ * R17 M4: 工作房存在性门闩——校验 config.git.worktree_root 下该 task 的 worktree
+ * **真实存在**（git worktree list 语义 = 目录存在 + `.git` 元数据文件指向主仓
+ * `.git/worktrees/<name>`）。缺失/伪目录 → 抛 WORKTREE_MISSING（结构化）+ 中文
+ * 可操作原因（提示 run-lead 先跑 scripts/worktree-setup.sh 或 git worktree add）。
+ * 纯校验：不创建、不 spawn、不产生任何进程。
+ */
+export function assertWorktreeExists(
+  repoRoot: string,
+  dir: string,
+  config: PicodeConfig,
+  taskId: string,
+): string {
+  const wt = worktreePath(repoRoot, config, path.basename(dir), taskId);
+  const issues: string[] = [];
+  if (!fs.existsSync(wt) || !fs.statSync(wt).isDirectory()) {
+    issues.push(`目录不存在：${wt}`);
+  } else {
+    const gitFile = path.join(wt, ".git");
+    if (!fs.existsSync(gitFile) || !fs.statSync(gitFile).isFile()) {
+      issues.push(`目录不是有效 worktree：缺少 ${gitFile} 元数据（git worktree list 不可见）`);
+    } else {
+      const m = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(gitFile, "utf8"));
+      const gitdirTarget = m ? path.resolve(wt, m[1].trim()) : null;
+      if (!gitdirTarget) {
+        issues.push(`worktree 元数据无效：${gitFile} 内容应形如 "gitdir: <主仓 .git/worktrees/<name>>"`);
+      } else if (!fs.existsSync(gitdirTarget)) {
+        issues.push(`worktree 元数据指向不存在的路径：${gitdirTarget}`);
+      } else if (!isUnderMainWorktrees(repoRoot, gitdirTarget)) {
+        issues.push(`worktree 元数据未指向主仓 .git/worktrees：${gitdirTarget}`);
+      }
+    }
+  }
+  if (issues.length > 0) {
+    throw new PicodeError(
+      ErrorCode.WORKTREE_MISSING,
+      `工作房未创建：${issues.join("；")}。` +
+        `请 run-lead 先运行 scripts/worktree-setup.sh（或 git worktree add）创建后重试（R17 M4 门闩）。`,
+    );
+  }
+  return wt;
+}
+
+/** 主仓 .git/worktrees 域（兼容 .git 为目录或 gitdir 文件两种形态）。 */
+function isUnderMainWorktrees(repoRoot: string, target: string): boolean {
+  const repoGit = path.resolve(repoRoot, ".git");
+  let worktreesDir: string;
+  try {
+    if (fs.statSync(repoGit).isDirectory()) {
+      worktreesDir = path.join(repoGit, "worktrees");
+    } else {
+      const m = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(repoGit, "utf8"));
+      worktreesDir = path.join(
+        path.resolve(repoRoot, m ? m[1].trim() : ".git"),
+        "worktrees",
+      );
+    }
+    // realpath 归一化（macOS /var↔/private/var、symlink 等）：git 写 gitdir 时用
+    // realpath，而 repoRoot 可能来自 Node os.tmpdir()（/var/folders 形式），
+    // 字面前缀比较会误判——统一按真实路径比较。
+    const resolvedTarget = fs.realpathSync(path.resolve(target));
+    const resolvedWorktrees = fs.realpathSync(path.resolve(worktreesDir));
+    return resolvedTarget.startsWith(resolvedWorktrees + path.sep);
+  } catch {
+    return false;
+  }
+}
+
 export function prepareTask(
   repoRoot: string,
   dir: string,
@@ -183,29 +253,44 @@ export function prepareTask(
   // P05 double latch: goal active ∧ work brief approved ∧ staffing approved.
   assertPrepareAllowed(repoRoot, dir, config, taskId);
 
-  const task = YAML.parse(
-    fs.readFileSync(path.join(dir, "tasks", taskId, "task.yaml"), "utf8"),
-  ) as TaskState;
-
+  // R17 M4: 工作房存在性门闩（prepare 落点）——
+  //   - worktree 已存在 → 校验真实 worktree（git worktree list 语义：目录 + .git
+  //     元数据指向主仓 .git/worktrees）；伪目录（R16 根因 #2 的"假房"）→ 拒绝；
+  //   - 缺失 → 自动创建（兼容既有 fixture 语义；C3 worktree-setup.sh 未合并前的
+  //     prepare 路径），创建失败 → WORKTREE_MISSING 中文可操作原因；
+  //   - spawn 最前沿的拒绝由 wakeAgent（真实后端路径）承担（缺失→拒绝 spawn，
+  //     不产生任何进程，见 pi-adapter.ts）。
   const wt = worktreePath(repoRoot, config, path.basename(dir), taskId);
   const branch = branchName(config, path.basename(dir), taskId);
-  ensureDir(path.dirname(wt));
-
-  if (!fs.existsSync(wt)) {
+  if (fs.existsSync(wt)) {
+    assertWorktreeExists(repoRoot, dir, config, taskId);
+  } else {
     try {
       execFileSync(
         "git",
         ["worktree", "add", "-b", branch, wt, config.git.base_branch],
         { cwd: repoRoot, stdio: "pipe" },
       );
-    } catch (e) {
-      // branch may exist
-      execFileSync("git", ["worktree", "add", wt, branch], {
-        cwd: repoRoot,
-        stdio: "pipe",
-      });
+    } catch {
+      try {
+        // branch may exist
+        execFileSync("git", ["worktree", "add", wt, branch], {
+          cwd: repoRoot,
+          stdio: "pipe",
+        });
+      } catch (e2) {
+        const detail = e2 instanceof Error ? e2.message : String(e2);
+        throw new PicodeError(
+          ErrorCode.WORKTREE_MISSING,
+          `工作房创建失败：${detail}。请 run-lead 先运行 scripts/worktree-setup.sh（或 git worktree add）后重试（R17 M4 门闩）。`,
+        );
+      }
     }
   }
+
+  const task = YAML.parse(
+    fs.readFileSync(path.join(dir, "tasks", taskId, "task.yaml"), "utf8"),
+  ) as TaskState;
 
   const secret = fs.readFileSync(path.join(dir, "secret.txt"), "utf8").trim();
   const triad = {
