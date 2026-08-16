@@ -271,10 +271,11 @@ export async function drainSessionCommands(
 ): Promise<DrainResult> {
   const file = path.join(dir, "session_commands.jsonl");
   if (!fs.existsSync(file)) return { processed: 0, results: [] };
-  // 逐行容错（P1）：一行损坏不再炸掉整个 drain / guardian tick
-  const lines = readJsonl<SessionCommand>(file);
 
   const drain = await withFileLock(path.join(dir, ".session_commands.lock"), async () => {
+    // P1-C（E5 r2）：读快照也必须在锁内——锁外读 + 锁内截断存在
+    // 「读后、获锁前入队命令被截断清掉」的丢失窗口。
+    const lines = readJsonl<SessionCommand>(file);
     const store = new SessionStore(dir);
     const results: DrainResult["results"] = [];
     for (const cmd of lines) {

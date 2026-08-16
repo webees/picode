@@ -57,10 +57,10 @@ describe("evaluateWatchdog（纯规则）", () => {
     assert.equal(v.state.silent_rounds, 2);
   });
 
-  it("4 轮无产出 → takeover_candidate + notify", () => {
+  it("4 轮无产出 → notify 动作（takeover_candidate 由执行层投递成功后置位，P1-B）", () => {
     const v = evaluateWatchdog(state({ silent_rounds: 3, at_risk: true }), noOutput);
     assert.equal(v.action, "notify_takeover");
-    assert.equal(v.state.takeover_candidate, true);
+    assert.equal(v.state.takeover_candidate, false, "判定层不置位（防投递失败永久丢失）");
   });
 
   it("产出恢复 → 归零解除 at_risk/takeover", () => {
