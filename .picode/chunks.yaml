@@ -1,177 +1,127 @@
-# run-2026-08-15T04-00-00-DASHBOARD 分块方案（sys-arch 定稿 · 覆盖上轮 SUBAGENT 方案）
-# 基线：main = 347f206（文档精简完成后，decision-lint 120 OK）。scale=M，并行 ≤3 组，3 波次。
-# 范围：Dashboard 全面完善——① 聊天室化（房间实时消息流读面 + 界面发送写面）② 流程可视化
-#       （双门闩/审查门/合并门状态机 + 审批流展示）③ 现有 9 视图增强 ④ 流程项落地
-#       （评分-招聘回路消费 + 文档精简维护机制）。
-# 与候选结构差异（详见 reviews/sysarch-chunks.md）：
-#   - 全部 dashboard-server 端点工作（聊天室读/写 + approvals/change-orders 数据源）合并为
-#     chunk-dashboard-server（router.ts 单一分发点 + index.ts CORS，写集互斥硬约束下仅一个 server 写者）；
-#   - 聊天室前端（读+写 UI）整并为 chunk-chat-ui（发送框与消息流共享组件/派生层，写集天然互斥）；
-#   - 流程可视化与 9 视图增强归 chunk-flow-ui（C2 只写聊天相关文件，C3 只写其余视图，见 shared_files）；
-#   - 流程项落地独立 chunk-process-items（core/orchestrator 小改 + 脚本/检查，与 dashboard 零耦合，W1 并行）。
+# run-2026-08-16T09-30-00-EFFICIENCY 分块方案（run-lead 定稿 · 依据 sys-arch/proc-audit 双分析）
+# 基线：main = 9b782c8（R16 DASHBOARD 收尾后）。scale=M，并行 ≤3 组，3 波次。
+# 范围：① 会话失能机制修复（工具自检 M2 + 工作房门闩 M4 + 零产出看门狗 M1 + 复活重投喂 M3）
+#       ② 运行效率工具链（worktree-setup/test-iso/env/merge-gate/tour-check + 测试编排）
+#       ③ 流程快赢规范（增量进度/接管留痕/at_risk 三查）+ 决策 + E20 纪要
+# 根因（双分析共识）：子代理工具 ENOENT（cwd 失效+node 不在 PATH，已修 node/npm/npx 软链）+ 工作房
+#   从未真实创建 + 无自动 at_risk/接管机制 + 接管绕过审查门轨迹 + 评分回路断裂。
 
 shared_files:
-  - path: "packages/dashboard/src/services/api/picode.api.ts"
-    owner_chunk: chunk-chat-ui
-    note: "聊天室 bus fetchers/hooks 由 chat-ui 追加（读面+写面同属聊天域）；flow-ui 新增独立
-           flow.api.ts 承载 approvals/change-orders 请求（apiFetch 复用 @/lib/api-client），不改此文件"
-  - path: "packages/dashboard/src/pages/dashboard/runs/[runId]/index.vue"
-    owner_chunk: chunk-chat-ui
-    note: "新增「聊天室」tab 由 chat-ui 一次性落地；flow-ui 增强落在既有 tab 组件内（gates-panel 等），
-           不新增 tab、不改本文件"
-  - path: "packages/dashboard/src/utils/labels.ts"
-    owner_chunk: chunk-chat-ui
-    note: "bus 消息类型中文标签由 chat-ui 追加；flow-ui 的审批/变更单/门禁阶段标签本地化
-           （gates-panel resultLabel、tasks-board KIND_ZH 既有先例），不改本文件"
+  - path: "packages/core/src/errors.ts"
+    owner_chunk: chunk-env-gate
+    note: "TOOL_ENV_BROKEN 新错误码由 env-gate 追加；watchdog/docs 只读引用"
+  - path: "package.json"
+    owner_chunk: chunk-toolchain
+    note: "测试编排（workspace concurrency + dashboard vitest 并入）由 toolchain 一次性落地；其余 chunk 不碰"
+  - path: "scripts/supervise/supervise.mjs"
+    owner_chunk: chunk-watchdog
+    note: "watchdog 接线 + 陈旧路径修复（lib.mjs 同属 supervise 目录由 watchdog 一并修，写集含 scripts/supervise/*）"
   - path: "docs/guides/operations.md"
     owner_chunk: chunk-docs
-    note: "监控面板节（9 端点清单/只读不变量/新端点运维要点）由 docs 一次性更新；
-           dashboard-server / 前端 chunk 只读引用"
+    note: "监控面板/工具链运维节由 docs 更新；toolchain 只读引用"
 
 chunks:
-  - id: chunk-dashboard-server
-    title: "dashboard-server 端点面扩展：聊天室读（房间/消息流/参与者）+ 聊天室写代理（sponsor chat）+ 审批流/变更单数据源（approvals/change_orders）"
+  - id: chunk-env-gate
+    title: "工具环境自检（M2：wakeAgent 前置探测 bash/node/git + TOOL_ENV_BROKEN 错误码）+ 工作房存在性门闩（M4：双门闩加 worktree 已建校验）"
     wave: 1
     write_paths:
-      - "packages/dashboard-server/src/index.ts"
-      - "packages/dashboard-server/src/router.ts"
-      - "packages/dashboard-server/src/index.test.ts"
-      - "packages/dashboard-server/src/bus.ts"
-      - "packages/dashboard-server/src/bus.test.ts"
-    read_paths:
-      - "packages/bus/src/room-store.ts"
-      - "packages/orchestrator/src/status.ts"
-      - "packages/orchestrator/src/memory.ts"
-      - "packages/core/src/approval.ts"
-      - "docs/guides/operations.md"
-    depends_on: []
-    acceptance:
-      - "GET /api/runs/:id/bus — 房间列表（room + 消息数，bus/*.jsonl 扫描，与 statusSnapshot.rooms 同源口径）"
-      - "GET /api/runs/:id/bus/:room — 消息流：逐行解析 JSONL（BusMessage 字段 ts/id/from/room/type/body/refs/reply_to/meta 原样），支持 ?limit=（默认 50，切片最近 N 条）；损坏行容错跳过（room-store readBus 逐行容错先例）；房间名 SAFE_ROOM_RE 校验防路径逃逸"
-      - "GET /api/runs/:id/bus/:room/members — 参与者：rooms/<room>/members.{yaml,json} 原样（id/access/post_types_allow）"
-      - "POST /api/runs/:id/bus/:room — 写代理：以 sponsor 身份 post type=chat（D018 sponsor 永远人类 + D035 sponsor 通道仅 chat）；ACL 校验 fail-closed——members 表含 sponsor 且 access=post 且 post_types_allow 含 chat（现默认仅 leadership/product 两房可发）；未授权 → 结构化拒绝（ROOM_POST_DENIED / BUS_TYPE_DENIED，含中文可读错误）；其余路由非 GET 仍 405（只读不变量仅对本端点局部例外）"
-      - "index.ts CORS 补 POST（Access-Control-Allow-Methods: GET,POST,OPTIONS）；OPTIONS 预检保持 204"
-      - "测试：index.test.ts 的 buildFixture 扩展（造 bus/<room>.jsonl + rooms/<room>/members + approvals/pending-*.json + change_orders/*.yaml）断言 6 个新端点 200 语义 + 拒绝/404/405 路径；bus.test.ts（新）断言 JSONL 解析纯函数（limit/损坏行/路径逃逸）"
-      - "GET /api/runs/:id/approvals — approvals/pending-*.json 全量（asked/decided 成对审计字段，ApprovalStore.list 升序语义）；GET /api/runs/:id/change-orders — change_orders/*.yaml（proposed→applied→closed 状态机数据源，memory.readChangeOrders 语义）"
-      - "新端点以 D113（读面扩展）/D114（写面例外）决策记录为依据（C5 落档）；实现期在 router.ts 新端点处注释标注决策编号引用"
-      - "全量 npm test 绿 + npm run check 三 lint 0 error"
-    owner_chunk: null
-    status: done
-  - id: chunk-process-items
-    title: "流程项落地：评分画像消费（人才池只读消费入口 + staffing 显式引用）+ 文档精简维护机制（可执行检查脚本 + npm script）"
-    wave: 1
-    write_paths:
-      - "packages/orchestrator/src/hr-talent.ts"
-      - "packages/orchestrator/src/hr-talent.test.ts"
-      - "packages/orchestrator/src/hr-score.test.ts"
+      - "packages/orchestrator/src/pi-adapter.ts"
+      - "packages/orchestrator/src/pi-adapter.test.ts"
+      - "packages/orchestrator/src/task.ts"
       - "packages/orchestrator/src/staffing.ts"
       - "packages/orchestrator/src/staffing.test.ts"
-      - "packages/orchestrator/src/commands/staffing.ts"
-      - "packages/orchestrator/src/commands/hr.ts"
-      - "packages/orchestrator/src/commands/index.ts"
-      - "packages/orchestrator/src/cli.test.ts"
-      - "scripts/doc-lean-check.mjs"
-      - "package.json"
+      - "packages/core/src/errors.ts"
+      - "packages/core/src/errors.test.ts"
     read_paths:
-      - "docs/knowledge/feedback/**"
-      - "docs/knowledge/hr/**"
-      - "packages/orchestrator/src/commands/types.ts"
-      - "packages/orchestrator/src/hr-score.ts"
+      - "packages/orchestrator/src/self-drive.ts"
+      - "packages/orchestrator/src/continuation.ts"
+      - ".picode/runs/run-2026-08-15T04-00-00-DASHBOARD/tasks/*/handoff/evidence.yaml"
+      - "docs/knowledge/feedback/sponsor-feedback-and-process-audit.md"
     depends_on: []
     acceptance:
-      - "评分画像消费（以 docs/knowledge/feedback/ 评分回路文档为据）：人才池（docs/knowledge/hr/talent.yaml，TalentRecord 含 score/grade/skills/seat/codename）新增只读消费入口——CLI 子命令（如 `picode staffing pool`，落 commands/staffing.ts 或新 commands/hr.ts）列出按 grade/skills/seat 筛选的候选画像（S/A 级优先），供招聘 reuse_persona_ids 显式引用；只读零写、不自动注入（防隐式行为变更）"
-      - "createStaffingRequest 支持显式预填 reuse_persona_ids（引用已存在字段，不新增配置键）——如机制与知识文档不符，以知识文档为权威并记录偏差"
-      - "命令注册：commands/index.ts COMMANDS/DOMAIN_ORDER 接线 + cli.test.ts 命令表断言（D074 成员断言模式，勿用计数断言）"
-      - "文档精简维护（以 docs/knowledge/feedback/ 文档生命周期文档为据）：新增 scripts/doc-lean-check.mjs（零依赖 node 脚本，退出码 0=通过）执行文档精简结构检查（检查项以知识文档定义为准：如 DECISIONS 行式/目录结构/冗余检测）；package.json 接 npm script（如 docs:lean）并在验收说明中给出运行命令；检查全绿可作 merge gate 输入"
-      - "全量 npm test 绿 + npm run check 三 lint 0 error"
+      - "工具探测纯函数（可单测）：给定 PATH/候选路径，探测 bash/node/npm/git 可用性；wakeAgent spawn 前调用，任一核心工具缺失→spawn 中止并置 session.error=TOOL_ENV_BROKEN（结构化，含缺失清单）"
+      - "core errors.ts 新增 TOOL_ENV_BROKEN（错误码+中文可读文案），pi-adapter 使用之；errors.test.ts 断言"
+      - "工作房存在性门闩：staffing 批准或 task prepare 时校验 config.git.worktree_root 下 worktree 真实存在（git worktree list 语义）；缺失→拒绝 spawn 并给出明确中文原因（提示 run-lead 先 worktree-setup.sh）"
+      - "测试：pi-adapter.test.ts 探测纯函数 + 失败路径（PATH 缺 node 模拟）；staffing.test.ts 门闩校验（缺失拒绝/存在放行）"
+      - "全量 npm test 绿 + npm run check 三 lint 0"
     owner_chunk: null
-    status: done
-  - id: chunk-chat-ui
-    title: "聊天室前端：房间实时消息流视图（消息列表/参与者/详情）+ 界面发送消息（写权限/审批联动/未授权拒绝）"
+    status: ready
+  - id: chunk-toolchain
+    title: "运行效率工具链：worktree-setup.sh / test-iso.sh / env.sh / merge-gate.sh / tour-check.sh + 根 package.json 测试编排（workspace concurrency + dashboard vitest 并入）"
+    wave: 1
+    write_paths:
+      - "scripts/worktree-setup.sh"
+      - "scripts/test-iso.sh"
+      - "scripts/env.sh"
+      - "scripts/merge-gate.sh"
+      - "scripts/tour-check.sh"
+      - "package.json"
+    read_paths:
+      - "docs/guides/operations.md"
+      - ".picode/worktrees/（既有 worktree 结构参考）"
+      - "docs/knowledge/feedback/design-deficiencies-analysis.md"
+    depends_on: []
+    acceptance:
+      - "worktree-setup.sh：git worktree add（或复用）+ packages/*/node_modules 自链（软链指向主仓对应目录，pnpm 软链特例处理）+ tsbuildinfo 清理 + 冒烟验证（node -v && git rev-parse --show-toplevel）；失败时给出明确错误与修复提示；幂等（已存在则跳过重建）"
+      - "test-iso.sh：mktemp HOME 隔离 + 先 tsc -b（防 stale dist 假红，R16 实测 dist 滞后 1.5 天致 9 项假失败）+ 全量测试透传；退出码 0=通过"
+      - "env.sh：导出 node/npm 路径确认 + PATH 检查（配合 runtime-commands 修复）；source 安全"
+      - "merge-gate.sh：合并门一键检查——evidence 齐 + diff ⊆ write_paths（--task 参数）+ lint（persona/skill/decision）+ 测试绿；输出 PASS/FAIL 清单"
+      - "tour-check.sh：巡检三查——progress 增量存在 / 工作房 git status 非空或分支有提交 / sdet evidence 存在或 BLOCKED；输出每 task 结论（产出/无产出/异常），退出码非 0 表示有待关注项"
+      - "根 package.json test 脚本：并入 packages/dashboard vitest（pnpm -C packages/dashboard test 或 workspace 引用）+ 包级并行（npm run -w 并行或 pnpm --workspace-concurrency）；保持 HOME 隔离"
+      - "脚本均有 usage/帮助注释；sh -n 语法检查通过；全量 npm test 绿"
+    owner_chunk: null
+    status: ready
+  - id: chunk-watchdog
+    title: "零产出看门狗（M1：按 agent 追踪产出信号，2 轮无产出→at_risk+steer 投喂，再 2 轮→bus 通知+takeover_candidate）+ 会话复活重投喂（M3：probeServeHealth 扩展）+ supervise 陈旧路径修复"
     wave: 2
     write_paths:
-      - "packages/dashboard/src/services/api/picode.api.ts"
-      - "packages/dashboard/src/utils/labels.ts"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/index.vue"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/rooms-view.vue"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/chat-room-view.vue"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/chat-send-box.vue"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/chat.data.ts"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/__tests__/chat.test.ts"
+      - "packages/orchestrator/src/session-watchdog.ts"
+      - "packages/orchestrator/src/session-watchdog.test.ts"
+      - "packages/orchestrator/src/self-drive.ts"
+      - "packages/orchestrator/src/self-drive.test.ts"
+      - "packages/orchestrator/src/continuation.test.ts"
+      - "scripts/supervise/supervise.mjs"
+      - "scripts/supervise/lib.mjs"
+      - "scripts/supervise/feed.mjs"
     read_paths:
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/views.data.ts"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/role-meta.data.ts"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/__tests__/views.test.ts"
-      - "packages/dashboard/src/services/api/picode.api.ts"
-      - "docs/guides/operations.md"
-    depends_on: ["chunk-dashboard-server"]
+      - "packages/core/src/errors.ts"
+      - "packages/orchestrator/src/continuation.ts"
+      - "packages/orchestrator/src/pi-adapter.ts"
+      - "docs/knowledge/feedback/design-deficiencies-analysis.md"
+    depends_on: ["chunk-env-gate"]
     acceptance:
-      - "新增「聊天室」tab（index.vue，owner）：房间列表（房间名/通俗名/消息数/参与者摘要，deriveRooms/roomLabel 复用）→ 选中房间 → 消息流视图（ts 倒序或正序 + 相对时间，类型徽章走 labels 中文映射，body/refs/meta 详情可展开）→ 参与者面板（GET members 端点 + 平台房 ROLE→ROOM 派生）"
-      - "消息流轮询 refetchInterval 3s（既有模式）；加载态骨架屏、错误态 ErrorState（D071 语义 token，不硬编码色值）"
-      - "发送框（chat-send-box）：输入 chat 文本 → POST /bus/:room；成功 → 清空 + 触发消息流刷新（invalidate/refetch）；未授权拒绝 → 结构化错误中文提示（ROOM_POST_DENIED/BUS_TYPE_DENIED，提示可发房间为 leadership/product）；发送目标房间由参与者面板展示的 ACL 决定（非 sponsor 可发房禁用发送框）"
-      - "审批联动：发送框失败提示与 C3 审批流展示语义一致（拒绝原因可见、pending 审批在门禁 tab 可见）——本 chunk 不实现审批请求落盘（写代理 fail-closed，D114）"
-      - "派生纯函数 chat.data.ts（消息类型中文映射、参与者/房间列表派生、发送校验预检）+ __tests__/chat.test.ts fixture 断言（views.test.ts 模式）"
-      - "rooms-view.vue 房间卡片可点击进入聊天室（入口增强）；views.data.ts / role-meta.data.ts 只读复用不改"
-      - "pnpm -C packages/dashboard test（vitest 全绿）+ pnpm -C packages/dashboard build 通过"
+      - "session-watchdog.ts：按 agent_id 追踪最近产出信号（git 提交 / 工作房文件 mtime / 转录 incoming），无产出 2 轮→at_risk（composeSteerPrompt 投 steer，I1 档），再 2 轮→bus 通知 run-lead + takeover_candidate 标记；零 LLM 决策（纯规则）；幂等（不重复投喂）；终态会话跳过"
+      - "self-drive.ts 接线：guardianTick 中集成 watchdog 检查（复用既有节奏）；probeServeHealth 扩展——error 会话失活超阈值自动 re-wake + resume（sendReady + clearError），失败保持原态不抖动"
+      - "supervise.mjs/lib.mjs/feed.mjs：陈旧路径修复（PICODE/REPO 从硬编码改 $REPO_ROOT 派生），supervise 可运行并接线 watchdog（调用 orchestrator 的 watchdog 检查函数或 CLI）"
+      - "测试：session-watchdog.test.ts（计数/升级/幂等/终态跳过/steer 投喂触发）；self-drive.test.ts 增量（复活重投喂路径）；continuation.test.ts 增量（复用 composeSteerPrompt 不破坏既有语义）"
+      - "全量 npm test 绿 + npm run check 三 lint 0"
     owner_chunk: null
-    status: done
-  - id: chunk-flow-ui
-    title: "流程可视化 + 9 视图增强：双门闩/审查门/合并门状态机展示 + 审批流/变更单展示 + 看板/合并/概览/进度/人员/分块/tokens 增强"
-    wave: 2
-    write_paths:
-      - "packages/dashboard/src/services/api/flow.api.ts"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/flow.data.ts"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/gates-panel.vue"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/tasks-board.vue"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/merge-train.vue"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/goal-overview.vue"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/progress-view.vue"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/personnel-view.vue"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/chunks-table.vue"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/sessions-live.vue"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/__tests__/flow.test.ts"
-    read_paths:
-      - "packages/dashboard/src/services/api/picode.api.ts"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/views.data.ts"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/role-meta.data.ts"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/components/tasks-board.data.ts"
-      - "packages/dashboard/src/pages/dashboard/runs/[runId]/__tests__/views.test.ts"
-      - "docs/guides/operations.md"
-    depends_on: ["chunk-dashboard-server"]
-    acceptance:
-      - "flow.api.ts（新）：approvals/change-orders fetchers + useApprovals/useChangeOrders hooks（3s 轮询），类型对齐 /api/runs/:id/approvals 与 /api/runs/:id/change-orders 响应"
-      - "门禁 tab（gates-panel.vue）：新增审批流区（approvals 列表——status pending/approved/rejected/used 徽章 + asked{from_agent/task_id/path/mode/reason} 与 decided{by/decision} 成对展示）与变更单区（change_orders proposed→applied→closed 状态 + 时间线）；门禁状态机展示：每任务流水（双门闩 brief/staffing → progress phase → evidence pass → handoff 包 + acceptance → dissolve → merge，数据源 /tasks latch/progress/evidence + /merge 队列 + /gates，纯派生 flow.data.ts）"
-      - "看板（tasks-board.vue）：卡片增双门闩状态徽标（brief/staffing latch 未齐 → 审批中，与 BOARD_COLUMN_META 视觉一致）；合并（merge-train.vue）：合并门展示增强（拓扑依赖/等待原因 skipped_due_to_deps）；概览（goal-overview.vue）：审批待办数/变更单活跃数告警卡片；进度（progress-view.vue）：双门闩状态列"
-      - "人员/分块/tokens（personnel-view/chunks-table/sessions-live）：轻量增强（与 D071 语义色/域组件一致，无结构重构）；本 chunk 不改 views.data.ts/role-meta.data.ts（新增派生全部落 flow.data.ts）"
-      - "审批/变更单/门禁阶段标签本地化于 flow.data.ts（labels.ts owner=C2，gates-panel resultLabel 先例）；文案中文通俗"
-      - "__tests__/flow.test.ts fixture 断言派生纯函数（状态机阶段映射/审批状态标签/变更单时间线）"
-      - "pnpm -C packages/dashboard test（vitest 全绿）+ pnpm -C packages/dashboard build 通过"
-    owner_chunk: null
-    status: done
+    status: planned
   - id: chunk-docs
-    title: "docs 收尾（D113 起 + catalog + operations.md 监控面板节更新 + E19 纪要 + --land + push）"
+    title: "流程快赢规范（M5 开工自检模板 + 增量进度报告格式 + 接管留痕 + at_risk 三查判据）+ D119 起决策 + operations.md + E20 纪要 + 评分回路收尾清单"
     wave: 3
     write_paths:
       - "docs/DECISIONS.md"
       - "docs/decisions/watermark.yaml"
       - "docs/reference/decision-catalog.md"
       - "docs/guides/operations.md"
-      - "docs/knowledge/evolve/run-2026-08-15T04-00-00-DASHBOARD.md"
+      - "docs/knowledge/feedback/process-quickwin-r17.md"
+      - "docs/knowledge/evolve/run-2026-08-16T09-30-00-EFFICIENCY.md"
     read_paths:
       - "docs/decisions/reserve.mjs"
-      - "packages/dashboard-server/src/router.ts"
-      - "docs/guides/operations.md"
+      - "packages/orchestrator/src/pi-adapter.ts"
+      - "packages/orchestrator/src/session-watchdog.ts"
+      - "scripts/*.sh"
+      - ".picode/plans/plan-r17-session-fix-efficiency.md"
     depends_on:
-      - "chunk-dashboard-server"
-      - "chunk-chat-ui"
-      - "chunk-flow-ui"
-      - "chunk-process-items"
+      - "chunk-env-gate"
+      - "chunk-toolchain"
+      - "chunk-watchdog"
     acceptance:
-      - "D113 起表行+详条（预计 5 项：dashboard-server 端点读面扩展（D071 例外）/ 聊天室写面写代理（D070 只读例外）/ 流程可视化入面板（approvals+change_orders 数据源）/ 流程项落地（评分消费+文档精简）/ docs 收尾；reserve.mjs --reserve → DECISIONS.md → --land 闭环）"
-      - "D070/D071 行修订标注：面板契约由「9 端点全 GET 只读」扩展为「+聊天室读/写 + 审批流/变更单数据源」，写仅限 sponsor chat（D018/D035 语义不变）"
-      - "decision-catalog 同步（面板端点面 + 写代理条目）"
-      - "docs/guides/operations.md 监控面板节更新：新端点清单（bus 读/写、approvals、change-orders）+ 前端聊天室 tab 说明 + 运维要点（POST 写代理仅 sponsor chat、ACL fail-closed）"
-      - "E19 纪要 docs/knowledge/evolve/run-2026-08-15T04-00-00-DASHBOARD.md（分块/合并序列/决策编号/波序/9 视图增强清单）"
+      - "D119 起决策：工具探测+TOOL_ENV_BROKEN（M2）/ 工作房门闩（M4）/ 看门狗分级干预（M1）/ 复活重投喂（M3）/ 工具链脚本集（C 项）/ 流程快赢规范（增量进度+接管留痕+at_risk 三查）——reserve.mjs → DECISIONS.md → --land 闭环"
+      - "process-quickwin-r17.md：增量进度报告格式（时间戳+phase 变更+WIP 产物路径+阻塞，追加式）、接管前置三查核验与变更单式留痕、at_risk 阶梯动作（1 通知/2 红灯/3 接管）、评分回路收尾 checklist（scores 齐 + talent 聚合）——作为下轮 skill 手册同步的权威依据"
+      - "operations.md：工具链脚本用法（worktree-setup/test-iso/env/merge-gate/tour-check）+ watchdog 运维说明（at_risk/takeover_candidate 语义与处置）+ 环境自检说明"
+      - "E20 纪要：根因/修复/合并序列/决策编号/效率实测（脚本耗时对比）"
       - "decision-lint 0 error；--land 完成；merge 后 git push origin main"
     owner_chunk: null
-    status: done
+    status: planned
