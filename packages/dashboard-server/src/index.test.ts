@@ -733,3 +733,20 @@ test("dogfood: current run detail has sessions + merge_queue + board cards (C1-c
   };
   assert.ok(tasks.tasks.some((t) => t.task_id === "task-dashboard-server"));
 });
+
+test("router: fixture 删 goal.yaml → 详情与会话端点均 200 且 snapshot.goal.acceptance===0（chunk-fix-500）", async () => {
+  const repo = tmpRepo();
+  const run = buildFixture(repo, "run-fixture-1");
+  // 模拟 .picode/runs 下缺失 goal.yaml 的 run（500 根因现场）
+  fs.rmSync(path.join(run, "goal.yaml"));
+  const h = makeRouter(repo);
+  const detail = await get(h, "/api/runs/run-fixture-1");
+  assert.strictEqual(detail.status, 200);
+  assert.strictEqual(
+    (detail.json as { snapshot: { goal: { acceptance: number } } }).snapshot.goal.acceptance,
+    0,
+    "缺 goal.yaml → snapshot.goal.acceptance 归 0（与列表端点口径一致）",
+  );
+  const sessions = await get(h, "/api/runs/run-fixture-1/sessions");
+  assert.strictEqual(sessions.status, 200);
+});

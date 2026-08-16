@@ -233,8 +233,11 @@ export function statusSnapshot(dir: string, config: PicodeConfig): StatusSnapsho
     goal: {
       status: goal.status,
       scale: goal.scale,
-      product_acceptance: goal.product_acceptance.length,
-      acceptance: goal.acceptance.length,
+      // 空值防御（与 router.ts 列表端点同口径）：readGoal 缺省已补空数组，
+      // 但 goal.yaml 显式 `acceptance: null` 会经 Object.assign 覆盖缺省，
+      // ?.length ?? 0 对 undefined / null 两种形态均兜底为 0，不抛 TypeError。
+      product_acceptance: goal.product_acceptance?.length ?? 0,
+      acceptance: goal.acceptance?.length ?? 0,
     },
     sessions: {
       total: list.length,

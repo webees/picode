@@ -264,6 +264,12 @@ export function readGoal(dir: string): GoalState {
       // 运行中 goal，guardian 续跑照旧（armed）；其余状态默认 disarmed。
       activation: raw.status === "active" ? "armed" : "disarmed",
       blocked_reason: null,
+      // acceptance / product_acceptance 与 GoalState 类型契约（必填）及
+      // createRun 写侧（L135-136）三方对齐：goal.yaml 缺失 / 旧格式缺省时
+      // 补空数组，避免下游消费方（statusSnapshot、setGoalStatus 激活校验）
+      // 对 undefined 读 .length 抛 TypeError（dashboard 500 根因）。
+      acceptance: [],
+      product_acceptance: [],
     },
     raw,
   ) as GoalState;

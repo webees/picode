@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import { tmpGitRepo } from "./test-utils.js";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { readYamlFile, writeYamlFile } from "@picode/core";
 import { createRun, resolveRunDir, setGoalStatus, setProductAcceptance } from "./run-store.js";
 import { addChunkAndTask } from "./task.js";
 import { statusSnapshot, checkpointOverview } from "./status.js";
@@ -179,4 +182,39 @@ test("C1: checkpointOverview derivation is the single source used by status segm
     checkpointOverview(dir),
     "statusSnapshot.checkpoint 与 checkpointOverview 同源（同一派生）",
   );
+});
+
+test("chunk-fix-500: 缺 goal.yaml 的 run → statusSnapshot 不抛错且计数归 0", () => {
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
+  const { runId } = createRun(repo, { title: "goal-no-goal-yaml", scale: "S" });
+  const { dir, config } = resolveRunDir(repo, runId);
+  // 模拟 .picode/runs 下缺失 goal.yaml 的 run（500 根因现场）
+  fs.rmSync(path.join(dir, "goal.yaml"));
+  const s = statusSnapshot(dir, config);
+  assert.equal(s.goal.acceptance, 0, "缺 goal.yaml → acceptance 归 0");
+  assert.equal(s.goal.product_acceptance, 0, "缺 goal.yaml → product_acceptance 归 0");
+});
+
+test("chunk-fix-500: goal.yaml 显式 acceptance/product_acceptance: null → 仍不抛错且计数归 0", () => {
+  const repo = tmpGitRepo({
+    prefix: "picode-test-",
+    email: "test@picode",
+    name: "picode-test",
+    readme: "# test\n",
+  });
+  const { runId } = createRun(repo, { title: "goal-null-acceptance", scale: "S" });
+  const { dir, config } = resolveRunDir(repo, runId);
+  // 显式 null 会经 Object.assign 覆盖 readGoal 缺省空数组 —— 验证 a 兜底
+  const rec = readYamlFile<Record<string, unknown>>(path.join(dir, "goal.yaml"))!;
+  rec.acceptance = null;
+  rec.product_acceptance = null;
+  writeYamlFile(path.join(dir, "goal.yaml"), rec);
+  const s = statusSnapshot(dir, config);
+  assert.equal(s.goal.acceptance, 0, "显式 null → acceptance 归 0");
+  assert.equal(s.goal.product_acceptance, 0, "显式 null → product_acceptance 归 0");
 });
