@@ -77,7 +77,7 @@ has_progress() {
 
 has_blocked() {
   local t="$1" f="$RUN_DIR/tasks/$t/progress/progress.md"
-  [ -s "$f" ] && grep -q "BLOCKED" "$f"
+  [ -s "$f" ] && grep -qw "BLOCKED" "$f"
 }
 
 has_evidence() {

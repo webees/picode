@@ -89,6 +89,14 @@ FAILS=0
 pass()  { printf '  [PASS] %s\n' "$1"; }
 fail()  { printf '  [FAIL] %s\n' "$1"; FAILS=$((FAILS+1)); }
 
+# 主仓根推导（R17 P1 教训：worktree 内运行不能靠 $PWD 上层推导）——git common-dir 物理定位
+if [ -f "$WORKTREE/.git" ]; then
+  MAIN_ROOT=$(git -C "$WORKTREE" rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's#/\.git$##')
+else
+  MAIN_ROOT=$(git -C "$WORKTREE" rev-parse --path-format=absolute --git-dir 2>/dev/null | sed 's#/\.git$##')
+fi
+: "${MAIN_ROOT:=$REPO_ROOT}"   # 兜底：主仓根（若已推导出 REPO_ROOT）
+
 # ---- [1] evidence 齐 ----
 echo "---- [1] evidence 齐 ----"
 EVIDENCE_OK=1
@@ -100,6 +108,20 @@ for f in evidence.yaml summary.md artifact_index.md known_issues.md diff_scope.m
     EVIDENCE_OK=0
   fi
 done
+# P0-1（R17 修复波）：签收门——acceptance.yaml 存在且 accepted_by 非空，缺则 FAIL
+# （无下游任务由文档主责/技术统筹签收；签收先于合并，R4 纪律）
+if [ -f "$TASK_DIR/handoff/acceptance.yaml" ]; then
+  if grep -qE "^accepted_by: \[\]" "$TASK_DIR/handoff/acceptance.yaml" || \
+     grep -qE "^accepted_by: \[ *\]" "$TASK_DIR/handoff/acceptance.yaml"; then
+    fail "handoff/acceptance.yaml 存在但 accepted_by 为空（未签收，R4：签收先于合并）"
+    EVIDENCE_OK=0
+  else
+    pass "handoff/acceptance.yaml（已签收）"
+  fi
+else
+  fail "handoff/acceptance.yaml 缺失（未签收，R4：签收先于合并）"
+  EVIDENCE_OK=0
+fi
 
 # ---- [2] diff ⊆ write_paths ----
 echo "---- [2] diff ⊆ write_paths（对照 brief.yaml）----"
@@ -147,6 +169,20 @@ if (cd "$WORKTREE" && npm run check >/tmp/merge-gate-check.log 2>&1); then
   pass "npm run check 三 lint（log: /tmp/merge-gate-check.log）"
 else
   fail "npm run check 非 0（log: /tmp/merge-gate-check.log）"
+fi
+
+# ---- [5] review 已版本化 ----
+echo "---- [5] review 已版本化（docs/reviews/<task>-e5*.md tracked）----"
+REVIEW_GLOB=$(ls "$MAIN_ROOT/docs/reviews/"*"$TASK_ID"*e5*.md 2>/dev/null | head -1)
+if [ -n "$REVIEW_GLOB" ]; then
+  REVIEW_NAME=$(basename "$REVIEW_GLOB")
+  if git -C "$MAIN_ROOT" ls-files --error-unmatch "docs/reviews/$REVIEW_NAME" >/dev/null 2>&1; then
+    pass "docs/reviews/$REVIEW_NAME（已 tracked）"
+  else
+    fail "docs/reviews/$REVIEW_NAME 存在但未提交入 git（P0-2：审查门记录须版本化）"
+  fi
+else
+  fail "docs/reviews/ 无 <task>-e5*.md 审查记录（E5 审查门缺失）"
 fi
 
 # ---- [4] 测试绿 ----

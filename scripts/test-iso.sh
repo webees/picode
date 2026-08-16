@@ -89,8 +89,9 @@ if [ -x "packages/dashboard/node_modules/.bin/vitest" ]; then
   pids+=("$dp_pid")
   echo "[test-iso] 启动: packages/dashboard vitest run (pid $dp_pid)"
 else
-  echo "[test-iso] 警告: packages/dashboard/node_modules/.bin/vitest 不存在，跳过 dashboard 测试" >&2
+  echo "[test-iso] 失败: packages/dashboard/node_modules/.bin/vitest 不存在（P1-6 修复：不再静默假绿）" >&2
   echo "[test-iso] 修复提示: 先运行 worktree-setup.sh（自链 dashboard node_modules）" >&2
+  fail=1
 fi
 
 fail=0
