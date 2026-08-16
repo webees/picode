@@ -3,8 +3,8 @@
 # 招聘侧（reuse_persona_ids / 用工标准）引用本档 + personas/<codename>.yaml 画像。
 # grade 分档：A >=90 / B 70-89 / C 50-69 / D <50；seat：squad-lead | engineer | sdet。
 schema_version: "1"
-updated_at: "2026-08-16T13:00:00Z"
-last_run: run-2026-08-16T09-30-00-EFFICIENCY
+updated_at: "2026-08-16T13:54:00Z"
+last_run: run-2026-08-16T20-14-40-FIX500
 people:
   # ---- R17 W1 · team 金汤（task-chunk-env-gate，队分 70/B）----
   - codename: "虎符"
@@ -90,3 +90,31 @@ people:
     skills: [断言矩阵, 集成冒烟实证, bus/ACL 集成层验收, 诚实打回, 证据取证]
     portrait: "验收贡献突出：集成实证 ACL P0 + 诚实打回 10 缺陷"
     note: "按实际验收贡献评；纯函数绿≠集成绿的验收标杆，集成类 task sdet 首选"
+  # ---- R18 · team 完璧（chunk-fix-500，队分 85/B+）----
+  - codename: "卞和"
+    seat: squad-lead
+    team_name: 完璧
+    task_id: chunk-fix-500
+    score: 90
+    grade: A
+    skills: [顺序门控/基线先取证, 初审+diff门禁自查, 交接包6/6, 门禁衔接, 诚实pending协调]
+    portrait: "统筹型主责：顺序门控保对照证据 + 交接包 6/6 齐 + 门禁复核"
+    note: "S 级单点修复首选主责；代码审查一次过，全流程零打回"
+  - codename: "荆璞"
+    seat: engineer
+    team_name: 完璧
+    task_id: chunk-fix-500
+    score: 90
+    grade: A
+    skills: [readGoal缺省补齐, 空值防御?.length??0, node:test回归, 最小面改动, 红线纪律]
+    portrait: "最小面实现：b+a 双保险 4 行净改动 + 测试锁死缺一不可"
+    note: "单提交 +66/-2 与简报逐字一致、零越界；红线纪律极佳，可复用 engineer 席"
+  - codename: "连城"
+    seat: sdet
+    team_name: 完璧
+    task_id: chunk-fix-500
+    score: 90
+    grade: A
+    skills: [证据链10条全绿, 修复前500→后200真对照, 真实服务取证/8799测试实例, 诚实pending, 全量测试+三lint]
+    portrait: "证据纪律典范：10 条证据全绿 + 修复前后真对照 + 8788 实测诚实 pending 不伪造"
+    note: "诚实披露团队项主要贡献者；不污染生产进程/数据，可复用 sdet 席"

@@ -1,0 +1,10 @@
+team_name: "完璧"
+records:
+  - { run_id: run-2026-08-16T20-14-40-FIX500, task_ids: [chunk-fix-500], team_score: 85, at: "2026-08-16T13:54:00Z" }
+summary: { count: 1, avg: 85, min: 85, max: 85 }
+personas:
+  - { codename: "卞和", seat: squad-lead }
+  - { codename: "荆璞", seat: engineer }
+  - { codename: "连城", seat: sdet }
+notes:
+  - "R18（chunk-fix-500，S 规模 dashboard runs 端点 500 修复）：evidence ev-1~ev-10 全闭环（含 ev-10 8788 重启实测诚实 pending→run-lead 闭环回填 done）+ code-review 一次过 PASS（0 P0/P1，2 非阻塞建议）+ 单提交 4bdc5fe +66/-2 带 task id + 交接包 6/6 齐 + 签收 accepted + 合并 7ed7073 已推送，流程零打回零返工。画像：S 级单点修复教科书组合（B+），三席全 A（90），组合可复用；唯一跟踪项 KI-1/ev-10 由 run-lead 合并后闭环（已 done）。"
