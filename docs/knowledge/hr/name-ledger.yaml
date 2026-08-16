@@ -2246,3 +2246,29 @@ entries:
     task_id: task-chunk-dashboard-server
     seat: sdet
     first_used_at: 2026-08-15T06:00:00Z
+
+  # —— run-2026-08-15T04-00-00-DASHBOARD（波1：铨衡）——
+  - kind: team_name
+    name: 铨衡
+    run_id: run-2026-08-15T04-00-00-DASHBOARD
+    task_id: task-chunk-process-items
+    seat: null
+    first_used_at: 2026-08-15T06:30:00Z
+  - kind: codename
+    name: 品藻
+    run_id: run-2026-08-15T04-00-00-DASHBOARD
+    task_id: task-chunk-process-items
+    seat: squad-lead
+    first_used_at: 2026-08-15T06:30:00Z
+  - kind: codename
+    name: 铨叙
+    run_id: run-2026-08-15T04-00-00-DASHBOARD
+    task_id: task-chunk-process-items
+    seat: engineer
+    first_used_at: 2026-08-15T06:30:00Z
+  - kind: codename
+    name: 月旦
+    run_id: run-2026-08-15T04-00-00-DASHBOARD
+    task_id: task-chunk-process-items
+    seat: sdet
+    first_used_at: 2026-08-15T06:30:00Z
