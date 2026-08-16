@@ -279,7 +279,7 @@
 
 - `.picode/plans/dsh-source-survey.md`：§2 #10@268-281（durable descriptor/深度围栏/冷恢复/权限边界）、§2 #5@188-201（inbox 三原语 + wake 门闩）、§2 #4@169-186（事件溯源机件 vs 真相模型）、§4 P1 C@357-361
 - `.picode/plans/run-2026-08-15T02-08-48-06-DSH-intake.md`：§2.3@62-67（D002 文件真相）、§3 C@76、§5 non_goals@110-120、§6 C1-C3@148-152、§8.2@182-185
-- `.picode/plans/research-brief-deepseek-harness.md`：§1 ①@26-28（会话=事件日志）、§1 ②@30-32（continuable 子代理全机制）、§1 ⑩@62-64（子代理不可问人）、§4 来源 11/12@115-116
+- `docs/knowledge/research/archive/deepseek-harness.md`：§1 ①@26-28（会话=事件日志）、§1 ②@30-32（continuable 子代理全机制）、§1 ⑩@62-64（子代理不可问人）、§4 来源 11/12@115-116
 - `research/briefs/pi-persistence.md`：**已落盘（2026-08-15T17:05+0700）**——§5 引用写实完成；结论「支持（部分接口限制）」，URL + retrieved_at 见 §5.3
 
 ---
