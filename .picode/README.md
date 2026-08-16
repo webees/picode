@@ -8,9 +8,9 @@
 
 | task | wave | team | squad-lead | engineer | sdet | worktree（真实已建） | 状态 |
 |---|---|---|---|---|---|---|---|
-| task-chunk-env-gate | W1 | 待招 | 待招 | 待招 | 待招 | .picode/worktrees/squad-task-chunk-env-gate | 双门闩中 |
-| task-chunk-toolchain | W1 | 待招 | 待招 | 待招 | 待招 | .picode/worktrees/squad-task-chunk-toolchain | 双门闩中 |
-| task-chunk-watchdog | W2 | 待招 | 待招 | 待招 | 待招 | .picode/worktrees/squad-task-chunk-watchdog | 依赖 env-gate |
+| task-chunk-env-gate | W1 | 金汤 | 虎符 adfbb6fb | 鱼钥 4a3238be | 关防 fdf7a8c9 | .picode/worktrees/squad-task-chunk-env-gate | 🚀 开发中 |
+| task-chunk-toolchain | W1 | 陶钧 | 执规 fba5b616 | 斫轮 a2b0dfb9 | 持矩 53938ff8 | .picode/worktrees/squad-task-chunk-toolchain | 🚀 开发中 |
+| task-chunk-watchdog | W2 | 金柝 | 更筹 | 戍鼓 | 宵柝 | .picode/worktrees/squad-task-chunk-watchdog | 依赖 env-gate |
 | task-chunk-docs | W3 | 文档小组 | - | - | - | main 直接 | 依赖全部 |
 
 ## 执行纪律（R17 新增，源自双分析）
