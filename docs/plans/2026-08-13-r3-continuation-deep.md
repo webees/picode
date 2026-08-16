@@ -126,3 +126,5 @@
 2. **会话 checkpoint 快照**（prime-agent /refine 对应物）：先定「快照只读、文件为准」边界
 3. **maxTokens 真计量**：待 serve token 契约（D058）就绪，续跑预算并入 token 维度
 4. **续跑预算按 role 差异化**：`max_per_session` 按角色/任务类型区分（承接平台席策略的精细化）
+
+> 精简批2（2026-08-15）：本 run E 纪要（r3）已摘要化，教训/风险去向见 evolve/E1-E15-SUMMARY.md；E 纪要细节见 git 历史。

@@ -118,3 +118,5 @@
 ## 本轮验证载体说明（acceptance 3）
 
 本轮 run 自身即验证：C1（机制）与 C2（恢复+CLI）两个代码任务 + C3 文档任务，在无人干预下由 self-drive guardian 推进——guardian 唤醒三角 → 三角会话收到 ready 消息自主实现 → **续跑 sweep 在会话空闲时自动投喂续跑 prompt 使实现持续推进** → 自测 → evidence/handoff → 串行 merge → E6 归档。run-lead 只产出本规划，不再逐任务投喂。验收判定：至少 2 个任务（C1+C2）完成并合并入 main。
+
+> 精简批2（2026-08-15）：本 run E 纪要（r1）已摘要化，教训/风险去向见 evolve/E1-E15-SUMMARY.md；E 纪要细节见 git 历史。

@@ -205,3 +205,5 @@ merge 自动 push），C3 文档合并（acceptance 4/5/6 达成——DECISIONS 
 三 lint 通过 + `--land` 完成 + **merge 后 push origin main**），E15 纪要归档。**额外 dogfood**：C1 落地后对
 真实 run 仓 `picode status` 输出含 `checkpoint` 段即观测面首次真实运行验证；C2 落地后首个 merge（C3 收尾）
 即自动 push 的首次真实运行验证（C3-c 显式 push 双保险）。
+
+> 精简批2（2026-08-15）：本 run E 纪要（r14）已摘要化，教训/风险去向见 evolve/E1-E15-SUMMARY.md；E 纪要细节见 git 历史。

@@ -1,4 +1,4 @@
-# run-lead 自治规划 — picode 监控面板（Dashboard）（run-2026-08-13T12-16-26-548Z · delivery · scale L）
+# run-lead 自治规划 — picode 监控面板（Dashboard）（run-2026-08-13T12-16-26-548Z · delivery · scale L · 合并 E 纪要）
 
 > 目标（product_acceptance，sponsor 投喂 + pm 确认）：
 > 1. 基于 shadcn-vue-admin 技术栈（Vue3+Vite+TS+shadcn-vue）的监控面板
@@ -127,3 +127,41 @@
 ## 本轮验证载体（acceptance 4）
 
 本轮 run 自身即验证：dogfood 克隆真实 run（run-2026-08-13T12-16-26-548Z）是面板的**数据源兼验收靶**——C1 curl 冒烟直读该 run YAML；C3 `pnpm dev` 渲染该 run 的 goal/sessions/tokens（serve 127.0.0.1:7788 在线）；C4 后按 operations.md 一键起面板闭环「可本地运行并接入真实 run 数据」。无人干预下由 self-drive guardian 推进（三角会话 ready → 自主实现 → continuation 续跑 → 自测 → evidence/handoff → 串行 merge）。验收判定：C1+C2+C3 三个代码任务完成并合并入 main，C4 文档归档，acceptance 1–4 全满足。
+
+---
+
+## 合并 E 纪要（2026-08-15 精简 · evolve/2026-08-13-r4-dashboard.md 增量并入）
+
+> 原 plans（决策 D1-D10 / chunk 分块 / 验收）与 evolve（决策要点 D070 / Diff / 验证）双写重复已去重，
+> 本计划为主干（决策/验收/编排）。以下为 evolve 纪要独有增量（剩余风险/后续候选），保留为下轮输入；
+> evolve 原文细节见 git 历史。
+
+### 执行结果（merge commit 列表）
+
+- **C1 `merge task-dashboard-server` = 1af542e**（feature e7caf20，9 文件 +878/−5）：`packages/dashboard-server/`（新包，`src/index.ts` `--repo/--port`、`src/router.ts` 9 只读端点、`src/live.ts` serve tokens 代理 `fetchLiveTokens`/`stripOcPrefix`/`lastTokenSample`、`index.test.ts` 379 行单测）；根 workspaces 显式六包 + build/test/typecheck 接 `-w @picode/dashboard-server`
+- **C2 `merge task-dashboard-scaffold` = 7cd3aa5**（feature d8b2284，538 文件 +24849）：`packages/dashboard/` vendor 模板裁剪（删除演示页；navData 替换为 picode 分区；vite proxy `/api` → 127.0.0.1:8788；骨架页 `/dashboard` + `/dashboard/runs/[runId]` 六 tab 占位；移除 simple-git-hooks postinstall）
+- **C3 `merge task-dashboard-pages` = 54ff3b9**（feature 308864c，10 文件 +1328/−30）：`picode.api.ts` 9 个 vue-query hooks；run 列表页 + 详情 tabs；6 面板组件（goal-overview/chunks-table/tasks-board 7 列/sessions-live 3s 轮询/merge-train/gates-panel）；异常降级 Alert 不白屏、空态 Empty
+- **C4 `chunk-dashboard-docs`（本任务）**：DECISIONS D070 + catalog §13 + operations.md + README + 本纪要（E6）
+
+### 验证终态
+
+- C1：`npm run build && npm test` 全绿（**362 tests**，含 dashboard-server 单测）；curl 冒烟 `localhost:8788/api/runs` 200 且真实 serve 在线时 tokens 非空
+- C2：`pnpm install && pnpm build`（vue-tsc+vite）通过；`pnpm dev` 冒烟 5173；`pnpm lint`+`pnpm test`（25 通过）
+- C3：`pnpm build`（vue-tsc+vite）通过、lint 零告警（实测 build 1.58s）
+- C4：`npm run check`（persona-lint）通过；文档不破坏构建
+- 验收判定：acceptance 1–4 全满足（技术栈 / 直观展示 / 数据源 / 可本地运行接真实 run）
+
+### 剩余风险（evolve 纪要原文 · 下轮输入）
+
+- **前端依赖重型**：`packages/dashboard` 自带 7.5k 行 pnpm-lock 与整套 shadcn-vue ui 组件库，构建面大；已隔离于根 npm 之外（D070 包管理器分离），根 gate 不受影响，但面板自身 `pnpm install/build` 耗时长
+- **tokens 依赖 serve 在线**：serve 失联/无 `pi_session_id` 会话 → tokens 列为空（`{error}` 降级不白屏）；实时活跃度是「尽力而为」展示，非文件真相（D002）
+- **只读边界靠自觉**：面板服务无鉴权、面向 localhost；若误暴露公网，只读端点可泄露 run 元数据（无 token 内容，但含任务/goal 摘要）——运维须保证不对外暴露（本轮非目标，第二轮补鉴权）
+- **代理 serve 契约漂移**：live 端点依赖 opencode serve `GET /session/{id}/message` 的 `info.tokens` 形状（D058 实测），上游变更需同步（有界超时 + 非数组/无 tokens 均降级，不硬崩）
+- **tokens 实时页 = 尽力而为**：sessions-live 3s 轮询依赖 serve 在线且会话已挂 `oc-` serve 会话（D044）；serve 失联/未挂载 → 降级 Alert（`{ok:false}`），非文件真相（D002），不阻塞其余只读面板
+- **看板列语义为前端常量**：tasks-board 复用 `BOARD_COLUMNS`（C1 导出），列名变更需同步 dashboard-server 导出与前端——已有单测守护 server 面，前端构建守护类型，跨包语义未做机械化一致性校验
+
+### 后续候选（evolve 纪要原文 · 下轮输入）
+
+1. **面板鉴权与部署**：非目标（D070）首项；本地外使用时需加 token/绑定 localhost
+2. **多 run 聚合**：当前一次一个 run；聚合视图（历史 run 对比）列第二轮
+3. **写面扩展**：第二轮评估是否加 sponsor 操作（受 D018/D035 边界约束）

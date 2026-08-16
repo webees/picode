@@ -1,4 +1,4 @@
-# run-lead 自治规划 — Skill Harness：SKILL.md 规范 + skills_root 激活 + persona skills[] 接线 + 渐进披露（run-2026-08-13T23-50-59-484Z · self_evolve · scale M）
+# run-lead 自治规划 — Skill Harness：SKILL.md 规范 + skills_root 激活 + persona skills[] 接线 + 渐进披露（run-2026-08-13T23-50-59-484Z · self_evolve · scale M · 合并 E 纪要）
 
 > 目标（宽松，run-lead 自主决策）：从 GitHub 学习 agent skill harness 知识（anthropics/skills +
 > agentskills spec），改进 picode 自身技能承载体系。product_acceptance：
@@ -137,3 +137,33 @@
 
 无人干预下由 self-drive guardian 推进（三角会话 ready → 自主实现 → 续跑 → 自测 → evidence/handoff → 串行 merge）。
 验收判定：C1/C2 代码任务合并入 main（acceptance 1/2/3/4/5 达成——skill-lint 校验、skills_root 激活、persona skills[] 接线、三层渐进披露、lint+测试），C3 文档归档（E11 纪要），既有单测全绿。
+
+---
+
+## 合并 E 纪要（2026-08-15 精简 · evolve/2026-08-13-r10-skill-harness.md 增量并入）
+
+> 原 plans（决策 D082-D086 / chunk 分块 / 验收 / (d) 后续候选）与 evolve（决策要点 D084-D088 / Diff /
+> 验证 / 剩余风险 / 后续候选）双写重复已去重，本计划为主干（决策/验收/编排/(d) 候选）。evolve 的
+> 后续候选 4 条与计划 (d) 完全对应（skills-ref 对齐 / 打包导入 / skill-creator / allowed-tools），
+> 不重复并入。以下为 evolve 独有增量（执行结果/验证终态/剩余风险），保留为下轮输入；evolve 原文
+> 细节见 git 历史。
+
+### 执行结果（merge commit 列表）
+
+- **C1 `task-skill-spec` = 884af8d**：`packages/core/src/skills.ts`（新模块）+ `skills.test.ts`、`validate/skill-lint.ts`（新 CLI + `SkillLintCode` 全集）+ `skill-lint.test.ts`、`config.ts`（skills_root 激活 + 相对路径校验）、`index.ts`（导出 skills）、`package.json`（check 接线 skill-lint）
+- **C2 `task-skill-wiring` = d5d3aeb + 冲突修复 3ddabcc**：`pi-adapter.ts`（buildPiEnv 注入 `PICODE_SKILLS_INDEX`/`PICODE_PERSONA_SKILLS`）、`opencode-adapter.ts`（`renderSkillsSection` system prompt 追加 skills 段，无 env 逐字节不变）、`.picode/agents/{engineer,run-lead}.md`（frontmatter `skills: [ponytail]`）、对应测试（渐进披露正文不进 prompt 硬验证 / 无 env 零回归）
+- **C3 `task-skill-docs`（本任务）**：DECISIONS D084 落地 + D055 行移除 skills_root 死键标记 + D085-086 记录；catalog §15；skill-spec.md 规范正文；skill-harness.md 人读页；skills/README 校验入口；本 E11 纪要
+
+### 验证终态
+
+- C1：`npm run build && npm test` 全绿（core 92 测试 + 全仓 **414 测试**零失败）+ `npm run check`（persona-lint + skill-lint 双通过）；skill-lint 全错误码单测覆盖；validateConfig 路径逃逸拒绝
+- C2：`npm run build && npm test` 全绿 + `npm run check`；C2-b/c/d 断言：`PICODE_PERSONA_SKILLS` 含 ponytail 路径 / system prompt 含 skills 段且不含 SKILL.md 正文 / 无 env 逐字节不变
+- C3：文档不破坏构建；`npm run check`（persona-lint + skill-lint）通过
+- 验收判定：acceptance 1–5 全满足
+
+### 剩余风险（evolve 纪要原文 · 下轮输入）
+
+- **allowed-tools 未强制**：skill 级工具白名单仅解析不强制（D088 拒），与 picode ACL（09 tool-profiles 六层）的整合关系留档待设计；agent 可能用任意工具执行 skill 指令
+- **官方 skills-ref 未接入**：自研 skill-lint 覆盖 name/desc/命名等价语义，但未逐项对齐官方工具链（D085 缓）；描述长度等建议阈值以 agentskills 为参照，非官方实现
+- **激活依赖模型自主**：渐进披露的 instructions/resources 层由 agent 自判 `repo_read`，弱模型可能不主动拉取正文，技能实际生效程度依赖模型能力
+- **C2 本地占位实现**：C2 的 buildSkillIndex/personaDeclaredSkills 为本地实现（C1 未合并时），merge 后与 core 导出可能并存两套——C1 已在 3ddabcc 冲突修复中改走 core 导出（无残留）

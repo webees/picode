@@ -157,3 +157,5 @@ C3 对之 `pnpm dev` 渲染进度（tasks.progress）/人员（triad+sessions）
 C4 后按 operations.md 一键起面板闭环「可本地运行并接入真实 run 数据」。
 无人干预下由 self-drive guardian 推进（三角会话 ready → 自主实现 → 续跑 → 自测 → evidence/handoff → 串行 merge）。
 验收判定：C1+C2+C3 三个代码任务合并入 main，C4 文档归档，acceptance 1–5 全满足。
+
+> 精简批2（2026-08-15）：本 run E 纪要（r5）已摘要化，教训/风险去向见 evolve/E1-E15-SUMMARY.md；E 纪要细节见 git 历史。

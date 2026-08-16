@@ -1,3 +1,5 @@
+<!-- 已合并至 plans/2026-08-13-r4-dashboard.md（2026-08-15 精简 · 批 2）：决策 D070 / chunk 分块 / 验证数字以 plans 为主干，本纪要的剩余风险/后续候选已并入 plans 合并节；细节见 git 历史。 -->
+
 # Evolve run-2026-08-13T12-16-26-548Z
 
 - goal: picode 监控面板（Dashboard）

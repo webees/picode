@@ -1,3 +1,4 @@
+<!-- 精简批2（2026-08-15）：E 纪要已摘要化——教训/风险去向见 evolve/E1-E15-SUMMARY.md 对应行，细节见 git 历史。 -->
 # Evolve run-2026-08-13T23-48-54-042Z
 
 - goal: 会话 checkpoint 边界决策先行 + 最小可行落地 + re-spawn 摘要去噪（宽松目标，run-lead 自主决策）

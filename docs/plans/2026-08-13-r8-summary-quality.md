@@ -135,3 +135,5 @@
 
 无人干预下由 self-drive guardian 推进（三角会话 ready → 自主实现 → 续跑 → 自测 → evidence/handoff → 串行 merge）。
 验收判定：C1/C2 代码任务合并入 main（acceptance 1/2/3 达成），C3 文档归档（E10 纪要），既有 continuation 单测全绿（acceptance 4）。
+
+> 精简批2（2026-08-15）：本 run E 纪要（r8）已摘要化，教训/风险去向见 evolve/E1-E15-SUMMARY.md；E 纪要细节见 git 历史。

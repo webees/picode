@@ -1,3 +1,4 @@
+<!-- 精简批2（2026-08-15）：E 纪要已摘要化——教训/风险去向见 evolve/E1-E15-SUMMARY.md 对应行，细节见 git 历史。 -->
 # Evolve run-2026-08-14T10-07-06-439Z
 
 - goal: 续跑摘要 ready/re-spawn 收拢 + 监控守护正式化 + 其他 run-lead 评估项（宽松）

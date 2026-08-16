@@ -1,3 +1,6 @@
+<!-- 精简批2（2026-08-15）：E 纪要已摘要化——教训/风险去向见 evolve/E1-E15-SUMMARY.md 对应行，细节见 git 历史。 -->
+<!-- 已摘要（见 E1-E15-SUMMARY.md，2026-08-15；plans 侧同名文件缺失，未按 2a 合并），细节见 git 历史。 -->
+
 # Evolve run-2026-08-13T01-15-17-073Z
 
 - goal: 会话续跑机制（continuation）：picode 无输入长时自治闭环

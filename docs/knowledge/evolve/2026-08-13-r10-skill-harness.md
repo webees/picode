@@ -1,3 +1,5 @@
+<!-- 已合并至 plans/2026-08-13-r10-skill-harness.md（2026-08-15 精简 · 批 2）：决策 D084-D088 / chunk 分块 / 验证数字 / 后续候选（与计划 (d) 对应）以 plans 为主干，本纪要的剩余风险已并入 plans 合并节；细节见 git 历史。 -->
+
 # Evolve run-2026-08-13T23-50-59-484Z
 
 - goal: Skill Harness 学习与激活：Agent Skills spec 融入 picode（skills_root 激活/SKILL.md 规范/persona 接线/渐进披露）

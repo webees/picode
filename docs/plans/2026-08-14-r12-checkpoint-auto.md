@@ -1,4 +1,4 @@
-# run-lead 自治规划 — checkpoint 自动捕获接线（guardian_tick 周期 + pre_merge 事件）+ 决策编号机制自验（run-2026-08-14T08-55-08-366Z · self_evolve · scale L）
+# run-lead 自治规划 — checkpoint 自动捕获接线（guardian_tick 周期 + pre_merge 事件）+ 决策编号机制自验（run-2026-08-14T08-55-08-366Z · self_evolve · scale L · 合并 E 纪要）
 
 > 目标（宽松，run-lead 自主决策）：
 > 1. **checkpoint 自动捕获接线**：guardian tick 周期捕获（`boundary: guardian_tick`，限流防抖）+ merge 前事件驱动捕获（`boundary: pre_merge`）——**快照只读、文件为准边界不变**（D082 核心约束）：自动捕获只是**写侧**新增，恢复/续跑/调度/合并仍只读 session.yaml / task.yaml / transcripts / git，checkpoint 绝不反向驱动任何状态决策
@@ -125,3 +125,36 @@
 
 无人干预下由 self-drive guardian 推进（三角会话 ready → 自主实现 → 续跑 → 自测 → evidence/handoff → 串行 merge）。
 验收判定：C1/C2 代码任务合并入 main（acceptance 1/2 达成——自动捕获接线 + 编号机制字段对齐），C3 文档合并（acceptance 3/4 达成——DECISIONS canonical + 既有单测全绿 + `npm run check` 三 lint 通过 + `--land` 完成），E12 纪要归档。**额外 dogfood**：本 run 自身任务的 guardian 会自动产生 `boundary: guardian_tick`/`pre_merge` checkpoint（证据链），即自动捕获的首次真实运行验证。
+
+---
+
+## 合并 E 纪要（2026-08-15 精简 · evolve/2026-08-14-r12-checkpoint-auto.md 增量并入）
+
+> 原 plans（决策 D091-D094 / chunk 分块 / 验收 / (d) 后续候选）与 evolve（决策要点 D091 / Diff /
+> 验证 / 剩余风险 / 后续候选）双写重复已去重，本计划为主干（决策/验收/编排/(d) 候选）。evolve 后续
+> 候选 #1（status 三面）与计划 (d) #1 相同、#2（自动捕获默认开启）已被后续 run（D096，r14）落地、
+> #3（docs 引用清理）为独有增量——合并节仅补 #3 与剩余风险。evolve 原文细节见 git 历史。
+
+### 执行结果（merge commit 列表）
+
+- **C1 `task-checkpoint-auto` = 7860df0**：`packages/core/src/config.ts`（CheckpointCaptureConfig + 校验 + DEFAULTS）、`packages/orchestrator/src/checkpoint-store.ts`（GUARDIAN/PRE_MERGE 边界 + guardianCaptureDue + captureDueGuardianCheckpoints）、`self-drive.ts`（guardianTick 接线）、`merge.ts`（mergeNext 前捕获）+ 对应测试（config/checkpoint-store/merge/self-drive）
+- **C2 `task-decision-reserve-schema` = 3b99888**：`docs/decisions/reserve.mjs`（from→start + --plan 预检）+ `reserve.test.mjs`（12 用例）
+- **C3 `task-ckauto-docs`（本任务）**：DECISIONS D091 表行 + 详条；catalog §12.9 自动捕获配置 + boundary 语义；operations 会话 checkpoint 自动捕获 + 决策编号规程；watermark 91 landed；本 E13 纪要
+
+### 验证终态
+
+- C1：`npm run build` + `npm test` 全绿（**445 断言**：core 111 / orchestrator 282），tsc -b 干净；D082 快照只读边界由 sdet 独立审计 PASS（checkpoint 仅写不读）
+- C2：`npm run build` + `npm test` 445 断言全绿；`reserve.test.mjs` 12/12；`npm run check` 三 lint 全绿
+- C3：`node packages/core/dist/validate/decision-lint.js .` 全绿（0 error）——表行/详条唯一、详条↔表行对应、水位一致（next_number=92 ≥ max 91）、引用可解析、预留 landed 无冲突
+- 验收判定：acceptance 1–4 全满足（自动捕获接线 + 编号字段对齐 + DECISIONS canonical + 既有单测全绿 + --land）
+
+### 剩余风险（evolve 纪要原文 · 下轮输入）
+
+- **自动捕获默认关闭**：`self_evolve.checkpoints.enabled` 默认 false——开启后才有 guardian 周期 + merge 前捕获；显式捕获（D082）行为始终不变（注：D096 于 r14 已翻转默认 true）
+- **guardian 周期捕获节流语义**：仅按「距上次 guardian 捕获」节流；手动 `capture` 不重置该时钟（boundary 不同，各自独立）；高频 tick（guardian_interval_sec=0）会每 tick 捕获——观测成本自担
+- **merge 前捕获 best-effort**：捕获异常被 try/catch 吞掉，绝不阻断 merge——极端情况下 merge 落地的那个时点可能没有 pre_merge 快照（观测物，不影响 merge 正确性）
+- **docs/** 引用为 warning 级**：历史债需人工清理（沿用 E12 记录）
+
+### 后续候选增量（evolve 纪要 · 计划 (d) 未覆盖项）
+
+- **docs/ 过期引用清理**：把 warning 级历史债清零（对 D0xx 引用逐一核对 DECISIONS/预留）——后续候选 #3（#1 status 三面见计划 (d) #1；#2 自动捕获默认开启已由 D096 落地）

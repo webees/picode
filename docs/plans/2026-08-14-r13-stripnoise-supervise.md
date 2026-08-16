@@ -138,3 +138,5 @@
 
 无人干预下由 self-drive guardian 推进（三角会话 ready → 自主实现 → 续跑 → 自测 → evidence/handoff → 串行 merge）。
 验收判定：C1/C2 代码任务合并入 main（acceptance 1/2 达成——stripNoise 口径统一 + supervise 监控命令正式化），C3 文档合并（acceptance 3/4 达成——DECISIONS canonical + 既有单测全绿 + `npm run check` 三 lint 通过 + `--land` 完成），E14 纪要归档。**额外 dogfood**：supervise 命令对真实 run 仓 `--once` 观测即首次真实运行验证。
+
+> 精简批2（2026-08-15）：本 run E 纪要（r13）已摘要化，教训/风险去向见 evolve/E1-E15-SUMMARY.md；E 纪要细节见 git 历史。

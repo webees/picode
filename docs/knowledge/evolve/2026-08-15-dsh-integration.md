@@ -1,7 +1,8 @@
 <!-- 文档小组产物。authored_by: docs-lead@run-2026-08-15T02-30-00-DSH · drafted_by: tech-writer · checked_by: docs-qa · date: 2026-08-15 -->
 <!-- 状态：定稿（C5 docs 收尾完成）。决策编号已领取并落地：D104-D108（reserve + DECISIONS + --land 完成）；decision-lint 0 error。push 由 run-lead 在合并门后执行（本 chunk 按约束不 push）。 -->
+<!-- 2026-08-15 精简（批 2）：与 DECISIONS 详条/decision-catalog 重复的分块表、实施纪要、验证数字已压缩为引用（见 DECISIONS D###）；保留剩余风险/教训/后续候选。 -->
 
-# Evolve run-2026-08-15T02-30-00-DSH（E17 纪要 · 定稿）
+# Evolve run-2026-08-15T02-30-00-DSH（E17 纪要 · 定稿 · 去重版）
 
 - goal: A goal 跨轮跟踪（revision CAS + 回合预算 + activation/resume/disarm + blocked 政策码）+ B 按需 skill 加载（loadSkill + skill_load 工具 + 双轨明界）+ E 沙箱三态 + 一次性升级审批 + read-before-edit + C continuable 子代理蓝图（本轮只存档）
 - kind: self_evolve · scale: M（分块并行 + D036 串行 merge）
@@ -9,68 +10,49 @@
 - status: **完成**（C1-C4 全部 merged；C5 docs 收尾完成；全量 562/562；`git push origin main` 由 run-lead 在合并门后执行 + sponsor 及时推送——D098 未实现前双保险，本 chunk 按约束不 push）
 - 决策编号: **D104-D108**（本 run 领取落地，--reserve → 表行+详条 → --land 闭环；上轮 run-2026-08-15T01-12-43-3NZ 的 D099-D103 已落地；D095-D098 属更早 run/暂停 run，不占用）
 
-## 分块与合并序列（D036 串行 merge）
+## 分块与合并序列（D036 串行 merge · 每 chunk 提交/merge/测试详见 DECISIONS D104-D108 详条）
 
-| chunk | 主题 | 提交 | merge | 测试 |
-|---|---|---|---|---|
-| C1 chunk-c1-goal-crossrun（周晷） | A goal 跨轮跟踪 | 2f8ceba + 8cb44b7 | 6a4a1ba | 519/519 |
-| C3 chunk-c3-sandbox-approval（锁钥） | E 沙箱三态+升级审批+守卫 | 2e50375 | 52d22ae | 552/552 |
-| C4 chunk-c4-continuable-blueprint（经纬） | C 蓝图存档（纯 docs） | d7f743b + 73953db + 4131637 | 048cd94 | —（零代码） |
-| C2 chunk-c2-skill-load（运斤） | B skill_load 双轨 | d3bb0c2（run-lead 接管，庖丁会话 failed） | 83df029 | 562/562 |
-| C5 chunk-c5-docs-closeout（本文档） | D104-D108 落档 + catalog/snippet 同步 + E17 纪要 + --land | 本提交 | — | decision-lint 0 error；562/562 复核 |
+C1 goal-crossrun（周晷，D104）→ C3 sandbox-approval（锁钥，D106）→ C4 continuable-blueprint（经纬，D107）
+→ C2 skill-load（运斤，D105）→ C5 docs-closeout（本文档）。波序：C1/C3 并行 → C4 → C2（depends_on C3）
+→ C5。**关键教训：C2 实现会话（庖丁）中途 failed，run-lead 接管提交（d3bb0c2）——见剩余风险。**
 
-> 波序：C1/C3（并行）→ C4（依赖调研 brief 落盘）→ C2（depends_on C3）→ C5（docs 收尾，依赖全部代码 chunk）。
+## 实施纪要（各决策详情见 DECISIONS 详条与 catalog §23）
 
-## 实施纪要（A/B/E + C 蓝图）
+### A goal 跨轮跟踪（C1 · 周晷 · D104）
 
-### A goal 跨轮跟踪（C1 · 周晷 · 决策 D104）
+- goal.yaml 增量字段：`revision`（CAS 围栏）/ `activation`（armed|disarmed，唯一 arm 入口 = `goal resume`）/
+  `rounds_started`/`max_goal_rounds`（回合预算）/ `blocked_reason` 政策码；guardian 投喂 vs goal resume 明界
+  写入 spec 17 §5.4；旧格式向后兼容。详见 DECISIONS D104。
+- 同步锁取舍：`withSyncFileLock` 镜像 withFileLock（mcp-server/self-drive 同步调用面不可改 async）；
+  CLI 无 `--expected` 乐观锁参数为观察项（K1，D104 记录）。
 
-- goal.yaml 增量字段（守 D002 文件真相）：`revision`（CAS 围栏，不重建状态）/ `rounds_started` / `max_goal_rounds` / `activation`（armed|disarmed）/ `blocked_reason` 政策码；旧格式向后兼容直接可读
-- **guardian vs goal resume 明界**（spec 17 §5.4，C1 写入）：guardian 投喂 = 会话级机械续跑（受 activation 门闩：active∧armed 可投喂；active∧disarmed 零投喂）；goal resume = goal 级激活授权（blocked→active + 清 blocker + armed；唯一 arm 入口）；disarmed 只门闩续跑投喂、不阻断 run 文件事件推进
-- **goal 跨进程门闩实测**（continuation-gate.test A2）：goal.yaml 落盘 → 新 sweep 调用模拟跨进程——active∧disarmed 零投喂、resume 后恢复；blocked 零投喂；intake 等非 active 状态门闩不生效
-- **回合预算实测**（A4）：rounds_started 递增（每次成功投喂 +1）；达上限 resume 拒绝（round budget exhausted）；guardian 自动 block(code:"round-limit") 且零投喂不静默续
-- **revision CAS 实测**（A3）：陈旧 expected → ILLEGAL_TRANSITION（stale revision）；合法 expected 递增；命令层并发写经 `.goal.lock` 同步锁串行化（sdet ev-4-lock 实测：并行 block 先到者成功、后者被 GOAL_TRANSITIONS 围栏拒绝，goal.yaml 无损坏）
-- 同步锁取舍：`withSyncFileLock` 镜像 withFileLock 语义（mcp-server/self-drive 同步调用面不可改 async）；CLI 无 `--expected` 乐观锁参数为观察项（K1，D104 记录）
-- 配置：唯一新键 `self_evolve.goal.max_rounds`（默认 0=不限，validateConfig 非负整数校验）；createRun 落盘 goal.yaml `max_goal_rounds`（文件真相，显式字段可覆盖，运行期不回查 config）
+### B skill_load 双轨（C2 · 运斤 · D105）
 
-### B skill_load 双轨（C2 · 运斤 · 决策 D105）
+- core `loadSkill` + pi-extension `skill_load <name>` 工具；persona `skills[]` 声明（系统提示常驻 metadata）
+  vs 按需加载完整 body **双轨并存不重复注入**（明界写入 skill-harness.md §5）。详见 DECISIONS D105。
+- 越写集处置：工具计数断言过期 → run-lead 经 **co-002** 变更单授权最小写集扩展（衔接 D108 教训）。
 
-- core `loadSkill(name, metas, {cwd, maxBytes})` + pi-extension `skill_load <name>` 工具；ACL 画像 implement.engineer / implement.squad-lead；健康校验内联码（SKILL_MD_MISSING / SKILL_BAD_FRONTMATTER / SKILL_PATH_DENIED / SKILL_NOT_FOUND，**不进 ErrorCode 枚举**——errors.ts 归 C3）
-- **skill_load ponytail 实测**（sdet 承蜩 11/11 + 独立脚本 8/8）：返回完整 body 与磁盘 SKILL.md 全文逐字一致（6637 字节）；ACL 拒绝（implement.sdet / governance.sess-mgr → TOOL_DENIED）；未知 ghost-skill → SKILL_NOT_FOUND；env maxBytes=100 → truncated=true（byte 感知截断不劈多字节字符）
-- 双轨明界：加载结果仅回工具结果、**不注入 persona 系统提示**（与 persona skills[] 声明并存不重复注入）；一行界定写入 skill-harness.md §5；体积上限 `DEFAULT_SKILL_MAX_BYTES=64KiB`、env `PICODE_SKILL_MAX_BYTES` 覆盖（唯一旋钮，不新增 config 键）
-- 越写集处置：工具计数断言过期（「all 20 spec-09 tools」）→ run-lead 经 **co-002** 变更单授权最小写集扩展（2 文件）→ 全量 562/562（衔接 D108）
+### E 沙箱三态 + 升级审批 + read-before-edit（C3 · 锁钥 · D106）
 
-### E 沙箱三态 + 升级审批 + read-before-edit（C3 · 锁钥 · 决策 D106）
+- 沙箱 mode（read-only / workspace-write / danger-full-access）叠加于 write_paths 静态白名单之上；
+  越界写 → 结构化拒绝 → `sandbox_permissions`+`justification` 成对申请一次性升级 → run-lead 代批 →
+  allowed-once 单次放行（E5 全链路实测 exit 0，详见 D106 详条验证行）；read-before-edit 守卫默认开。
+  三处开关全走会话 env，零 config 键。详见 DECISIONS D106 与 catalog §23.3/23.4/23.5。
 
-- **沙箱审批实测纪要**（E5 全链路，handoff/logs/e5-escalation-demo.mjs + .log，exit 0）：
-  1. workspace-write（默认 mode）越界写 + `sandbox_permissions=danger-full-access` + `justification` → `APPROVAL_PENDING` + approval_id；`runs/<id>/approvals/pending-<id>.json` 落盘（asked 记录 from_agent/task_id/path/mode/reason 完整）
-  2. `picode approval list` → 1 条 pending
-  3. `picode approval decide --id <id> --approve --note "E5 同意一次性放行"` → status=approved，decided.by=run-lead（answerer=run-lead 代批）
-  4. 重试 `repo_write`（同 escalation 参数 + approval_id）→ ok:true，outside.txt 真实写入（allowed-once 单次放行）
-  5. 再次重试同一 approval_id → `APPROVAL_ALREADY_USED`（重试再验）
-  6. 审计成对：asked+decided **同文件** status=used + used_at（成对审计闭环）
-  7. 对照：`PICODE_APPROVAL_POLICY=never` → `APPROVAL_DENIED` fail-closed，**不落新请求**
-- **read-before-edit 实测**：已存在文件本会话未读 → `FS_NOT_OBSERVED`（"edit requires reading first"）；repo_read 记录 observed 后放行；新建文件免预读；`PICODE_READ_BEFORE_EDIT` 默认开 fail-closed
-- 沙箱三态：read-only 拒一切写（含白名单内）；workspace-write 白名单内可写、越界结构化拒绝（含生效 mode + `[sandbox: …]` 标记）；danger-full-access 工作房内任意写、仍拒 path escape 出 cwd
-- 观察项：danger-full-access 下 escalation 参数被忽略（mode 围栏短路 tryEscalation，写由 mode 授权；判定非阻断）；read-before-edit 只认 repo_read（repo_grep 等内部读取不记 observed）
-- 配置旋钮最小化：沙箱/审批/守卫三处开关全走会话 env（PICODE_SANDBOX_MODE / PICODE_APPROVAL_POLICY / PICODE_READ_BEFORE_EDIT），**零 config 键**（spec 04 §10.4，D104/D106）；D071 审批观测走 run 目录文件、零 dashboard 端点
+### C continuable 子代理蓝图（C4 · 经纬 · D107）
 
-### C continuable 子代理蓝图（C4 · 经纬 · 决策 D107）
-
-- 本轮只存档 `docs/plans/continuable-subagents-blueprint.md`（纯 docs，零代码/配置）作为下轮 C 实现输入（C3 验收：run-lead 审阅存档）
-- **Pi 持久化可行性结论**（research/briefs/pi-persistence.md，ind-res，落盘 2026-08-15T17:05+0700，URL + retrieved_at 见蓝图 §5.3）：**支持（部分接口限制）**——opencode（picode 实际集成运行时）原生 durable session identity（SQLite `ses_...`）+ cold resume（同 sessionID `POST /session/{id}/message`）；**阻塞在 picode 侧使用方式**：sleepAgent/terminateAgent 现走 `DELETE /session/{id}` 销毁会话（pi-adapter.ts:350/367 → opencode-adapter.ts:269-276），cold resume 需 sleep 改保留/归档 + wake 走 resume（复用现成 sendReady，self-drive.ts:256 serve 恢复路径即同会话续写范例）
-- 取舍：方案 A（转录+摘要+续跑投喂增强，continuation.ts 语义延伸）vs 方案 B（事件溯源恢复）→ **采用 A 拒绝 B**（守 D002/D082，蓝图 §1.3 依据链）
-- 分支裁决：① resume API 直连激活为主路径；降级 = 增量 steer 而非整体重投（resume 失效兜底）
-- 下轮输入：蓝图 §6 建议表 I1-I7（投喂分级 / resume 接线 / 深度围栏 / 写集继承 / 所有权围栏 / 结算通知 / cancel 队列）+ §7 open questions（N 值/身份命名/结算事件/围栏叠加序/子代理问人禁令）；**I1 须与 D104 guardian 续跑合并防双逻辑**（KI-6，continuation.ts 内收敛）
+- 本轮只存档 `docs/plans/continuable-subagents-blueprint.md`（下轮实现输入）。取舍：采用方案 A
+  （转录+摘要+续跑投喂增强）拒绝方案 B（事件溯源恢复，守 D002/D082）；Pi 持久化可行性 = 支持（部分
+  接口限制，阻塞在 picode 侧 sleep/terminate 走 DELETE）。下轮输入 I1-I7；**I1 须与 D104 guardian 续跑
+  合并防双逻辑**（KI-6，continuation.ts 内收敛）。详见 DECISIONS D107 与蓝图。
 
 ## 验证（C5 终态）
 
-- 官方全量 `npm test`（HOME 隔离）：**562/562 exit 0**（core 155 / bus 19 / orchestrator 318 / pi-extension 36 / mcp-server 18 / dashboard-server 16）
-- `npm run check`：三 lint 全绿（persona-lint OK / skill-lint OK / decision-lint **0 error 0 warning**）
-- decision-lint 0 error：C2/C3 基线 2 条 `D104 REF_UNRESOLVED` warning（spec 04 §10.4 / C2 evidence 口径）随 D104 落地消解
-- diff 门禁（C5）：5 文件 ⊆ write_paths（docs/DECISIONS.md、docs/decisions/watermark.yaml、docs/reference/decision-catalog.md、docs/reference/default-config.example.yaml、本纪要）
-- 决策编号闭环：`--reserve`（104-108，count 5）→ 表行+详条（编号对齐）→ `--land` 完成；watermark next_number=104 → 109
-- 上轮遗留消解：D103 治理流程本轮 C3 复证（node_modules 断链再复现、重建自链有效）
+- 官方全量 `npm test`（HOME 隔离）：**562/562 exit 0**（core 155 / bus 19 / orchestrator 318 /
+  pi-extension 36 / mcp-server 18 / dashboard-server 16）；`npm run check` 三 lint 全绿
+  （decision-lint **0 error 0 warning**）。各 chunk evidence 详见 task handoff/evidence.yaml。
+- 决策编号闭环：`--reserve`（104-108）→ 表行+详条 → `--land` 完成；watermark next_number 104 → 109。
+- 上轮遗留消解：D103 治理流程本轮 C3 复证（node_modules 断链再复现、重建自链有效）。
 
 ## 剩余风险（C5 终态）
 

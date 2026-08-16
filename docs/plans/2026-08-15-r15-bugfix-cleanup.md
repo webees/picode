@@ -1,7 +1,7 @@
 <!-- 文档小组产物。authored_by: docs-lead@run-2026-08-15T01-12-43-3NZ · drafted_by: tech-writer · checked_by: docs-qa · date: 2026-08-15 -->
 <!-- 状态：定稿归档（C6 收尾完成）。决策编号 D099-D103 已领取落地；全 chunk merged；decision-lint 0 error。 -->
 
-# run-lead 自治规划 — deepMerge DEFAULTS 污染修复（Bug A）+ E7/E2 排除语义误拒修复（Bug B）+ ponytail-audit 清理（run-2026-08-15T01-12-43-3NZ · self_evolve · scale L）
+# run-lead 自治规划 — deepMerge DEFAULTS 污染修复（Bug A）+ E7/E2 排除语义误拒修复（Bug B）+ ponytail-audit 清理（run-2026-08-15T01-12-43-3NZ · self_evolve · scale L · 合并 E 纪要）
 
 > 目标（宽松，run-lead 自主决策 + sponsor 确认）：
 > 1. **Bug A（生产级）**：修复 `deepMerge` DEFAULTS 共享引用污染——`config.opencode` 与 `DEFAULTS.opencode`
@@ -181,3 +181,34 @@
   catalog §22（后续工作房统一布局，机械落地列后续候选 #4）。
 - C1 未合并是本 run 全量全绿的最后一个代码缺口：C1 合并（2df7486）后复核 guardianTick 转绿 +
   checkpoint-auto 不红 ✅，C5 终验 502/502 最终确认。
+
+---
+
+## 合并 E 纪要（2026-08-15 精简 · evolve/2026-08-15-r15-bugfix-cleanup.md 增量并入）
+
+> 原 plans（目标/决策要点/分块/验收/基线失败/进度/风险）与 evolve 双写重复已去重，本计划为主干。
+> evolve 已按批 2 去重（决策内容表压缩为 DECISIONS 引用），以下并入 evolve 独有增量（剩余风险/
+> 后续候选），保留为下轮输入；evolve 原文细节见 git 历史。
+
+### 剩余风险（evolve 纪要 · C6 终态）
+
+- **session_wake_direct 分诊待**：flaky、根因未定（疑 mcp 管理工具契约/环境面）；C5 终验 502/502
+  未复现，仍列后续候选 #1，独立立项分诊。
+- **docs 历史引用债**：spec 17/19 yaml 示例仍含已删键字样（sess_mgr.enabled / allow_orch_force_wake /
+  require_sponsor_merge / knowledge_log_glob，非运行时引用）；`scripts/mcp/self-evolve.mjs:244` 及
+  docs 历史文本对已删符号的字符串提及不改（失真风险，run-lead 裁决是否全仓字符串级清零）。
+- **D097/D098 悬空预留**：暂停 run（run-2026-08-14T11-14-26-837Z）D097 缓项 / D098 本轮 non_goal
+  预留未落地；台账以 `reserved` 保留归属（不占用、不释放），后续若立项须走 D089 领号流程重新确认。
+- **工作房环境**：node_modules 断链问题治理流程已沉淀（D103 + catalog §22）；后续 run 统一布局
+  模板仍未机械化（建议 run-lead 按 D103 落地标准操作）。
+
+### 后续候选（evolve 纪要 · 下轮输入）
+
+1. **session_wake_direct 分诊**：mcp-server `management.test.ts:110` flaky 根因定位（契约/环境面），
+   与 C1-C5 无交集，独立立项。
+2. **D097 立项评估**：feed 映射文档化 / 摘要语义化 / docs 引用债清理（暂停 run 缓项），按 D089 流程领号。
+3. **D098 立项评估**：merge 后自动 push 机制化（sponsor 及时推送，本轮仍双保险人工 push），按 D089 流程领号。
+4. **工作房布局模板机械落地**：D103 标准操作固化（自链脚本 / tsbuildinfo 清理 / HOME 隔离），
+   减少复建环境的重复手工步骤。
+5. **checkpoint-auto 夹具语义备忘**：该用例依赖「task 有新鲜 progress.json」避免 progress_due 旁路
+   唤醒——后续改 self-drive.test 夹具时保持该前置，防止再踩「踩 bug 上绿」类假绿。

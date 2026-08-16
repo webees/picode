@@ -153,3 +153,5 @@
 验收判定：C1/C2 代码任务合并入 main（acceptance 1/2 达成——编号分配机制 + 冲突 lint），C3 文档修复合并
 （acceptance 3/4 达成——DECISIONS canonical D084-088 恢复 + 既有单测全绿 + `npm run check` 三 lint 通过），
 E12 纪要归档。
+
+> 精简批2（2026-08-15）：本 run E 纪要（r11）已摘要化，教训/风险去向见 evolve/E1-E15-SUMMARY.md；E 纪要细节见 git 历史。

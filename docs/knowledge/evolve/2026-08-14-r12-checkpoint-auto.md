@@ -1,3 +1,5 @@
+<!-- 已合并至 plans/2026-08-14-r12-checkpoint-auto.md（2026-08-15 精简 · 批 2）：决策 D091 / chunk 分块 / 验证数字以 plans 为主干，本纪要的剩余风险与后续候选增量已并入 plans 合并节；细节见 git 历史。 -->
+
 # Evolve run-2026-08-14T08-55-08-366Z
 
 - goal: checkpoint 自动捕获接线（guardian 周期捕获，快照只读语义不变）+ 其他 run-lead 评估项（宽松）
