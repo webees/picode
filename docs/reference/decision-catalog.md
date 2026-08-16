@@ -597,6 +597,9 @@ CLI：`picode checkpoint capture` / `picode checkpoint status`。
 |`GET /api/live/:runId/:agent`|代理 serve `GET /session/{id}/message` → 抽 `info.tokens.total/input/output`（`oc-` 前缀剥离）；serve 失联/超时（5s ERR-01）→ `{error}` 不挂死|
 
 **已定（D070）：9 端点全只读 JSON。** 实现 `packages/dashboard-server/src/router.ts`。
+**（2026-08-15 D113/D114 修订标注：路由面已扩展——bus 读面 3 端点 + 唯一写端点 POST /bus/:room
+（sponsor chat 写代理）+ approvals/change-orders 数据源 2 端点，见 §25.1；D070 只读不变量仅对本写端点
+局部例外）**
 
 ### 13.5 运行方式
 
@@ -1062,3 +1065,79 @@ type → members ACL → **owner 围栏**。
 | 决策落档 | D109-D111 表行+详条（来源标注到 chunk/task）；D044 行 I2 修订标注（sleep 保留 / terminate DELETE）|
 | 流程简化候选 | sponsor 反馈 + 流程复杂度审计（真实性评级**高**，修正项已落地：代提交 ≥3 / squad-lead 价值补充 / 交接包重复细化 / 重复汇报来源标注）；**A 级试点排下一轮流程优化 run**，本轮不实施 |
 | 纪律 | 决策内容与交接包/evidence 一致（事件溯源 D002 / 事实一致）；编号必须 reserve.mjs 领号（D089）|
+
+---
+
+## 25. 管理界面完善：聊天室化 + 流程可视化 + 流程项落地（D113-D118）
+
+权威正文：DECISIONS D113-D118 详条 + sysarch 分块方案（`.picode/chunks.yaml`）+ spec 04
+（bus/房间 ACL）+ spec 16（招聘评分）+ `docs/knowledge/feedback/DOC-LIFECYCLE.md`（文档生命周期）。
+
+### 25.1 面板路由面扩展（D113 读面 / D114 写代理）
+
+**D113 已定：bus 读面 3 端点 + approvals/change-orders 数据源 2 端点（全部仍 GET 只读）；
+D114 已定：唯一写端点 = POST /bus/:room sponsor chat 写代理（D070 只读局部例外）。**
+
+| 端点 | 语义 |
+|------|------|
+| `GET /api/runs/:id/bus` | 房间列表（bus/*.jsonl 扫描行计数，与 statusSnapshot.rooms 同源口径）|
+| `GET /api/runs/:id/bus/:room` | 消息流（BusMessage 字段原样；`?limit=` 默认 50 取最近 N 条；损坏行容错跳过；SAFE_ROOM_RE 防路径逃逸）|
+| `GET /api/runs/:id/bus/:room/members` | 参与者（rooms/<room>/members.{yaml,json} 原样，缺失/损坏容错 null）|
+| `POST /api/runs/:id/bus/:room` | **唯一写端点**：sponsor 身份 post `type=chat`（D018/D035 语义不变）；校验链走 RoomStore.post（type → members ACL → owner/sender 围栏）；ACL fail-closed——成员表须含 sponsor 且 access=post 且 post_types_allow 含 chat（默认仅 leadership/product 两房）；未授权 `ROOM_POST_DENIED` 403 / `BUS_TYPE_DENIED` 400 / `BAD_ROOM` 400 / `BAD_BODY` 400 / `ACL_CORRUPT` 500 |
+| `GET /api/runs/:id/approvals` | 审批流数据源（approvals/pending-*.json 全量，ApprovalStore.list 升序，asked/decided 成对审计字段）|
+| `GET /api/runs/:id/change-orders` | 变更单数据源（change_orders/*.yaml，proposed→applied→closed 状态机，readChangeOrders ts 升序）|
+
+**只读纪律**：以上读端点全部 GET、fs 直读不套 ACL（面板观测者无 agent 身份，apiGates/statusSnapshot 先例）；
+D070「无写」仅对 D114 写代理作唯一局部例外——其余路由非 GET 仍 405；index.ts CORS 补 POST
+（GET,POST,OPTIONS）+ OPTIONS 预检 204。D071「零端点改动」约束随之局部解除（D113/D114 修订标注已落
+DECISIONS 行）。
+
+### 25.2 聊天室前端（D116 · W2a chunk-chat-ui）
+
+**D116 已定：聊天室 tab + 消息流视图 + 发送框 + 房间入口增强。**
+
+| 件 | 语义 |
+|------|------|
+| tab | index.vue 新增「聊天室」tab（owner=chat-ui）；rooms-view 房间卡片可点击进入聊天室 |
+| 消息流 | chat-room-view：ts 相对时间、类型徽章走 labels 中文映射、body/refs/meta 详情可展开；参与者面板（GET members + 平台房 ROLE→ROOM 派生）；轮询 3s；骨架屏/ErrorState（D071 语义 token）|
+| 发送框 | chat-send-box：POST /bus/:room（D114 写代理）；成功清空+刷新；未授权中文提示（ROOM_POST_DENIED/BUS_TYPE_DENIED，可发房提示 leadership/product）；非 sponsor 可发房禁用 |
+| 派生 | chat.data.ts 纯函数（消息类型映射/参与者/房间列表/发送预检）+ chat.test.ts fixture 断言；labels.ts owner=chat-ui |
+
+**审批联动**：发送失败提示与门禁 tab 审批流展示语义一致；本 chunk 不实现审批请求落盘
+（写代理 fail-closed，D114）。
+
+### 25.3 流程可视化（D115 · W2b chunk-flow-ui）
+
+**D115 已定：approvals/change-orders 数据源消费 + 门禁状态机展示 + 9 视图增强。**
+
+| 区 | 语义 |
+|------|------|
+| flow.api.ts（新）| useApprovals/useChangeOrders（3s 轮询），类型对齐 D113 两数据源端点 |
+| 门禁 tab 审批流区 | approvals 列表——status pending/approved/rejected/used 徽章 + asked{from_agent/task_id/path/mode/reason} 与 decided{by/decision} 成对展示 |
+| 门禁 tab 变更单区 | change_orders proposed→applied→closed 状态 + 时间线 |
+| 门禁状态机 | 每任务流水：双门闩 brief/staffing → progress phase → evidence pass → handoff+acceptance → dissolve → merge（数据源 /tasks latch/progress/evidence + /merge + /gates，纯派生 flow.data.ts）|
+| 9 视图增强 | 看板双门闩徽标 / 合并门拓扑依赖与等待原因 / 概览审批待办+变更单活跃告警卡 / 进度双门闩列 / 人员·分块·tokens 轻量增强（D071 语义色/域组件一致）|
+
+标签本地化于 flow.data.ts（labels.ts owner=chat-ui，gates-panel resultLabel 先例）；只读展示不驱动状态决策。
+
+### 25.4 流程项落地（D117 · W1b chunk-process-items）
+
+**D117 已定：评分画像消费（只读）+ reuse_persona_ids 显式预填 + 文档精简维护 docs:lean。**
+
+| 项 | 语义 |
+|------|------|
+| queryTalentPool | hr-talent.ts 只读消费入口（按 grade/skills/seat 筛选、S/A 级优先）；`picode staffing pool` 子命令（--grade/--seat/--skill，只读零写、不自动注入、非法 grade 结构化拒绝）|
+| reuse_persona_ids | createStaffingRequest 显式预填（引用已存在字段，不新增配置键）；与知识文档不符以知识文档为权威并记录偏差 |
+| docs:lean | scripts/doc-lean-check.mjs（零依赖只读：决策权威+关键目录 / DECISIONS 行式 / feedback 索引 / 冗余检测）+ package.json `docs:lean`（可作 merge gate 输入）|
+
+### 25.5 docs 收尾（D118）
+
+**D118 已定：D113-D117 落档 + D070/D071 修订标注 + catalog §25 + operations 面板节 + E19 纪要 +
+--land + push。**
+
+| 项 | 内容 |
+|------|------|
+| 决策落档 | D113-D118 表行+详条（来源标注到 chunk/队：W1a 观澜 / W1b 铨衡 / W2a 雁书 / W2b 砥柱）|
+| 修订标注 | D070/D071 行 + 详条边界：面板契约「9 端点全 GET 只读」→「+聊天室读/写 + 审批流/变更单数据源；写仅限 sponsor chat（D114）」（2026-08-15）|
+| 同步 | operations.md 监控面板节（新端点清单 + 聊天室 tab + 运维要点）；E19 纪要（flow-ui 部分占位，run-lead 合并后收尾）|
+| 闭环 | `--reserve`（113-118）→ 落档 → `--land`（status=landed）；push origin main（rev-list 0）|

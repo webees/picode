@@ -233,7 +233,7 @@ picode supervise --repo <path> --run <id> --once --log /tmp/supervise.jsonl  # �
 
 ## 监控面板（Dashboard，D070）运维
 
-面板 = `packages/dashboard-server`（只读 HTTP）+ `packages/dashboard`（前端 UI）。数据源 = `.picode/runs` YAML（文件真相 D002）+ opencode serve 实时 tokens（D058）。面板**只读**：全部 GET、无写、无 daemon、不持锁。
+面板 = `packages/dashboard-server`（只读 HTTP + 唯一写端点）+ `packages/dashboard`（前端 UI）。数据源 = `.picode/runs` YAML（文件真相 D002）+ opencode serve 实时 tokens（D058）。面板**只读**：读面全部 GET、无 daemon、不持锁；**唯一写端点** = `POST /api/runs/:id/bus/:room`（D114 写代理，sponsor chat，ACL fail-closed）。
 
 ### 前置
 
@@ -263,7 +263,7 @@ curl -s localhost:8788/api/live/<runId>/<agent> # {ok,tokens:{total,input,output
 cd packages/dashboard && pnpm install && pnpm dev   # Vite 5173，dev proxy /api → 127.0.0.1:8788
 ```
 
-浏览器打开 `http://localhost:5173/dashboard` → 选择 run → 详情页 9 视图（概览 / 进度 / 房间 / 人员 / 分块 / 看板 / 会话+tokens 实时 / 合并 / 门禁）。总览页即 run 列表 + 统计条。
+浏览器打开 `http://localhost:5173/dashboard` → 选择 run → 详情页 10 视图（概览 / 进度 / 房间 / 人员 / 分块 / 看板 / 会话+tokens 实时 / 合并 / 门禁 / **聊天室**）。总览页即 run 列表 + 统计条。
 
 ### 三视图数据来源（进度/房间/人员，D071-4/D071-5）
 
@@ -278,12 +278,34 @@ cd packages/dashboard && pnpm install && pnpm dev   # Vite 5173，dev proxy /api
 - 角色/房间通俗名与阶段映射 = 前端静态知识常量 `role-meta.data.ts`（同步来源见文件注释：人设 frontmatter / ROLE_PRIMARY_ROOM / terminology §3）；上游成员表/人设描述变更时需同步该文件
 - 单测守护：`packages/dashboard/src/pages/dashboard/runs/[runId]/__tests__/views.test.ts` fixture 断言派生纯函数；改派生须同步测试
 
+### 聊天室与流程数据端点（D113/D114/D115）
+
+D113 起面板路由面扩展：聊天室 bus 读面 + 唯一写端点 + 审批流/变更单数据源（实现 `packages/dashboard-server/src/router.ts`，D070/D071 只读契约局部扩展，见 DECISIONS D113/D114）。
+
+|端点|语义|
+|------|------|
+|`GET /api/runs/:id/bus`|房间列表（bus/*.jsonl 扫描行计数，与 statusSnapshot.rooms 同源口径）|
+|`GET /api/runs/:id/bus/:room`|消息流（`?limit=` 默认 50 取最近 N 条；损坏行容错跳过；房间名 SAFE_ROOM_RE 防路径逃逸）|
+|`GET /api/runs/:id/bus/:room/members`|参与者（rooms/<room>/members.{yaml,json} 原样；缺失/损坏容错 null）|
+|`POST /api/runs/:id/bus/:room`|**唯一写端点（D114 写代理）**：sponsor 身份 post `type=chat`；ACL fail-closed——成员表须含 sponsor 且 `access=post` 且 `post_types_allow` 含 chat（默认仅 leadership/product 两房可发）|
+|`GET /api/runs/:id/approvals`|审批流数据源（ApprovalStore.list 升序，asked/decided 成对审计字段；供流程可视化）|
+|`GET /api/runs/:id/change-orders`|变更单数据源（proposed→applied→closed 状态机，readChangeOrders ts 升序；供流程可视化）|
+
+**前端聊天室 tab（D116）**：「聊天室」tab = 房间列表 → 选中房间 → 消息流视图（类型徽章中文 labels 映射、body/refs/meta 详情可展开）+ 参与者面板；rooms-view 房间卡片可点击进入聊天室。消息流 3s 轮询；发送框只对 sponsor 可发房启用（非 sponsor 可发房禁用）；发送成功清空 + 刷新，未授权显示结构化中文提示（可发房间 = leadership/product）。
+
+**运维要点**：
+
+- **POST 写代理仅 sponsor chat**：`POST /api/runs/:id/bus/:room` 是面板唯一写端点，身份固定 sponsor、类型仅 `chat`（D018/D035）；其余路由非 GET 一律 405（只读不变量保持）
+- **ACL fail-closed**：未授权 → `ROOM_POST_DENIED` 403；非 chat 类型 → `BUS_TYPE_DENIED` 400；房间名非法 → `BAD_ROOM` 400；body 非法 → `BAD_BODY` 400；成员表损坏 → `ACL_CORRUPT` 500（绝不静默放行）
+- **CORS**：server 已允许 `GET,POST,OPTIONS`；OPTIONS 预检 204（Vite dev proxy `/api` → 8788 免 CORS，直连 8788 时浏览器跨域需要 CORS 生效）
+- **写面冒烟**：`curl -s -X POST localhost:8788/api/runs/<runId>/bus/leadership -H 'Content-Type: application/json' -d '{"body":"hello"}'` → `{posted:true,message:{...}}`；sponsor 无权限房（如 squad 房）→ `{error:{code:"ROOM_POST_DENIED"}}` 403
+
 ### Dashboard 设计约定（D071）
 
 - **语义状态色**：状态一律用 token（`--status-success/warning/danger/info`）或 `@/utils/labels` 的色点映射，禁止硬编码色值；浅深色均满足 WCAG AA ≥4.5:1
 - **域组件复用**：新页面组件优先用 `components/dashboard/`（StatCard/StatusBadge/SectionCard/EmptyState/ErrorState/Skeleton*）；加载态用骨架屏而非 spinner；`--radius` 统一 0.5rem
 - **文案**：面板文案中文通俗，走 `@/utils/labels` 单一事实源（RUN_STATUS/RUN_KIND/RUN_SCALE），不写机器化/英文拼接
-- **只读不变量**：展示层只派生不改数据；新增数据需求先评估既有端点派生，不新增端点（D070 只读投影契约）
+- **只读不变量**：展示层只派生不改数据；新增读数据需求先评估既有端点派生，确需新端点须走决策记录（D113 读面扩展先例）；面板写面**仅限** D114 写代理（sponsor chat），前端不得另开写路径
 
 ### 观察 tokens 活跃度
 
@@ -297,6 +319,7 @@ cd packages/dashboard && pnpm install && pnpm dev   # Vite 5173，dev proxy /api
 2. 前端页面空态/报错？`pnpm dev` 是否在跑；proxy 是否指向 8788（vite.config.ts）；CORS 兜底已开
 3. tokens 列为空？serve 未在线或该会话无 `oc-` serve 会话（D044）；`/api/live` 返回 `{ok:false,error}` 即说明
 4. 端口冲突？server 换 `--port` 后需同步改 `packages/dashboard/vite.config.ts` 的 proxy target
+5. 聊天室空/发不出？先查源：`curl localhost:8788/api/runs/<runId>/bus`（房间列表）→ `/bus/<room>`（消息流）→ `/bus/<room>/members`（sponsor 是否在成员表且 access=post）；POST 403 = ACL fail-closed 生效（sponsor 不在可发房成员表），400 = 类型/body 非法；非 GET 405 属预期（D114 外无写面）
 
 ## 会话生命周期：run 收尾自动休眠 + 跨 run 残留审计（D072/D073）
 

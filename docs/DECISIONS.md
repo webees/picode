@@ -75,8 +75,8 @@
 |D067|**续跑 idle 时钟 = 回合完成时间，非投喂时间**（R3-C1 修监督者实测缺陷）：idle 判定取 `max(last_wake_at, 最近一条 transcript **incoming（响应）记录** ts)`，续跑投喂记录为 outgoing **不重置 idle 时钟**；转录末条为 outgoing 且其后无 incoming（长回合进行中）视为 **in-flight，不进入候选、不投喂**。根因：原 `lastActivityMs` 取 `max(last_wake_at, 最近转录 ts)` 而转录含 outgoing，每次投喂立即重置 idle 时钟，noReply 长回合被误判空闲连投打断（实测 run-lead 被连投 4 次排队）。实现 `continuation.ts`（`lastRoundCompletedMs` / `isRoundInFlight`），纯函数不变|
 |D068|**平台席策略 + 续跑 gate 可选接入**（R3-C1/C2）：`self_evolve.continuation.platform_seats` 默认 `"skip"`——无 task 绑定会话（scout/sys-arch/run-lead 等平台席）不进续跑候选，根治 E6「平台席无界空转」gap（R2-C2 仅 `max_per_session` 有界缓解）；`"allow"` 显式逃生仍受预算闸约束。`self_evolve.continuation.gate_commands` 默认 `[]`（不启用）——启用时续跑投喂前跑 gate（有界超时，借鉴 prime-agent `captureGitWorktreeSnapshot`：git status + diff HEAD + untracked 聚合）；**上次失败快照与当前一致 → 不重跑不投喂**（防没改代码反复重跑），gate 通过 → 停靠不投喂；失败快照按 agent 持久化 run 目录 `continuation-gate.jsonl`。不引入 LLM 决策/daemon，默认关闭不改既有行为|
 |D069|**续跑遥测三面可观测**（R3-C3）：status/CLI/MCP 三面一致暴露逐会话续跑列——`continuations_used`（`session.budget.continuations` 持久化）/ `last_continuation_at`（最近 outgoing 转录 ts）/ `max_per_session`（配置值）/ `in_flight`（末条 outgoing 无响应=回合进行中）/ `platform_seat`（未绑定任务）。`picode status` 快照含 `continuation` 段；`self-drive continuation --status` 与 MCP `continuation_status` 复用同一派生（`status.ts` `continuationTelemetry`），三面口径一致、纯读零写|
-|D070|**监控面板（Dashboard）**：`packages/dashboard-server`（npm workspace 成员 · `node:http` 只读 HTTP · 复用 orchestrator 纯读投影 9 端点 + serve tokens 代理）+ `packages/dashboard`（自包含 pnpm 项目 · Vue3+Vite+shadcn-vue · 从根 workspaces 显式排除）。后端并入根 build/test、前端 E4 用 `pnpm -C packages/dashboard build` 显式验收；只读、无写、无 daemon（D002/D057 延续）；`--repo` 定位任意真实 run 仓|
-|D071|**Dashboard 视觉检修**：语义状态色 token（绿/琥珀/红/蓝，浅深色均 WCAG AA ≥4.5:1）+ 边框阴影层级 token + 域组件层（StatCard/StatusBadge/SectionCard/EmptyState/ErrorState/Skeleton 系）+ 布局壳精修。总览页中文通俗文案/统计条/状态色点（labels 单一事实源）；详情页 9 视图 TabsList + 进度/房间/人员三视图。**零端点改动约束**：三视图由既有 9 端点派生纯函数（`views.data.ts`）+ 静态知识常量（`role-meta.data.ts`），`dashboard-server` 零改动|
+|D070|**监控面板（Dashboard）**：`packages/dashboard-server`（npm workspace 成员 · `node:http` 只读 HTTP · 复用 orchestrator 纯读投影 9 端点 + serve tokens 代理）+ `packages/dashboard`（自包含 pnpm 项目 · Vue3+Vite+shadcn-vue · 从根 workspaces 显式排除）。后端并入根 build/test、前端 E4 用 `pnpm -C packages/dashboard build` 显式验收；只读、无写、无 daemon（D002/D057 延续）；`--repo` 定位任意真实 run 仓**（2026-08-15 D113/D114 修订标注：面板契约由「9 端点全 GET 只读」扩展为「+聊天室读/写（bus 读面 3 端点 + 唯一写端点 POST /bus/:room）+ 审批流/变更单数据源（approvals/change-orders）」；写仅限 sponsor chat（D114，D018/D035 语义不变），其余路由非 GET 仍 405，只读不变量对本端点外保持）**|
+|D071|**Dashboard 视觉检修**：语义状态色 token（绿/琥珀/红/蓝，浅深色均 WCAG AA ≥4.5:1）+ 边框阴影层级 token + 域组件层（StatCard/StatusBadge/SectionCard/EmptyState/ErrorState/Skeleton 系）+ 布局壳精修。总览页中文通俗文案/统计条/状态色点（labels 单一事实源）；详情页 9 视图 TabsList + 进度/房间/人员三视图。**零端点改动约束**：三视图由既有 9 端点派生纯函数（`views.data.ts`）+ 静态知识常量（`role-meta.data.ts`），`dashboard-server` 零改动**（2026-08-15 D113/D116 修订标注：聊天室化/流程可视化引入新端点（bus 读面 + 写代理 + approvals/change-orders）与前端组件（聊天室 tab/chat-room-view/chat-send-box/flow 视图），「零端点改动」约束局部解除（D113 读面扩展 + D114 写代理唯一例外）；三视图派生纯函数 + 静态知识常量模式延续（chat.data.ts/flow.data.ts））**|
 |D072|**run 收尾自动休眠平台席**（C1）：goal 终态（completed/cancelled）自动休眠所有 awake 平台席（无 task 绑定），不残留 awake 占 max_awake。`sleepPlatformSeats` + `closeRun`（补发 TASK_DISSOLVED + 休眠平台席，幂等 best-effort）；guardianTick 终态分支回报 `slept_platform`，`goal set-status` 终态分支联动 closeRun|
 |D073|**session audit 跨 run 会话残留审计与清理**（C2）：`deriveAuditReport` 纯派生（逐 run 读 goal.status + SessionStore，输出 residual 标记 + 跨 run 汇总 vs max_awake）+ `cleanResidual` 执行器（对终态 run 残留调 C1 closeRun 原语，动态 import 延迟接通，best-effort 单 run 失败不阻断）；CLI `session audit [--clean] [--run]`（noRun 跨 run）|
 |D074|**C2 验收 test 目标修正（处置记录）**：chunk acceptance `<project-test-command>` 占位符在 QA 阶段具体化为 `cli.test` 注册断言（`picode session audit` 入 --help 命令表）+ `session-audit.test` 派生/执行/失败容错断言，371 测试全绿；验收口径由占位符修正为具体断言，实现据此补齐 test 目标|
@@ -158,7 +158,7 @@
   - **运行**：server `node packages/dashboard-server/dist/index.js --repo <path>`（`--repo` 默认 cwd，读 `.picode/config.yaml` 的 `runs_root` 与 `opencode.base_url`）；前端 `cd packages/dashboard && pnpm dev`（Vite 5173）
   - **非目标（范围外）**：无写操作（无 POST 编排/唤醒/合并按钮）、无鉴权（本地 localhost 工具）、无部署打包；鉴权/写面列第二轮
 - 实现：C1 server（`packages/dashboard-server`，9 端点 + live 代理 + 根 workspace 接线，1af542e）；C2 scaffold（`packages/dashboard` vendor 模板裁剪 + proxy + 骨架页，7cd3aa5）；C3 pages（API hooks + 6 面板，chunk-dashboard-pages）；C4 本文档（docs 层）
-- 边界：面板只读不改状态、不持锁；serve 失联降级显示不白屏（C3 降级提示）；数据源 = 文件真相（D002）+ serve 实时 tokens
+- 边界：面板只读不改状态、不持锁；serve 失联降级显示不白屏（C3 降级提示）；数据源 = 文件真相（D002）+ serve 实时 tokens。**（2026-08-15 D113/D114 修订标注：读面扩展 bus/approvals/change-orders（仍只读，见 D113）；写面唯一局部例外 = POST /bus/:room sponsor chat 写代理（见 D114）；D070「无写」对本端点外保持）**
 
 ## D071 — Dashboard 视觉检修（语义色/布局/三视图/零端点改动约束）
 - 2026-08-13 · 来源：sponsor 反馈面板「丑、描述晦涩」+ run-2026-08-13T15-08-28-705Z C1–C3 检修规划
@@ -170,7 +170,7 @@
   - **详情页三视图（C3）**：9 视图横向可滚 TabsList（概览/进度/房间/人员/分块/看板/会话/合并/门禁）；新增进度视图（逐任务 phase/blocked/summary/updated_at + in-flight/受阻计数）、房间视图（squad 房按 task `work_room`+triad 派生成员、平台房按 snapshot.rooms + ROLE→ROOM 约定）、人员视图（平台席 sessions + 任务三角 tasks.triad）；看板列加宽 + 列头状态点 + 卡内进度条；各视图 spinner 换骨架屏 + 语义色
   - **零端点改动约束（硬约束）**：三视图全部由既有 9 端点响应派生——`views.data.ts` 导出 `derivePersonnel/deriveRooms/deriveProgress` 纯函数 + `views.test.ts` fixture 断言；角色/房间/阶段静态知识落 `role-meta.data.ts`（ROLE_META 取自人设 frontmatter description + ROLE_PRIMARY_ROOM 约定，ROOM_META 取自 terminology §3）；面板只读不读 `members.json` 避免文件系统耦合；`dashboard-server` 与 9 端点零改动
 - 实现：C1 设计系统（5e8b3ec）；C2 总览（7fe32ba + 文案 labels 收敛 4ab9ee7）；C3 运行详情三视图（73abe11）；C4 本文档（docs 层）
-- 边界：仅视觉/文案/派生展示层，不改任何 API 契约；数据仍源 = 文件真相（D002）+ serve 实时 tokens（D058）；后续页面继续复用 token 与域组件，新增数据需先经 D071-4 派生纯函数或静态知识常量
+- 边界：仅视觉/文案/派生展示层，不改任何 API 契约；数据仍源 = 文件真相（D002）+ serve 实时 tokens（D058）；后续页面继续复用 token 与域组件，新增数据需先经 D071-4 派生纯函数或静态知识常量。**（2026-08-15 D113/D115/D116 修订标注：聊天室化/流程可视化引入新端点与前端组件，「零端点改动」约束局部解除——D113 读面扩展 + D114 写代理唯一例外 + D115 approvals/change-orders 数据源消费；派生纯函数模式延续到 chat.data.ts/flow.data.ts，D071 语义色/域组件约定继续适用）**
 
 ## D072 — run 收尾自动休眠平台席（sleepPlatformSeats + closeRun，C1）
 - 2026-08-14 · 来源：会话生命周期 run（run-2026-08-13T17-25-34-974Z）product_acceptance：run 收尾（goal completed/cancelled）时平台席自动休眠，不残留 awake 占 max_awake
@@ -310,6 +310,12 @@
 |D110|**写集只收窄 + 所有权围栏（I4+I5 · chunk-fence-owner）**：I4 子代理有效写集 = 父 task write_paths ∩ 子声明（只收窄不放宽；子宽于父 → 结构化拒绝；父缺失 fail-loud；无父链退化现状）；I5 bus post 在 ACL 之上加 **owner 围栏**——目标为子代理会话房（depth>0 ∧ parent_session 非空）且发送者非其 `parent_session` → `ROOM_POST_DENIED`（消息含 owner fence 标记，agent-busy 等价；嵌套仅直接父可路由）；发送侧问人禁令——子代理仅可向其父可发言的房间发言（sponsor/领导层房不可直达）；复用错误码不新增（errors.ts 零改动）；非子代理房间语义零变更|
 |D111|**settled 机械通知 + 投喂分级（I6+I1 · chunk-settle-feed）**：I6 guardian 纯派生检测子代理终态（depth>0 ∧ terminated ∧ parent_session）→ 复用 `cell_done` bus 词汇机械投递父房（refs 指转录/证据，meta.source=orchestrator 非 LLM 自报，父房 bus 幂等），**不新增 SESSION_EVENTS**（core session.ts 零改动）；I1 投喂三档 followup/steer/inject（S 变体不碰 17 状态机）——followup=现状续跑、steer=增量引导（摘要+引导段，不重灌固定模板）、inject=状态通知不唤醒不计数；投喂计数/预算/门闩收敛 continuation.ts 内防双逻辑（KI-6，不新建模块）|
 |D112|**docs 收尾 + 流程教训（chunk-docs · W3）**：D109-D111 落档（表行+详条，来源标注到 chunk/task）+ D044 行 I2 修订标注 + decision-catalog 同步（durable 会话语义 + 三道围栏条目）+ E18 纪要 + `--land` 闭环；流程简化候选记录——sponsor 反馈 + 流程复杂度审计（真实性评级高、修正项已落地）A 级试点排下一轮流程优化 run，本轮只记录候选不实施|
+|D113|**dashboard-server 读面扩展（W1a chunk-dashboard-server · D071「9 端点全 GET 只读」局部例外，仍只读）**：新增 bus 读面 3 端点（`GET /api/runs/:id/bus` 房间列表（bus/*.jsonl 扫描行计数，与 statusSnapshot.rooms 同源口径）/ `GET /api/runs/:id/bus/:room` 消息流（`?limit=` 默认 50 取最近 N 条、损坏行容错跳过、SAFE_ROOM_RE 防路径逃逸）/ `GET /api/runs/:id/bus/:room/members` 参与者（rooms/<room>/members.{yaml,json} 原样，容错 null））+ 流程数据源 2 端点（`GET /api/runs/:id/approvals` ApprovalStore.list 升序 / `GET /api/runs/:id/change-orders` readChangeOrders ts 升序，供 W2 flow-ui）；全部仍 GET 只读，fs 直读不套 ACL（面板观测者无 agent 身份，apiGates/statusSnapshot 先例），D070/D071 只读不变量延续|
+|D114|**聊天室写面写代理（W1a chunk-dashboard-server · D070 只读例外唯一写端点）**：`POST /api/runs/:id/bus/:room` 为**唯一写端点**——以 **sponsor** 身份 post `type=chat`（D018 sponsor 永远人类 + D035 sponsor 通道仅 chat，语义不变）；校验链直接走 `@picode/bus` RoomStore.post（type 注册表 → members ACL → owner 围栏 → sender 围栏），**ACL fail-closed**——成员表须含 sponsor 且 access=post 且 post_types_allow 含 chat（现默认仅 leadership/product 两房），未授权结构化拒绝（ROOM_POST_DENIED 403 / BUS_TYPE_DENIED 400 / BAD_ROOM 400 / BAD_BODY 400 / ACL_CORRUPT 500）；其余路由非 GET 仍 405（只读不变量仅本端点局部例外）；index.ts CORS 补 POST（Access-Control-Allow-Methods: GET,POST,OPTIONS）+ OPTIONS 预检 204|
+|D115|**流程可视化入面板（W2b chunk-flow-ui · 供 D113 approvals+change_orders 数据源消费）**：flow.api.ts 新增 useApprovals/useChangeOrders（3s 轮询）+ 门禁 tab 审批流区（pending/approved/rejected/used 徽章 + asked/decided 成对展示）与变更单区（proposed→applied→closed + 时间线）；门禁状态机展示每任务流水（双门闩 brief/staffing → progress phase → evidence pass → handoff+acceptance → dissolve → merge），数据源 /tasks latch/progress/evidence + /merge 队列 + /gates，纯派生 flow.data.ts（审批/变更单/门禁阶段标签本地化于 flow.data.ts，不占 labels.ts owner）|
+|D116|**聊天室前端（W2a chunk-chat-ui）**：index.vue 新增「聊天室」tab + rooms-view 房间卡片点击进入聊天室（入口增强）+ chat-room-view 消息流视图（ts/类型徽章中文 labels 映射/body/refs/meta 详情可展开/参与者面板）+ chat-send-box 发送框（POST /bus/:room，成功清空 + 刷新，未授权结构化错误中文提示 ROOM_POST_DENIED/BUS_TYPE_DENIED，非 sponsor 可发房禁用发送框）+ chat.data.ts 派生纯函数 + chat.test.ts fixture 断言；轮询 3s（既有模式）+ 骨架屏/ErrorState（D071 语义 token 不硬编码色值）；审批联动——发送框失败提示与门禁 tab 审批流展示语义一致（本 chunk 不实现审批请求落盘，写代理 fail-closed D114）|
+|D117|**流程项落地（W1b chunk-process-items）**：评分画像消费——hr-talent.ts 新增只读消费入口 `queryTalentPool`（按 grade/skills/seat 筛选、S/A 级优先）+ `picode staffing pool` 子命令（--grade/--seat/--skill，只读零写、不自动注入、非法 grade 结构化拒绝）；createStaffingRequest 支持显式预填 reuse_persona_ids（引用已存在字段，不新增配置键）；文档精简维护——scripts/doc-lean-check.mjs（零依赖只读检查：决策权威/关键目录/DECISIONS 行式/feedback 索引/冗余检测）+ package.json `docs:lean` 接线（可作 merge gate 输入）|
+|D118|**docs 收尾 + 流程教训（W3 chunk-docs）**：D113-D117 落档（表行+详条，来源标注到 chunk）+ D070/D071 行修订标注（面板契约「9 端点全 GET 只读」→「+聊天室读/写 + 审批流/变更单数据源；写仅限 sponsor chat（D114）」）+ decision-catalog §25 同步（面板端点面 + 写代理条目）+ operations.md 监控面板节更新（新端点清单 + 聊天室 tab + 运维要点）+ E19 纪要 + `--land` 闭环（watermark reserved → landed，next_number 119）+ git push origin main（本 run 收尾含 push）|
 ## D084 — Skill harness 落地（技能承载体系）
 - 2026-08-14 · 来源：run-lead 自治规划 run-2026-08-13T23-50-59-484Z（从 anthropics/skills + agentskills spec 学习，改 picode 自身技能承载体系）
 - 问题：`paths.skills_root` 是 D055 死键（声明零读取），两个种子 SKILL.md 无任何校验守卫，新 skill 可任意书写；`Persona.skills[]` 是必填维度但零消费；ready 消息若硬注入 skill 正文会爆 context
@@ -589,4 +595,68 @@
   - **流程简化候选（本轮不实施）**：sponsor 反馈 + 流程复杂度审计真实性评级**高**（9 项验证清单 7 成立 / 2 部分成立 / 0 不成立，数据事实与 run 历史档案逐条吻合）；修正项已落地（①代提交 ≥5 → **≥3**（commit message 实证口径）；②squad-lead 价值补充 C1 B1 根因分析；③交接包重复细化为「summary 重复高、artifact_index 重复低」；④重复汇报来源标注为会话实录、仓库不可复核）；**A 级简化试点**（三人组 → 双人组 / 人设程序化生成 / 交接包精简 2 件 / 重复汇报治理）排下一轮流程优化 run，本轮只记录候选（E18 后续候选 1），不实施不改变既有流程
 - 验证：decision-lint **0 error**（docs/** 全量扫描）；npm run check 三 lint 全过；diff 门禁 = 4 写集文件 ⊆ write_paths（纯 docs 层，零代码零配置）；决策编号闭环 `--reserve`（109-112，count 4）→ 落档 → `--land`（status=landed）
 - 剩余风险（E18 终态）：serve 侧会话累积 GC（D109 遗留，后续轮候选）；D2 偏差记录（D044 修订标注行，sleep 保留 / terminate DELETE 两义齐全）；流程简化试点排下轮（E18 后续候选 1，验收口径建议改可测基线）；push 由 run-lead 在合并门（approvals/merge.yaml，R9）批准后执行（本 chunk 按约束不 push）
+- commit: 本提交（chunk-docs / W3）
+
+## D113 — dashboard-server 读面扩展（bus 读面 + approvals/change-orders 数据源 · W1a chunk-dashboard-server）
+- 2026-08-15 · 来源：W1a（观澜队：凭栏/听涛/漱石；commit 50e2ab6 → merge **a55e05f**）+ sysarch 分块方案（`.picode/chunks.yaml`）+ run goal success_criteria「聊天室化 + 流程可视化」；与 D071「9 端点全 GET 只读」契约构成**读面局部扩展**（仍只读）
+- 问题：面板聊天室化需要 bus 消息流/参与者数据，流程可视化需要审批流/变更单数据——既有 9 端点（D070/D071）只有状态投影（rooms 仅消息数、无逐条消息），缺房间/消息/审批/变更单读面
+- 决定：
+  - **bus 读面 3 端点**：`GET /api/runs/:id/bus`（房间列表——bus/*.jsonl 扫描行计数，与 statusSnapshot.rooms 同源口径）；`GET /api/runs/:id/bus/:room`（消息流——逐行解析 JSONL，BusMessage 字段原样，`?limit=` 默认 50 取最近 N 条，损坏行容错跳过（room-store readBus 逐行容错先例），房间名 SAFE_ROOM_RE 校验防路径逃逸）；`GET /api/runs/:id/bus/:room/members`（参与者——rooms/<room>/members.{yaml,json} 原样（id/access/post_types_allow），缺失/损坏容错 null）
+  - **流程数据源 2 端点**：`GET /api/runs/:id/approvals`（approvals/pending-*.json 全量，asked/decided 成对审计字段，ApprovalStore.list 升序语义）；`GET /api/runs/:id/change-orders`（change_orders/*.yaml，proposed→applied→closed 状态机数据源，readChangeOrders ts 升序）——供 W2 flow-ui 流程可视化
+  - **只读语义不变**：全部仍 GET、fs 直读不套 ACL（面板观测者无 agent 身份，apiGates/statusSnapshot 先例）、无写无锁无副作用；D070「只读无写无 daemon」与 D071「零端点改动」约束对读面成立（D071 约束随后由 D114 写代理作唯一局部例外，见 D114）
+- 验证：W1a 全量验证（dashboard-server 31+2skip + curl 冒烟 200/403/400/405）+ 回归断言（limit/损坏行/逃逸/字段原样）+ HTTP 面矩阵（review task-chunk-dashboard-server，结论 pass）
+- 边界：房间读面与 bus 文件真相（D002）一致；members 读取与 loadMembers 同口径（members.json 优先）；损坏成员表读面容错 null、写面仍 fail-closed（D114）
+
+## D114 — 聊天室写面写代理（D070 只读例外唯一写端点 · W1a chunk-dashboard-server）
+- 2026-08-15 · 来源：W1a（观澜队；commit 50e2ab6 → merge **a55e05f**）+ sysarch 分块方案 + goal success_criteria「界面可发送消息（写权限 + 审批联动）」；D070「无写」局部例外
+- 问题：面板要可发送消息（product_acceptance「发送消息走现有 bus API + 审批联动（未授权拒绝）」），但 D070 面板**只读、无写**是硬不变量——需在不放大写面、不引入新 ACL 逻辑的前提下开放一条受控写通道
+- 决定：
+  - **唯一写端点**：`POST /api/runs/:id/bus/:room`——以 **sponsor** 身份 post `type=chat`（D018 sponsor 永远人类 + D035 sponsor 通道仅 chat，**语义不变**）；payload 形如 `{body: string, refs?: string[], type?: "chat"}`（type 缺省=chat），非对象/空 body/非法 refs → `BAD_BODY` 400
+  - **ACL fail-closed**：校验链直接走 `@picode/bus` RoomStore.post（type 注册表 → members ACL → owner 围栏 → sender 围栏，D110 语义沿用）——成员表须含 sponsor 且 access=post 且 post_types_allow 含 chat（现默认仅 leadership/product 两房，run-store.ts createRun）；未授权 → `ROOM_POST_DENIED` 403；非 chat 类型 → `BUS_TYPE_DENIED` 400；房间名非法 → `BAD_ROOM` 400；成员表损坏 → `ACL_CORRUPT` 500（fail-closed，绝不静默放行）
+  - **只读不变量保持**：其余路由非 GET 仍 405（D070 只读契约仅对本端点局部例外）；index.ts CORS 补 POST（Access-Control-Allow-Methods: GET,POST,OPTIONS）+ OPTIONS 预检 204
+- 验证：W1a 全量验证 + curl 冒烟 200/403/400/405（POST 成功 / sponsor 无权限房拒绝 / 类型拒绝 / 房间非法）+ review 结论 pass（「POST 仅 sponsor chat 两房（D114 局部例外，未放大）」）
+- 边界：写代理只做身份与 ACL 判定，不新增审批落盘逻辑（审批请求落盘 = 既有 approval 流程，D115 只展示不代写）；前端发送失败提示与审批流展示语义一致（D116）
+
+## D115 — 流程可视化入面板（approvals + change_orders 数据源 + 门禁状态机展示 · W2b chunk-flow-ui）
+- 2026-08-15 · 来源：W2b（砥柱队：司关/钤印/稽核；**待合并**，合并门后由 run-lead 收尾）+ sysarch 分块方案 + goal success_criteria「流程可视化：双门闩/审查门/合并门状态机展示 + 审批流展示」
+- 问题：面板有看板/门禁 tab，但双门闩（brief/staffing）、审查门、合并门的状态流转与审批流/变更单缺可视化；数据源 D113 已就绪
+- 决定：
+  - **flow.api.ts（新）**：approvals/change-orders fetchers + `useApprovals`/`useChangeOrders` hooks（3s 轮询，既有模式），类型对齐 D113 两数据源端点响应
+  - **门禁 tab（gates-panel.vue）**：新增审批流区（approvals 列表——status pending/approved/rejected/used 徽章 + asked{from_agent/task_id/path/mode/reason} 与 decided{by/decision} 成对展示）与变更单区（change_orders proposed→applied→closed 状态 + 时间线）；门禁状态机展示每任务流水（双门闩 brief/staffing → progress phase → evidence pass → handoff 包 + acceptance → dissolve → merge），数据源 /tasks latch/progress/evidence + /merge 队列 + /gates，纯派生 flow.data.ts
+  - **9 视图增强**：看板（tasks-board.vue）卡片增双门闩状态徽标；合并（merge-train.vue）合并门展示增强（拓扑依赖/等待原因 skipped_due_to_deps）；概览（goal-overview.vue）审批待办数/变更单活跃数告警卡片；进度（progress-view.vue）双门闩状态列；人员/分块/tokens（personnel-view/chunks-table/sessions-live）轻量增强（D071 语义色/域组件一致，无结构重构）
+  - **派生与标签**：审批/变更单/门禁阶段标签本地化于 flow.data.ts（labels.ts owner=chat-ui，gates-panel resultLabel 先例）；不改 views.data.ts/role-meta.data.ts
+- 验证：`__tests__/flow.test.ts` fixture 断言派生纯函数（状态机阶段映射/审批状态标签/变更单时间线）；`pnpm -C packages/dashboard test`（vitest 全绿）+ `pnpm -C packages/dashboard build` 通过（**W2b 合并后补充实测数字**）
+- 边界：只读展示（写代理唯一写面仍 D114）；门禁状态机为**展示投影**，不驱动任何状态决策（文件真相 D002）
+
+## D116 — 聊天室前端（消息流/发送框/房间入口 tab · W2a chunk-chat-ui）
+- 2026-08-15 · 来源：W2a（雁书队：青鸟/尺素/鱼雁；commit 7981df0 → merge **19e006c**）+ sysarch 分块方案 + goal success_criteria「聊天室化：实时消息流视图 + 界面可发送消息」
+- 问题：面板房间视图只展示统计（D071 派生），无逐条消息流、无发送通道——聊天室化需前端消息流视图 + 发送 UI + 房间入口
+- 决定：
+  - **「聊天室」tab（index.vue，owner）**：房间列表（房间名/通俗名/消息数/参与者摘要，deriveRooms/roomLabel 复用）→ 选中房间 → 消息流视图（chat-room-view：ts 相对时间、类型徽章走 labels 中文映射、body/refs/meta 详情可展开）→ 参与者面板（GET members 端点 + 平台房 ROLE→ROOM 派生）
+  - **消息流轮询** refetchInterval 3s（既有模式）；加载态骨架屏、错误态 ErrorState（D071 语义 token，不硬编码色值）
+  - **发送框（chat-send-box）**：输入 chat 文本 → `POST /bus/:room`（D114 写代理）；成功 → 清空 + 触发消息流刷新（invalidate/refetch）；未授权拒绝 → 结构化错误中文提示（ROOM_POST_DENIED/BUS_TYPE_DENIED，提示可发房间为 leadership/product）；发送目标房间由参与者面板展示的 ACL 决定（非 sponsor 可发房禁用发送框）
+  - **审批联动**：发送框失败提示与门禁 tab 审批流展示语义一致（拒绝原因可见、pending 审批在门禁 tab 可见）——本 chunk 不实现审批请求落盘（写代理 fail-closed，D114）
+  - **派生纯函数** chat.data.ts（消息类型中文映射、参与者/房间列表派生、发送校验预检）+ `__tests__/chat.test.ts` fixture 断言（views.test.ts 模式）；rooms-view.vue 房间卡片可点击进入聊天室（入口增强）；views.data.ts / role-meta.data.ts 只读复用不改
+- 验证：`pnpm -C packages/dashboard test`（vitest 全绿）+ `pnpm -C packages/dashboard build` 通过（merge 19e006c，门禁 pass）
+- 边界：发送面完全收敛到 D114 写代理（前端零新增写逻辑）；labels.ts owner=chat-ui（共享文件纪律，flow-ui 不占）
+
+## D117 — 流程项落地（评分画像消费 queryTalentPool + staffing 显式 reuse_persona_ids + 文档精简维护 docs:lean · W1b chunk-process-items）
+- 2026-08-15 · 来源：W1b（铨衡队：品藻/铨叙/月旦；commit 13af0e4 + W1b 补丁 44aa83b（pool 参数兼容）→ merge **ab78cab** + 补丁 merge **78d4aa4**）+ goal success_criteria「流程项落地：评分-招聘回路（评分画像消费）、文档精简维护机制」+ `docs/knowledge/feedback/` 文档生命周期/评分回路权威
+- 问题：人才池（docs/knowledge/hr/talent.yaml）只沉淀不消费——招聘侧 reuse_persona_ids 无显式画像引用入口（评分画像与招聘脱节）；文档精简维护无机械检查（DECISIONS 行式/目录结构/冗余靠人工）
+- 决定：
+  - **评分画像消费（只读）**：hr-talent.ts 新增只读消费入口 `queryTalentPool`（按 grade/skills/seat 筛选、S/A 级优先，TalentRecord 含 score/grade/skills/seat/codename）；`picode staffing pool` 子命令（--grade/--seat/--skill，只读零写、不自动注入（防隐式行为变更）、非法 grade 结构化拒绝）——供招聘 reuse_persona_ids 显式引用
+  - **reuse_persona_ids 显式预填**：createStaffingRequest 支持显式预填 reuse_persona_ids（引用已存在字段，**不新增配置键**）；机制与知识文档不符时以知识文档为权威并记录偏差
+  - **文档精简维护**：scripts/doc-lean-check.mjs（零依赖只读 node 脚本，退出码 0=通过：决策权威 + 关键目录结构 / DECISIONS 行式（`## D### — 标题` 单行、编号唯一、条目非空）/ feedback 索引覆盖 / feedback 冗余检测）+ package.json `docs:lean` 接线（可作 merge gate 输入）
+- 验证：W1b 全量 **379/379** + doc-lean-check exit 0 + pool CLI 手动/插桩实测（records=3 → 筛选 1/1/3/0）+ 铨叙 hr-talent.test（排序/过滤/只读断言）+ cli.test pool 用例（含非法 grade）+ review 结论 pass
+- 边界：queryTalentPool 只读零写（评分-招聘回路消费侧，不自动注入）；docs:lean 为结构检查（warn 不影响退出码，转正项 feedback/README 索引由 W3 chunk-docs 处理）
+
+## D118 — docs 收尾 + 流程教训（W3 chunk-docs）
+- 2026-08-15 · 来源：W3 收尾（本 chunk）+ sysarch 分块方案（chunk-docs write_paths/acceptance）+ 前置四 chunk 合并（W1a a55e05f / W1b ab78cab+78d4aa4 / W2a 19e006c / W2b **待合并**）
+- 决定：
+  - **D113-D117 决策落档**：表行 + 详条（来源标注到 chunk/队：W1a dashboard-server（观澜）/ W1b process-items（铨衡）/ W2a chat-ui（雁书）/ W2b flow-ui（砥柱））；**D070/D071 行修订标注**——面板契约由「9 端点全 GET 只读」扩展为「+聊天室读/写 + 审批流/变更单数据源；写仅限 sponsor chat（D114）」，标注修订日期 2026-08-15
+  - **decision-catalog §25 同步**：面板端点面（bus 读/写 + approvals/change-orders）+ 聊天室前端 + 流程可视化数据源 + 流程项落地条目；operations.md 监控面板节更新（新端点清单 + 前端聊天室 tab + 运维要点：POST 写代理仅 sponsor chat、ACL fail-closed、CORS POST）
+  - **E19 纪要** `docs/knowledge/evolve/run-2026-08-15T04-00-00-DASHBOARD.md`（goal 背景 / 分块方案 5 chunks / 波序 W1(2组并行)+W2(2组)+W3 / 决策编号 D113-D118 / 9 视图增强清单 / 聊天室化清单 / 流程项落地清单 / 验收结果；flow-ui 部分留占位「W2b 合并后补充」，run-lead 收尾）
+  - **`--land` 闭环**：watermark run-2026-08-15T04-00-00-DASHBOARD reserved → landed（next_number 119）；**git push origin main**（本 run 收尾含 push，rev-list origin/main..main = 0）
+- 验证：decision-lint **0 error**（docs/** 全量扫描）；`node scripts/doc-lean-check.mjs`（docs:lean）OK；diff 门禁 = 5 写集文件 ⊆ write_paths（纯 docs 层 + watermark，零代码零配置）；决策编号闭环 `--reserve`（113-118，count 6，已由 run-lead 预留）→ 落档 → `--land`（status=landed）
+- 剩余风险（E19 终态）：**W2b flow-ui 待合并**（D115 实测数字与最终视图增强清单由 run-lead 在合并门后收尾补录 E19）；serve 侧会话累积 GC（D109 遗留，跨轮候选延续）；流程简化 A 级试点排下一轮流程优化 run（D112/E18 后续候选延续，本轮不实施）
 - commit: 本提交（chunk-docs / W3）
